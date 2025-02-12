@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import List
 from urllib.parse import quote_plus
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -10,14 +10,12 @@ class Settings(BaseSettings):
     mongodb_user: str
     mongodb_password: str
     mongodb_cluster: str
-    mongodb_name: str
+    mongodb_name: str = "shelfd"
     tmdb_api_key: str
     tmdb_base_url: str
     google_books_base_url: str
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "https://shelfd-prototype.vercel.app"
-    ]
+    # Default CORS settings that can be overridden by environment variables
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "https://shelfd-prototype.vercel.app"]
 
     @property
     def mongodb_url(self) -> str:
@@ -26,7 +24,8 @@ class Settings(BaseSettings):
         return f"mongodb+srv://{encoded_username}:{encoded_password}@{self.mongodb_cluster}/?retryWrites=true&w=majority"
 
     class Config:
-        env_file = ".env.production"
+        env_file = ".env"
+        case_sensitive = True
 
 def get_application():
     _app = FastAPI()

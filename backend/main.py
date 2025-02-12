@@ -14,12 +14,10 @@ app = FastAPI(title="Shelfd API")
 # Get environment-specific settings
 settings = Settings()
 
-# CORS middleware with environment-aware origins
-origins = os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
-
+# CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,7 +30,6 @@ app.include_router(shelf.router, prefix="/api/shelves", tags=["shelves"])
 
 @app.on_event("startup")
 async def startup_db_client():
-    settings = Settings()
     try:
         # Updated connection settings
         client = AsyncIOMotorClient(
