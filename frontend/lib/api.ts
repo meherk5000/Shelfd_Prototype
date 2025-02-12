@@ -1,7 +1,7 @@
 // lib/api.ts
 import axios from 'axios'
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -118,7 +118,7 @@ export const getTVDetails = async (tvId: number) => {
 
 export const getBookDetails = async (id: string) => {
   const response = await axios.get(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/books/${id}`,
+    `${API_BASE_URL}/media/books/${id}`,
     {
       headers: {
         "Content-Type": "application/json",
