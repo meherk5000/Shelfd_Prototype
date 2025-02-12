@@ -100,20 +100,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log("Login - Starting login attempt for:", email);
       console.log("Login - API URL:", `${API_BASE_URL}/api/auth/login`);
 
-      const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
-        email,
-        password,
-      });
+      const response = await axios.post(
+        `${API_BASE_URL}/api/auth/login`,
+        {
+          email,
+          password,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+        }
+      );
 
       console.log("Login - Raw response:", response);
       console.log("Login - Response data:", response.data);
+      console.log("Login - User data:", response.data.user);
 
       if (response.data.access_token) {
         console.log("Login - Got access token, setting up auth state");
         localStorage.setItem("token", response.data.access_token);
-        document.cookie = `token=${
-          response.data.access_token
-        }; path=/; max-age=${7 * 24 * 60 * 60}`;
 
         const userData = response.data.user;
         console.log("Login - Setting user data:", userData);
@@ -136,6 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         error: error,
         response: error.response?.data,
         status: error.response?.status,
+        headers: error.response?.headers,
       });
       const message = error.response?.data?.detail || "Failed to login";
       setError({ message });

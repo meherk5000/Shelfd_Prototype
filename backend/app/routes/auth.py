@@ -62,7 +62,15 @@ async def signup(user_data: UserCreate):
         token = create_access_token({"sub": str(user.id)})
         
         print("Debug - Signup successful")
-        return {"access_token": token, "token_type": "bearer"}
+        return {
+            "access_token": token, 
+            "token_type": "bearer",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "username": user.username
+            }
+        }
         
     except Exception as e:
         print(f"Debug - Error in signup: {str(e)}")
@@ -78,7 +86,16 @@ async def login(user_data: UserLogin):
         raise HTTPException(status_code=400, detail="Invalid email or password")
     
     token = create_access_token({"sub": str(user.id)})
-    return {"access_token": token, "token_type": "bearer"}
+    # Add user data to response
+    return {
+        "access_token": token, 
+        "token_type": "bearer",
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username
+        }
+    }
 
 @router.get("/me")
 async def get_current_user_info(authorization: str = Header(None)):
