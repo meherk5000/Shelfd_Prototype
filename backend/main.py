@@ -34,14 +34,11 @@ app.include_router(shelf.router, prefix="/api/shelves", tags=["shelves"])
 async def startup_db_client():
     settings = Settings()
     try:
-        # Modified connection settings
+        # Updated connection settings
         client = AsyncIOMotorClient(
             settings.mongodb_url,
             serverSelectionTimeoutMS=5000,
-            ssl=True,
-            ssl_cert_reqs=False,  # This is important
-            connect=True,
-            retryWrites=True,
+            tls=True,
             tlsAllowInvalidCertificates=True
         )
         
