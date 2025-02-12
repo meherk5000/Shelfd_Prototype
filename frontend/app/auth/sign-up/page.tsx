@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { API_ROUTES } from "@/lib/config";
+import axios from "axios";
 
 export default function SignUp() {
   const [email, setEmail] = useState("");
@@ -25,6 +27,11 @@ export default function SignUp() {
 
     try {
       console.log("Attempting signup for:", email);
+      const response = await axios.post(API_ROUTES.SIGNUP, {
+        email,
+        password,
+        username,
+      });
       await signup(email, username, password);
     } catch (err: any) {
       console.error("Signup error:", err);

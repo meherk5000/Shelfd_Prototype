@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { API_ROUTES } from "@/lib/config";
+import axios from "axios";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -23,6 +25,10 @@ export default function SignIn() {
     setIsLoading(true);
 
     try {
+      const response = await axios.post(API_ROUTES.LOGIN, {
+        email,
+        password,
+      });
       await login(email, password);
     } catch (err) {
       setError("Invalid email or password");
