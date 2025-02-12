@@ -12,3 +12,4 @@ import axios from 'axios';
 
 axios.defaults.baseURL = API_BASE_URL;
 axios.defaults.withCredentials = true; // Important for cookies/sessions
+axios.defaults.headers.common['Content-Type'] = 'application/json';

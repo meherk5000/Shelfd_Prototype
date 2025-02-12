@@ -29,6 +29,7 @@ export function Search() {
 
   const fetchResults = async (query: string) => {
     try {
+      console.log("[Quick Search] Request URL:", API_ROUTES.SEARCH);
       const response = await axios.get(API_ROUTES.SEARCH, {
         params: { query },
       });
