@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+from urllib.parse import quote_plus
 
 class Settings(BaseSettings):
     jwt_secret_key: str
@@ -16,7 +17,9 @@ class Settings(BaseSettings):
 
     @property
     def mongodb_url(self) -> str:
-        return f"mongodb+srv://{self.mongodb_user}:{self.mongodb_password}@{self.mongodb_cluster}/?retryWrites=true&w=majority"
+        encoded_username = quote_plus(self.mongodb_user)
+        encoded_password = quote_plus(self.mongodb_password)
+        return f"mongodb+srv://{encoded_username}:{encoded_password}@{self.mongodb_cluster}/?retryWrites=true&w=majority"
 
     class Config:
         env_file = ".env.production"
