@@ -94,7 +94,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(response.data.user);
         setIsAuthenticated(true);
 
-        router.push("/");
+        axios.defaults.headers.common[
+          "Authorization"
+        ] = `Bearer ${response.data.access_token}`;
+
+        window.location.href = "/";
         return response.data;
       }
     } catch (error: any) {
@@ -125,7 +129,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(response.data.user);
         setIsAuthenticated(true);
 
-        router.push("/");
+        axios.defaults.headers.common[
+          "Authorization"
+        ] = `Bearer ${response.data.access_token}`;
+
+        window.location.href = "/";
       }
       return response.data;
     } catch (error: any) {
@@ -168,6 +176,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }),
     [isAuthenticated, isLoading, user, error, login, signup, logout, clearError]
   );
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (token) {
+      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    }
+  }, []);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

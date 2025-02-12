@@ -1,6 +1,7 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 from urllib.parse import quote_plus
+from fastapi.middleware.cors import CORSMiddleware
 
 class Settings(BaseSettings):
     jwt_secret_key: str
@@ -23,5 +24,21 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env.production"
+
+def get_application():
+    _app = FastAPI()
+
+    _app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",
+            "https://shelfd-prototype.vercel.app"
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    return _app
 
 settings = Settings()

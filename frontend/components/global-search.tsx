@@ -6,7 +6,7 @@ import { Search, Loader2, Film, Tv, Book, Newspaper } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { searchQuick } from "@/lib/api";
+import axios from "axios";
 
 interface SearchResult {
   id: string;
@@ -54,8 +54,16 @@ export function GlobalSearch() {
     const fetchResults = async () => {
       setLoading(true);
       try {
-        const data = await searchQuick(debouncedQuery);
-        setResults(data);
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/search/quick`,
+          {
+            params: { query: debouncedQuery },
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        setResults(response.data);
       } catch (error) {
         console.error("Search error:", error);
         setResults({
