@@ -15,7 +15,8 @@ const nextConfig = {
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   eslint: {
-    ignoreDuringBuilds: true
+    ignoreDuringBuilds: true,
+    dirs: ['pages', 'components', 'lib', 'app']
   },
   typescript: {
     ignoreBuildErrors: true
