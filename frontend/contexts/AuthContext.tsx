@@ -47,6 +47,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem("token");
+      console.log("CheckAuth - Token exists:", !!token);
+
       if (!token) {
         setIsAuthenticated(false);
         setUser(null);
@@ -54,17 +56,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      console.log("CheckAuth - Making /me request");
       const response = await axios.get(`${API_BASE_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      console.log("CheckAuth - /me response:", response.data);
 
       if (response.data && response.data.id) {
+        console.log("CheckAuth - Setting user data:", response.data);
         setUser(response.data);
         setIsAuthenticated(true);
         setError(null);
 
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
       } else {
+        console.log("CheckAuth - Invalid user data received");
         localStorage.removeItem("token");
         document.cookie =
           "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
@@ -72,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       }
     } catch (err) {
-      console.error("Auth check error:", err);
+      console.error("CheckAuth - Error:", err);
       localStorage.removeItem("token");
       document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       setIsAuthenticated(false);
@@ -91,23 +97,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      console.log("Attempting login with:", { email }); // Debug log
+      console.log("Login - Starting login attempt for:", email);
+      console.log("Login - API URL:", `${API_BASE_URL}/api/auth/login`);
 
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         email,
         password,
       });
 
-      console.log("Login response:", response.data); // Debug log
+      console.log("Login - Raw response:", response);
+      console.log("Login - Response data:", response.data);
 
       if (response.data.access_token) {
+        console.log("Login - Got access token, setting up auth state");
         localStorage.setItem("token", response.data.access_token);
         document.cookie = `token=${
           response.data.access_token
         }; path=/; max-age=${7 * 24 * 60 * 60}`;
 
         const userData = response.data.user;
-        console.log("Setting user data:", userData); // Debug log
+        console.log("Login - Setting user data:", userData);
 
         setUser(userData);
         setIsAuthenticated(true);
@@ -119,10 +128,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push("/");
         return response.data;
       } else {
+        console.log("Login - No access token in response");
         throw new Error("No access token received");
       }
     } catch (error: any) {
-      console.error("Login error:", error.response?.data || error);
+      console.error("Login - Error details:", {
+        error: error,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
       const message = error.response?.data?.detail || "Failed to login";
       setError({ message });
       throw error;
