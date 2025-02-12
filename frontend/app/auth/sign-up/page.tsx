@@ -27,10 +27,8 @@ export default function SignUp() {
 
     try {
       await signup(email, username, password);
-      router.push("/auth/sign-in");
     } catch (error: any) {
       if (error.response?.status === 400) {
-        // Handle email already exists error
         setError("Email already registered. Please try signing in instead.");
       } else if (error.response?.status === 500) {
         setError("Server error. Please try again later.");

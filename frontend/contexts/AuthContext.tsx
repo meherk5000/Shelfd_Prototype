@@ -86,8 +86,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (response.data.access_token) {
+        localStorage.setItem("token", response.data.access_token);
+        document.cookie = `token=${
+          response.data.access_token
+        }; path=/; max-age=${7 * 24 * 60 * 60}`;
+
         setUser(response.data.user);
         setIsAuthenticated(true);
+
+        router.push("/");
         return response.data;
       }
     } catch (error: any) {
@@ -108,6 +115,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         username,
         password,
       });
+
+      if (response.data.access_token) {
+        localStorage.setItem("token", response.data.access_token);
+        document.cookie = `token=${
+          response.data.access_token
+        }; path=/; max-age=${7 * 24 * 60 * 60}`;
+
+        setUser(response.data.user);
+        setIsAuthenticated(true);
+
+        router.push("/");
+      }
       return response.data;
     } catch (error: any) {
       const message =
