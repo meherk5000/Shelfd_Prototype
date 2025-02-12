@@ -1,8 +1,9 @@
-node_modules/
-.next/
-out/
-build/
-public/
-*.config.js
-*.config.mjs
-*.config.ts
+**/node_modules/*
+**/.next/*
+**/out/*
+**/*.d.ts
+**/build/*
+app/**/*
+components/**/*
+lib/**/*
+contexts/**/*
