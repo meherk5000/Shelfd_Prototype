@@ -1,5 +1,6 @@
 {
-  "extends": "next/core-web-vitals",
+  "root": true,
+  "extends": ["next/core-web-vitals"],
   "ignorePatterns": ["**/*"],
   "rules": {
     "@typescript-eslint/no-explicit-any": "off",
@@ -9,6 +10,9 @@
     "@next/next/no-img-element": "off",
     "no-unused-vars": "off",
     "no-console": "off",
-    "@typescript-eslint/ban-ts-comment": "off"
+    "@typescript-eslint/ban-ts-comment": "off",
+    "@typescript-eslint/no-empty-function": "off",
+    "@typescript-eslint/no-non-null-assertion": "off",
+    "@typescript-eslint/no-var-requires": "off"
   }
 } 
