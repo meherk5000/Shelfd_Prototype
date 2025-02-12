@@ -43,7 +43,7 @@ async def startup_db_client():
         await client.admin.command('ping')
         
         await init_beanie(
-            database=client[settings.mongodb_name],
+            database=client[settings.MONGODB_NAME],
             document_models=[User, ShelfModel, ShelfItemModel]
         )
         print(f"Successfully connected to MongoDB and initialized Beanie!")

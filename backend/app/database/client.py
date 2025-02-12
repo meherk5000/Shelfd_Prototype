@@ -6,7 +6,7 @@ class Database:
     settings: Settings = Settings()
 
     def get_db(self):
-        return self.client[self.settings.mongodb_name]
+        return self.client[self.settings.MONGODB_NAME]
 
 # Create a single instance
 db = Database()

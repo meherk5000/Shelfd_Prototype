@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     MONGODB_USER: str
     MONGODB_PASSWORD: str
     MONGODB_CLUSTER: str
-    MONGODB_NAME: str = "shelfd"
+    MONGODB_NAME: str = "shelfd_db"
     TMDB_API_KEY: str
     TMDB_BASE_URL: str
     GOOGLE_BOOKS_BASE_URL: str
