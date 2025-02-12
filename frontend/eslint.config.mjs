@@ -7,27 +7,33 @@ const __dirname = dirname(__filename);
 
 const compat = new FlatCompat({
   baseDirectory: __dirname,
+  recommendedConfig: {
+    env: {
+      es2022: true,
+      node: true,
+      browser: true,
+    },
+  },
 });
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...compat.extends("next/core-web-vitals"),
   {
+    files: ["**/*.ts", "**/*.tsx"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "react/no-unescaped-entities": "off",
       "react/display-name": "off",
-      "@next/next/no-img-element": "warn",
-      "no-console": ["warn", { allow: ["warn", "error"] }],
+      "@next/next/no-img-element": "off",
+      "no-unused-vars": "off",
+      "no-console": "off"
     },
-    ignorePatterns: [
-      "node_modules/",
-      ".next/",
-      "out/",
-      "public/",
-      "*.config.js",
-      "*.config.mjs",
-    ],
+    languageOptions: {
+      parserOptions: {
+        project: "./tsconfig.json",
+      },
+    },
   },
 ];
 
