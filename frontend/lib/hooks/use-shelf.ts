@@ -197,8 +197,17 @@ export function useShelf() {
         return [];
       }
 
+      // Add this line to debug the API URL and token
+      console.log("Making API call with token:", token);
+      
+      // Update the api configuration to use the deployed URL
+      api.defaults.baseURL = 'https://shelfd-prototype-backend.onrender.com'; // Replace with your actual deployed backend URL
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      
       const apiMediaType = mediaTypeMap[mediaType].toLowerCase();
+      
+      // Add this line to debug the final URL
+      console.log("Fetching from URL:", `${api.defaults.baseURL}/api/shelves/user/${apiMediaType}`);
       
       const response = await api.get(`/api/shelves/user/${apiMediaType}`);
       
