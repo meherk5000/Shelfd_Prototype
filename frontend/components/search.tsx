@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Filter, Loader2 } from "lucide-react";
+import { Filter } from "lucide-react";
 import { searchMedia } from "@/lib/api";
 import { useRouter } from "next/navigation";
 
@@ -15,28 +15,6 @@ export function Search() {
   const [results, setResults] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-
-  const handleSearch = async () => {
-    setLoading(true);
-    console.log("Search triggered for:", activeCategory); // Debug log
-
-    try {
-      const mediaType =
-        activeCategory === "All"
-          ? undefined
-          : activeCategory.toLowerCase().replace(" ", "_").replace("shows", "");
-
-      console.log("Calling searchMedia with:", { mediaType }); // Debug log
-      const data = await searchMedia(activeCategory, mediaType);
-      console.log("Search results received:", data); // Debug log
-
-      setResults(data);
-    } catch (error) {
-      console.error("Error in handleSearch:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Add this function to check what results we have
   const getResultsCount = () => {

@@ -6,7 +6,6 @@ import { Search, Loader2, Film, Tv, Book, Newspaper } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { API_BASE_URL } from "@/lib/api";
 import { searchQuick } from "@/lib/api";
 
 interface SearchResult {
