@@ -11,6 +11,7 @@ import {
 import axios from "axios";
 import { useRouter } from "next/navigation";
 import api, { API_BASE_URL } from "@/lib/api";
+import { API_ROUTES } from "@/lib/config";
 
 interface User {
   id: string;
@@ -79,19 +80,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await axios.post(
-        `${API_BASE_URL}/api/auth/login`,
-        {
-          email,
-          password,
-        },
-        {
-          withCredentials: true,
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      const response = await axios.post(API_ROUTES.LOGIN, {
+        email,
+        password,
+      });
 
       if (response.data.access_token) {
         localStorage.setItem("token", response.data.access_token);
@@ -120,7 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log("Attempting signup with:", { email, username });
 
-      const response = await api.post("/api/auth/signup", {
+      const response = await axios.post(API_ROUTES.SIGNUP, {
         email,
         username,
         password,

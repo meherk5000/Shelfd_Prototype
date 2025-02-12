@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
 import { searchMedia } from "@/lib/api";
 import { useRouter } from "next/navigation";
+import { API_ROUTES } from "@/lib/config";
+import axios from "axios";
 
 const categories = ["All", "Books", "Movies", "TV Shows"];
 const genres = ["New Releases", "Fantasy & Sci-Fi"];
@@ -23,6 +25,18 @@ export function Search() {
     const tvCount = results.tv_shows?.results?.length || 0;
     const bookCount = results.books?.items?.length || 0;
     return movieCount + tvCount + bookCount;
+  };
+
+  const fetchResults = async (query: string) => {
+    try {
+      const response = await axios.get(API_ROUTES.SEARCH, {
+        params: { query },
+      });
+      return response.data;
+    } catch (error) {
+      console.error("[Quick Search] Error:", error);
+      return [];
+    }
   };
 
   return (
