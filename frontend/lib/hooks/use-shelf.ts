@@ -41,12 +41,31 @@ export enum ShelfStatus {
 // Add this interface near the top of the file with other type definitions
 interface ShelfItem {
   media_id: string;
-  id: string;
   title: string;
-  cover_image?: string;
-  creator?: string;
-  added_at?: string;
-  status?: string;
+  cover_image: string;
+  creator: string;
+  added_at: string;
+}
+
+interface Shelf {
+  _id: string;
+  name: string;
+  items: ShelfItem[];
+}
+
+interface TransformedShelfItem {
+  id: string;
+  media_id: string;
+  title: string;
+  cover_image: string;
+  creator: string;
+  added_at: string;
+}
+
+interface TransformedShelf {
+  _id: string;
+  name: string;
+  items: TransformedShelfItem[];
 }
 
 // Helper function to get the correct shelf type based on media type and status
@@ -137,10 +156,7 @@ export function useShelf() {
       const shelfType = getShelfType(mediaType, status);
       
       // Check if item already exists in the target shelf
-      const targetShelf = shelves.find((shelf: { 
-        name: string; 
-        items?: ShelfItem[];
-      }) => 
+      const targetShelf = shelves.find((shelf: TransformedShelf) => 
         shelf.name.toLowerCase() === shelfType.replace(/_/g, ' ').toLowerCase()
       );
 
@@ -149,8 +165,8 @@ export function useShelf() {
       console.log('Debug - Existing Items:', targetShelf?.items);
 
       // Check both media_id and id fields for existing items
-      const itemExists = targetShelf?.items?.some((existingItem: ShelfItem) => 
-        (existingItem.media_id === item.id || existingItem.id === item.id)
+      const itemExists = targetShelf?.items?.some((existingItem: TransformedShelfItem) => 
+        existingItem.media_id === item.id
       );
 
       console.log('Debug - Item Exists Check:', itemExists);
@@ -197,30 +213,27 @@ export function useShelf() {
         return [];
       }
 
-      // Add this line to debug the API URL and token
       console.log("Making API call with token:", token);
       
-      // Update the api configuration to use the deployed URL
-      api.defaults.baseURL = 'https://shelfd-prototype-backend.onrender.com'; // Replace with your actual deployed backend URL
       api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       
       const apiMediaType = mediaTypeMap[mediaType].toLowerCase();
       
-      // Add this line to debug the final URL
       console.log("Fetching from URL:", `${api.defaults.baseURL}/api/shelves/user/${apiMediaType}`);
       
-      const response = await api.get(`/api/shelves/user/${apiMediaType}`);
+      const response = await api.get<Shelf[]>(`/api/shelves/user/${apiMediaType}`);
       
       if (!response.data) {
         console.warn("No shelf data received");
         return [];
       }
 
-      return response.data.map((shelf: any) => ({
+      return response.data.map((shelf: Shelf): TransformedShelf => ({
         _id: shelf._id,
         name: shelf.name,
-        items: shelf.items?.map((item: any) => ({
+        items: shelf.items?.map((item: ShelfItem): TransformedShelfItem => ({
           id: item.media_id,
+          media_id: item.media_id,
           title: item.title,
           cover_image: item.cover_image,
           creator: item.creator,
@@ -235,47 +248,5 @@ export function useShelf() {
     }
   }, []);
 
-  const moveItem = async (
-    mediaType: keyof MediaTypeMapping,
-    itemId: string,
-    newStatus: string
-  ) => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem("token");
-      const apiMediaType = mediaTypeMap[mediaType];
-      
-      const payload = {
-        media_type: apiMediaType,
-        media_id: itemId,
-        new_status: newStatus
-        // Removed shelf_type as it's not expected by the backend
-      };
-
-      console.log('Moving item with payload:', payload);
-      
-      await api.post('/api/shelves/move_item', payload, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-    } catch (err) {
-      console.error('Move item error:', err);
-      setError('Failed to move item');
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const removeFromShelf = async (shelf: ShelfType, id: string) => {
-    // ... existing code ...
-  };
-
-  const updateShelfItem = async (id: string, existingItem: ShelfItem) => {
-    // ... existing code ...
-  };
-
-  return { addToShelf, getUserShelves, moveItem, loading, error };
+  return { loading, error, initializeShelves, addToShelf, getUserShelves };
 }

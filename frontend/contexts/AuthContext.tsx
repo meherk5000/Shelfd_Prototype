@@ -10,8 +10,7 @@ import {
 } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import api, { API_BASE_URL } from "@/lib/api";
-import { API_ROUTES } from "@/lib/config";
+import { API_BASE_URL } from "../lib/config";
 
 interface User {
   id: string;

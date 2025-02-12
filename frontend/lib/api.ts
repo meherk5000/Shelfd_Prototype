@@ -3,10 +3,6 @@ import axios from 'axios'
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-if (!API_BASE_URL) {
-  throw new Error('NEXT_PUBLIC_API_URL is not defined')
-}
-
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
