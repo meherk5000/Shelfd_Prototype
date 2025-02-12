@@ -58,10 +58,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setUser(response.data);
-      setIsAuthenticated(true);
-      setError(null);
+      if (response.data && response.data.id) {
+        setUser(response.data);
+        setIsAuthenticated(true);
+        setError(null);
+
+        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      } else {
+        localStorage.removeItem("token");
+        document.cookie =
+          "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+        setIsAuthenticated(false);
+        setUser(null);
+      }
     } catch (err) {
+      console.error("Auth check error:", err);
       localStorage.removeItem("token");
       document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
       setIsAuthenticated(false);
@@ -79,13 +90,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
-        {
-          email,
-          password,
-        }
-      );
+
+      const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
+        email,
+        password,
+      });
 
       if (response.data.access_token) {
         localStorage.setItem("token", response.data.access_token);
@@ -93,21 +102,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           response.data.access_token
         }; path=/; max-age=${7 * 24 * 60 * 60}`;
 
-        setUser(response.data.user);
+        const userData = response.data.user;
+        setUser(userData);
         setIsAuthenticated(true);
 
-        // Set the Authorization header for future requests
         axios.defaults.headers.common[
           "Authorization"
         ] = `Bearer ${response.data.access_token}`;
 
-        // Use router.push instead of window.location for smoother navigation
         router.push("/");
         return response.data;
+      } else {
+        throw new Error("No access token received");
       }
     } catch (error: any) {
+      console.error("Login error:", error.response?.data || error);
       const message = error.response?.data?.detail || "Failed to login";
-      setError(message);
+      setError({ message });
       throw error;
     } finally {
       setIsLoading(false);
