@@ -86,20 +86,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (response.data.access_token) {
-        localStorage.setItem("token", response.data.access_token);
-        document.cookie = `token=${
-          response.data.access_token
-        }; path=/; max-age=${7 * 24 * 60 * 60}`;
-        await checkAuth();
-        window.location.href = "/";
+        setUser(response.data.user);
+        setIsAuthenticated(true);
+        return response.data;
       }
-    } catch (err: any) {
-      console.error("Login error details:", err.response?.data || err.message);
-      setError({
-        message: err.response?.data?.detail || "Login failed",
-        status: err.response?.status,
-      });
-      throw err;
+    } catch (error: any) {
+      const message = error.response?.data?.detail || "Failed to login";
+      setError(message);
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -109,41 +103,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-
-      console.log("Attempting signup with:", { email, username });
-
       const response = await axios.post(API_ROUTES.SIGNUP, {
         email,
         username,
         password,
       });
-
-      console.log("Signup response:", response.data);
-
-      if (response.data.access_token) {
-        localStorage.setItem("token", response.data.access_token);
-        document.cookie = `token=${
-          response.data.access_token
-        }; path=/; max-age=${7 * 24 * 60 * 60}`;
-        await checkAuth();
-        window.location.href = "/";
-      }
-    } catch (err: any) {
-      console.error("Signup error details:", {
-        error: err,
-        response: err.response?.data,
-        status: err.response?.status,
-        message: err.message,
-      });
-
-      setError({
-        message:
-          err.response?.data?.detail ||
-          err.message ||
-          "Failed to create account",
-        status: err.response?.status || 500,
-      });
-      throw err;
+      return response.data;
+    } catch (error: any) {
+      const message =
+        error.response?.data?.detail || "Failed to create account";
+      setError(message);
+      throw error;
     } finally {
       setIsLoading(false);
     }

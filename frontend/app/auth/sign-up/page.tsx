@@ -26,16 +26,18 @@ export default function SignUp() {
     setIsLoading(true);
 
     try {
-      console.log("Attempting signup for:", email);
-      const response = await axios.post(API_ROUTES.SIGNUP, {
-        email,
-        password,
-        username,
-      });
       await signup(email, username, password);
-    } catch (err: any) {
-      console.error("Signup error:", err);
-      setError(err?.response?.data?.detail || "Failed to create account");
+      router.push("/auth/sign-in");
+    } catch (error: any) {
+      if (error.response?.status === 400) {
+        // Handle email already exists error
+        setError("Email already registered. Please try signing in instead.");
+      } else if (error.response?.status === 500) {
+        setError("Server error. Please try again later.");
+      } else {
+        setError("Failed to create account. Please try again.");
+      }
+      console.error("Signup error:", error);
     } finally {
       setIsLoading(false);
     }

@@ -10,6 +10,16 @@ export const API_ROUTES = {
 // Add axios default config
 import axios from 'axios';
 
+// Configure axios defaults
 axios.defaults.baseURL = API_BASE_URL;
-axios.defaults.withCredentials = true; // Important for cookies/sessions
+axios.defaults.withCredentials = true;
 axios.defaults.headers.common['Content-Type'] = 'application/json';
+
+// Add response interceptor for better error handling
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);

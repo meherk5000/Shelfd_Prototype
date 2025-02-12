@@ -29,10 +29,14 @@ export function Search() {
 
   const fetchResults = async (query: string) => {
     try {
-      console.log("[Quick Search] Request URL:", API_ROUTES.SEARCH);
       const response = await axios.get(API_ROUTES.SEARCH, {
         params: { query },
+        baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
+      console.log("[Quick Search] Response:", response.data);
       return response.data;
     } catch (error) {
       console.error("[Quick Search] Error:", error);
