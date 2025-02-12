@@ -33,16 +33,29 @@ app.include_router(shelf.router, prefix="/api/shelves", tags=["shelves"])
 @app.on_event("startup")
 async def startup_db_client():
     settings = Settings()
-    client = AsyncIOMotorClient(
-        settings.mongodb_url,
-        tls=True,
-        tlsAllowInvalidCertificates=True
-    )
-    await init_beanie(
-        database=client[settings.mongodb_name],
-        document_models=[User, ShelfModel, ShelfItemModel]
-    )
-    print("Successfully connected to MongoDB and initialized Beanie!")
+    try:
+        # Modified connection settings
+        client = AsyncIOMotorClient(
+            settings.mongodb_url,
+            serverSelectionTimeoutMS=5000,
+            ssl=True,
+            ssl_cert_reqs=False,  # This is important
+            connect=True,
+            retryWrites=True,
+            tlsAllowInvalidCertificates=True
+        )
+        
+        # Test the connection
+        await client.admin.command('ping')
+        
+        await init_beanie(
+            database=client[settings.mongodb_name],
+            document_models=[User, ShelfModel, ShelfItemModel]
+        )
+        print(f"Successfully connected to MongoDB and initialized Beanie!")
+    except Exception as e:
+        print(f"Failed to connect to MongoDB: {str(e)}")
+        raise e
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
