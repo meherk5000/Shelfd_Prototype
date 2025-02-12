@@ -91,10 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       setError(null);
 
+      console.log("Attempting login with:", { email }); // Debug log
+
       const response = await axios.post(`${API_BASE_URL}/api/auth/login`, {
         email,
         password,
       });
+
+      console.log("Login response:", response.data); // Debug log
 
       if (response.data.access_token) {
         localStorage.setItem("token", response.data.access_token);
@@ -103,6 +107,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }; path=/; max-age=${7 * 24 * 60 * 60}`;
 
         const userData = response.data.user;
+        console.log("Setting user data:", userData); // Debug log
+
         setUser(userData);
         setIsAuthenticated(true);
 
@@ -129,14 +135,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/signup`,
-        {
-          email,
-          username,
-          password,
-        }
-      );
+      const response = await axios.post(`${API_BASE_URL}/api/auth/signup`, {
+        email,
+        username,
+        password,
+      });
 
       if (response.data.access_token) {
         localStorage.setItem("token", response.data.access_token);
@@ -144,22 +147,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           response.data.access_token
         }; path=/; max-age=${7 * 24 * 60 * 60}`;
 
-        setUser(response.data.user);
+        const userData = response.data.user;
+        setUser(userData);
         setIsAuthenticated(true);
 
-        // Set the Authorization header for future requests
         axios.defaults.headers.common[
           "Authorization"
         ] = `Bearer ${response.data.access_token}`;
 
-        // Use router.push instead of window.location
         router.push("/");
         return response.data;
+      } else {
+        throw new Error("No access token received");
       }
     } catch (error: any) {
+      console.error("Signup error:", error.response?.data || error);
       const message =
         error.response?.data?.detail || "Failed to create account";
-      setError(message);
+      setError({ message });
       throw error;
     } finally {
       setIsLoading(false);
@@ -167,35 +172,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = useCallback(() => {
-    // First, clear all auth state
+    // Clear axios header first
+    delete axios.defaults.headers.common["Authorization"];
+
+    // Clear auth state
     localStorage.removeItem("token");
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+
+    // Update state
     setUser(null);
     setIsAuthenticated(false);
     setIsLoading(false);
 
-    // Then do a single navigation
-    router.push("/auth/sign-in");
+    // Navigate after state is cleared
+    router.replace("/auth/sign-in");
   }, [router]);
 
   const clearError = () => {
     setError(null);
   };
 
-  // Use useMemo to prevent unnecessary re-renders
-  const value = useMemo(
-    () => ({
-      isAuthenticated,
-      isLoading,
-      user,
-      error,
-      login,
-      signup,
-      logout,
-      clearError,
-    }),
-    [isAuthenticated, isLoading, user, error, login, signup, logout, clearError]
-  );
+  // Remove the useMemo for individual functions
+  const value = {
+    isAuthenticated,
+    isLoading,
+    user,
+    error,
+    login,
+    signup,
+    logout,
+    clearError,
+  };
 
   useEffect(() => {
     const token = localStorage.getItem("token");
