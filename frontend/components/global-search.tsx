@@ -86,13 +86,13 @@ export function GlobalSearch() {
 
     switch (result.type) {
       case "tv":
-        router.push(`/tv/${result.id}`);
+        router.push(`/media/tv/${result.id}`);
         break;
       case "movie":
-        router.push(`/movies/${result.id}`);
+        router.push(`/media/movies/${result.id}`);
         break;
       case "book":
-        router.push(`/books/${result.id}`);
+        router.push(`/media/books/${result.id}`);
         break;
       default:
         console.error("Unknown media type:", result.type);

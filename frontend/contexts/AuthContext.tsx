@@ -94,15 +94,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           response.data.access_token
         }; path=/; max-age=${7 * 24 * 60 * 60}`;
 
-        setUser(response.data.user);
+        const userData = {
+          id: response.data.user.id,
+          email: response.data.user.email,
+          username: response.data.user.username,
+          image: response.data.user.image,
+        };
+        setUser(userData);
         setIsAuthenticated(true);
 
-        // Set the Authorization header for future requests
         axios.defaults.headers.common[
           "Authorization"
         ] = `Bearer ${response.data.access_token}`;
 
-        // Use router.push instead of window.location for smoother navigation
         router.push("/");
         return response.data;
       }
