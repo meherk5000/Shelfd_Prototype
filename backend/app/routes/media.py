@@ -41,9 +41,9 @@ async def search_quick(query: str):
         async with httpx.AsyncClient() as client:
             # Search movies
             movie_response = await client.get(
-                f"https://api.themoviedb.org/3/search/movie",
+                f"{settings.TMDB_BASE_URL}/search/movie",
                 params={
-                    "api_key": settings.tmdb_api_key,
+                    "api_key": settings.TMDB_API_KEY,
                     "query": query,
                     "language": "en-US",
                     "page": 1
@@ -53,9 +53,9 @@ async def search_quick(query: str):
             
             # Search TV shows
             tv_response = await client.get(
-                f"https://api.themoviedb.org/3/search/tv",
+                f"{settings.TMDB_BASE_URL}/search/tv",
                 params={
-                    "api_key": settings.tmdb_api_key,
+                    "api_key": settings.TMDB_API_KEY,
                     "query": query,
                     "language": "en-US",
                     "page": 1
@@ -65,7 +65,7 @@ async def search_quick(query: str):
             
             # Search books
             book_response = await client.get(
-                f"{settings.google_books_base_url}/volumes",
+                f"{settings.GOOGLE_BOOKS_BASE_URL}/volumes",
                 params={
                     "q": query,
                     "maxResults": 5
@@ -118,7 +118,7 @@ async def search_quick(query: str):
 async def get_book_details(book_id: str):
     try:
         print(f"Fetching book details for ID: {book_id}")
-        url = f"{settings.google_books_base_url}/volumes/{book_id}"
+        url = f"{settings.GOOGLE_BOOKS_BASE_URL}/volumes/{book_id}"
         print(f"Making request to URL: {url}")  # Add this log
         
         async with httpx.AsyncClient() as client:
@@ -185,9 +185,9 @@ async def get_tv_details(tv_id: int):
     """Fetch TV show details from TMDB API"""
     try:
         print(f"[TV Details Backend] Fetching TV show details for ID: {tv_id}")
-        url = f"{settings.tmdb_base_url}/tv/{tv_id}"
+        url = f"{settings.TMDB_BASE_URL}/tv/{tv_id}"
         params = {
-            "api_key": settings.tmdb_api_key,
+            "api_key": settings.TMDB_API_KEY,
             "append_to_response": "credits,videos,similar,recommendations"
         }
         
@@ -214,9 +214,9 @@ async def get_movie_details(movie_id: int):
     """Fetch movie details from TMDB API"""
     try:
         print(f"[Movie Details Backend] Fetching movie details for ID: {movie_id}")
-        url = f"{settings.tmdb_base_url}/movie/{movie_id}"
+        url = f"{settings.TMDB_BASE_URL}/movie/{movie_id}"
         params = {
-            "api_key": settings.tmdb_api_key,
+            "api_key": settings.TMDB_API_KEY,
             "append_to_response": "credits,videos,similar,recommendations"
         }
         
