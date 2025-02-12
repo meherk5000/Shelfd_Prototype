@@ -156,15 +156,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = useCallback(() => {
+    // First, clear all auth state
     localStorage.removeItem("token");
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     setUser(null);
     setIsAuthenticated(false);
     setIsLoading(false);
-    // Wrap navigation in setTimeout to ensure state updates complete first
-    setTimeout(() => {
-      router.push("/auth/sign-in");
-    }, 0);
+
+    // Then do a single navigation
+    router.push("/auth/sign-in");
   }, [router]);
 
   const clearError = () => {
