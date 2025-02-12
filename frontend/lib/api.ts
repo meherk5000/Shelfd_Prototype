@@ -120,47 +120,16 @@ export const getTVDetails = async (tvId: number) => {
   }
 };
 
-export const getBookDetails = async (bookId: string) => {
-  try {
-    console.log('Fetching book details for:', bookId);
-    const url = `${API_BASE_URL}/media/books/${bookId}`;
-    console.log('Request URL:', url);  // Add this log
-    
-    const response = await fetch(url);
-    console.log('Response status:', response.status);  // Add this log
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log('Error response text:', errorText);  // Add this log
-      
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        console.log('Failed to parse error response as JSON:', e);  // Add this log
-        errorData = { detail: errorText };
-      }
-      
-      console.error('API Error Response:', {
-        status: response.status,
-        statusText: response.statusText,
-        data: errorData,
-        url: url  // Add the URL to error info
-      });
-      
-      throw new Error(
-        errorData.detail || 
-        `Failed to fetch book details: ${response.statusText}`
-      );
+export const getBookDetails = async (id: string) => {
+  const response = await axios.get(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/books/${id}`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+      },
     }
-    
-    const data = await response.json();
-    console.log('Book details received:', data);
-    return data;
-  } catch (error) {
-    console.error('Book details error:', error);
-    throw error;
-  }
+  );
+  return response.data;
 };
 
 export const searchQuick = async (query: string) => {

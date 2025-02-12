@@ -80,10 +80,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await axios.post(API_ROUTES.LOGIN, {
-        email,
-        password,
-      });
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/login`,
+        {
+          email,
+          password,
+        }
+      );
 
       if (response.data.access_token) {
         localStorage.setItem("token", response.data.access_token);
@@ -94,11 +97,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(response.data.user);
         setIsAuthenticated(true);
 
+        // Set the Authorization header for future requests
         axios.defaults.headers.common[
           "Authorization"
         ] = `Bearer ${response.data.access_token}`;
 
-        window.location.href = "/";
+        // Use router.push instead of window.location for smoother navigation
+        router.push("/");
         return response.data;
       }
     } catch (error: any) {
@@ -114,11 +119,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await axios.post(API_ROUTES.SIGNUP, {
-        email,
-        username,
-        password,
-      });
+      const response = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/auth/signup`,
+        {
+          email,
+          username,
+          password,
+        }
+      );
 
       if (response.data.access_token) {
         localStorage.setItem("token", response.data.access_token);
@@ -129,13 +137,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(response.data.user);
         setIsAuthenticated(true);
 
+        // Set the Authorization header for future requests
         axios.defaults.headers.common[
           "Authorization"
         ] = `Bearer ${response.data.access_token}`;
 
-        window.location.href = "/";
+        // Use router.push instead of window.location
+        router.push("/");
+        return response.data;
       }
-      return response.data;
     } catch (error: any) {
       const message =
         error.response?.data?.detail || "Failed to create account";

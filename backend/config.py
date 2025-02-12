@@ -14,7 +14,10 @@ class Settings(BaseSettings):
     tmdb_api_key: str
     tmdb_base_url: str
     google_books_base_url: str
-    cors_origins: str
+    CORS_ORIGINS: list = [
+        "http://localhost:3000",
+        "https://shelfd-prototype.vercel.app"
+    ]
 
     @property
     def mongodb_url(self) -> str:
