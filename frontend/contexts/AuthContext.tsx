@@ -97,52 +97,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(true);
       setError(null);
 
-      console.log("Login - Starting login attempt for:", email);
+      console.log("Login - Starting login attempt");
       const url = `${API_BASE_URL}/api/auth/login`;
-      console.log("Login - Full URL:", url);
-      console.log("Login - Request payload:", { email, password });
+      console.log("Login - Request URL:", url);
 
-      const config = {
-        headers: {
-          "Content-Type": "application/json",
-        },
-        withCredentials: true,
-      };
-      console.log("Login - Request config:", config);
-
-      const response = await axios.post(url, { email, password }, config);
-
-      console.log("Login - Response status:", response.status);
-      console.log("Login - Response headers:", response.headers);
-      console.log("Login - Response data:", response.data);
+      const response = await axios.post(url, { email, password });
+      console.log("Login - Response received:", {
+        status: response.status,
+        data: response.data,
+      });
 
       if (response.data.access_token) {
-        console.log("Login - Got access token, setting up auth state");
+        console.log("Login - Setting auth state");
         localStorage.setItem("token", response.data.access_token);
-
-        const userData = response.data.user;
-        console.log("Login - Setting user data:", userData);
-
-        setUser(userData);
+        setUser(response.data.user);
         setIsAuthenticated(true);
 
+        console.log("Login - Setting axios headers");
         axios.defaults.headers.common[
           "Authorization"
         ] = `Bearer ${response.data.access_token}`;
 
+        console.log("Login - Navigating to home");
         router.push("/");
-        return response.data;
       } else {
-        console.log("Login - No access token in response");
-        throw new Error("No access token received");
+        throw new Error("No access token in response");
       }
     } catch (error: any) {
-      console.error("Login - Full error object:", error);
-      console.error("Login - Error response:", {
-        data: error.response?.data,
+      console.error("Login - Error:", {
+        message: error.message,
+        response: error.response?.data,
         status: error.response?.status,
-        headers: error.response?.headers,
-        config: error.config,
       });
 
       const message = error.response?.data?.detail || "Failed to login";
@@ -194,20 +179,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = useCallback(() => {
-    // Clear axios header first
-    delete axios.defaults.headers.common["Authorization"];
+    console.log("Logout - Starting logout process");
+    try {
+      // Clear auth state first
+      setUser(null);
+      setIsAuthenticated(false);
 
-    // Clear auth state
-    localStorage.removeItem("token");
-    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      // Then clear storage
+      console.log("Logout - Clearing local storage");
+      localStorage.removeItem("token");
 
-    // Update state
-    setUser(null);
-    setIsAuthenticated(false);
-    setIsLoading(false);
+      // Clear axios headers
+      console.log("Logout - Clearing axios headers");
+      delete axios.defaults.headers.common["Authorization"];
 
-    // Navigate after state is cleared
-    router.replace("/auth/sign-in");
+      // Navigate last
+      console.log("Logout - Navigating to sign-in page");
+      router.push("/auth/sign-in");
+    } catch (error) {
+      console.error("Logout - Error during logout:", error);
+    }
   }, [router]);
 
   const clearError = () => {

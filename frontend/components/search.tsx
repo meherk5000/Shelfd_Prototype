@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
 import { searchMedia } from "@/lib/api";
 import { useRouter } from "next/navigation";
-import { API_ROUTES } from "@/lib/config";
+import { API_BASE_URL } from "@/lib/api";
 import axios from "axios";
 
 const categories = ["All", "Books", "Movies", "TV Shows"];
