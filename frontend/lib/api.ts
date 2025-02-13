@@ -1,7 +1,6 @@
 // lib/api.ts
 import axios from 'axios'
-
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000';
+import { API_BASE_URL } from './config'
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -25,9 +24,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      // Don't redirect here - let the component handle it
-      console.log('Auth error detected, token removed');
+      localStorage.removeItem('token')
+      window.location.href = '/auth/sign-in'
     }
     return Promise.reject(error)
   }
@@ -159,35 +157,17 @@ export const searchQuick = async (query: string) => {
 };
 
 export async function checkAuth() {
-  const token = localStorage.getItem('token');
-  console.log('CheckAuth - Token exists:', !!token);
-  
-  if (!token) {
-    return false;
-  }
-  
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      credentials: 'include'
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+
+    const response = await axios.get(`${API_BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` }
     });
-    
-    if (!response.ok) {
-      console.log('CheckAuth - Response not OK:', response.status);
-      localStorage.removeItem('token');
-      return false;
-    }
-    
-    const data = await response.json();
-    console.log('CheckAuth - Verification successful:', data);
-    return true;
+
+    return response.data;
   } catch (error) {
-    console.error('Auth check failed:', error);
-    localStorage.removeItem('token');
-    return false;
+    console.error('Check auth error:', error);
+    return null;
   }
 }

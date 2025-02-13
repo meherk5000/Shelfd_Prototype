@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Filter } from "lucide-react";
-import { searchMedia } from "@/lib/api";
+import { searchMedia, searchQuick } from "@/lib/api";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/config";
 import axios from "axios";
 
 const categories = ["All", "Books", "Movies", "TV Shows"];
