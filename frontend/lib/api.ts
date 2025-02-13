@@ -25,8 +25,9 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      window.location.href = '/auth/sign-in'
+      localStorage.removeItem('token');
+      // Don't redirect here - let the component handle it
+      console.log('Auth error detected, token removed');
     }
     return Promise.reject(error)
   }
@@ -156,3 +157,37 @@ export const searchQuick = async (query: string) => {
     return emptyResults;
   }
 };
+
+export async function checkAuth() {
+  const token = localStorage.getItem('token');
+  console.log('CheckAuth - Token exists:', !!token);
+  
+  if (!token) {
+    return false;
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/verify`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      credentials: 'include'
+    });
+    
+    if (!response.ok) {
+      console.log('CheckAuth - Response not OK:', response.status);
+      localStorage.removeItem('token');
+      return false;
+    }
+    
+    const data = await response.json();
+    console.log('CheckAuth - Verification successful:', data);
+    return true;
+  } catch (error) {
+    console.error('Auth check failed:', error);
+    localStorage.removeItem('token');
+    return false;
+  }
+}
