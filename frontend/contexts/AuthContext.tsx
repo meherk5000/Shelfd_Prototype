@@ -98,25 +98,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(null);
 
       console.log("Login - Starting login attempt for:", email);
-      console.log("Login - API URL:", `${API_BASE_URL}/api/auth/login`);
+      const url = `${API_BASE_URL}/api/auth/login`;
+      console.log("Login - Full URL:", url);
+      console.log("Login - Request payload:", { email, password });
 
-      const response = await axios.post(
-        `${API_BASE_URL}/api/auth/login`,
-        {
-          email,
-          password,
+      const config = {
+        headers: {
+          "Content-Type": "application/json",
         },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-          withCredentials: true,
-        }
-      );
+        withCredentials: true,
+      };
+      console.log("Login - Request config:", config);
 
-      console.log("Login - Raw response:", response);
+      const response = await axios.post(url, { email, password }, config);
+
+      console.log("Login - Response status:", response.status);
+      console.log("Login - Response headers:", response.headers);
       console.log("Login - Response data:", response.data);
-      console.log("Login - User data:", response.data.user);
 
       if (response.data.access_token) {
         console.log("Login - Got access token, setting up auth state");
@@ -139,12 +137,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("No access token received");
       }
     } catch (error: any) {
-      console.error("Login - Error details:", {
-        error: error,
-        response: error.response?.data,
+      console.error("Login - Full error object:", error);
+      console.error("Login - Error response:", {
+        data: error.response?.data,
         status: error.response?.status,
         headers: error.response?.headers,
+        config: error.config,
       });
+
       const message = error.response?.data?.detail || "Failed to login";
       setError({ message });
       throw error;

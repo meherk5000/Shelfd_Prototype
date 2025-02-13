@@ -81,13 +81,26 @@ async def signup(user_data: UserCreate):
 
 @router.post("/login")
 async def login(user_data: UserLogin):
+    print(f"Debug - Login attempt for email: {user_data.email}")
+    
     user = await User.find_one({"email": user_data.email})
-    if not user or not verify_password(user_data.password, user.hashed_password):
+    print(f"Debug - Found user: {user is not None}")
+    
+    if not user:
+        print("Debug - User not found")
+        raise HTTPException(status_code=400, detail="Invalid email or password")
+        
+    is_valid = verify_password(user_data.password, user.hashed_password)
+    print(f"Debug - Password verification result: {is_valid}")
+    
+    if not is_valid:
+        print("Debug - Invalid password")
         raise HTTPException(status_code=400, detail="Invalid email or password")
     
     token = create_access_token({"sub": str(user.id)})
-    # Add user data to response
-    return {
+    print("Debug - Created access token")
+    
+    response_data = {
         "access_token": token, 
         "token_type": "bearer",
         "user": {
@@ -96,6 +109,8 @@ async def login(user_data: UserLogin):
             "username": user.username
         }
     }
+    print(f"Debug - Sending response: {response_data}")
+    return response_data
 
 @router.get("/me")
 async def get_current_user_info(authorization: str = Header(None)):
