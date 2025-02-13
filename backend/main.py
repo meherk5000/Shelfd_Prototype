@@ -13,6 +13,7 @@ app = FastAPI(title="Shelfd API")
 
 # Get environment-specific settings
 settings = Settings()
+print(f"CORS Origins configured: {settings.CORS_ORIGINS}")
 
 # CORS middleware configuration
 app.add_middleware(
