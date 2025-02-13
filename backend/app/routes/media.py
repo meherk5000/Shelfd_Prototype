@@ -1,9 +1,10 @@
 # app/routes/media.py
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 import httpx
 from pydantic import BaseModel
 from config import Settings
+from services.shelf_service import ShelfService
 
 # router = APIRouter(
 #     prefix="/media",  # This sets the prefix for all routes in this router
@@ -237,3 +238,22 @@ async def get_movie_details(movie_id: int):
             status_code=500,
             detail=f"Error fetching movie details: {str(e)}"
         )
+
+@router.get("/shelves/user/{media_type}")
+async def get_user_shelves(
+    media_type: str,
+    current_user: str = Depends(get_current_user)
+):
+    print(f"Debug - Received media_type: {media_type}")
+    print(f"Debug - Current user: {current_user}")
+    
+    try:
+        shelves = await ShelfService.get_user_shelves(
+            user_id=current_user,
+            media_type=media_type
+        )
+        print(f"Debug - Found shelves: {shelves}")
+        return shelves
+    except Exception as e:
+        print(f"Debug - Error getting shelves: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))

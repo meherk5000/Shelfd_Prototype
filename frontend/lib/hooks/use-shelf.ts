@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import api from '@/lib/api';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 export type MediaTypeMapping = {
   Books: "book";
@@ -51,21 +52,6 @@ interface Shelf {
   _id: string;
   name: string;
   items: ShelfItem[];
-}
-
-interface TransformedShelfItem {
-  id: string;
-  media_id: string;
-  title: string;
-  cover_image: string;
-  creator: string;
-  added_at: string;
-}
-
-interface TransformedShelf {
-  _id: string;
-  name: string;
-  items: TransformedShelfItem[];
 }
 
 // Helper function to get the correct shelf type based on media type and status
@@ -124,7 +110,8 @@ const shelfTypeMap = {
   }
 } as const;
 
-export function useShelf() {
+export function useShelf(mediaType?: string) {
+  const [shelves, setShelves] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -135,6 +122,36 @@ export function useShelf() {
       console.error('Failed to initialize shelves:', err);
     }
   };
+
+  const fetchShelves = useCallback(async () => {
+    if (!mediaType) return;
+    
+    try {
+      setLoading(true);
+      console.log('Fetching shelves for media type:', mediaType);
+      const response = await axios.get(
+        `${API_BASE_URL}/api/shelves/user/${mediaType}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        }
+      );
+      console.log('Shelves response:', response.data);
+      setShelves(response.data);
+    } catch (err) {
+      console.error('Error fetching shelves:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch shelves');
+    } finally {
+      setLoading(false);
+    }
+  }, [mediaType]);
+
+  useEffect(() => {
+    if (mediaType) {
+      fetchShelves();
+    }
+  }, [mediaType, fetchShelves]);
 
   const addToShelf = async (
     mediaType: keyof MediaTypeMapping,
@@ -151,32 +168,21 @@ export function useShelf() {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("No authentication token found");
 
-      // First check if item already exists in any shelf of this media type
       const shelves = await getUserShelves(mediaType);
       const shelfType = getShelfType(mediaType, status);
       
-      // Check if item already exists in the target shelf
-      const targetShelf = shelves.find((shelf: TransformedShelf) => 
+      const targetShelf = shelves.find((shelf: Shelf) => 
         shelf.name.toLowerCase() === shelfType.replace(/_/g, ' ').toLowerCase()
       );
 
-      console.log('Debug - Target Shelf:', targetShelf);
-      console.log('Debug - New Item ID:', item.id);
-      console.log('Debug - Existing Items:', targetShelf?.items);
-
-      // Check both media_id and id fields for existing items
-      const itemExists = targetShelf?.items?.some((existingItem: TransformedShelfItem) => 
+      const itemExists = targetShelf?.items?.some((existingItem: ShelfItem) => 
         existingItem.media_id === item.id
       );
 
-      console.log('Debug - Item Exists Check:', itemExists);
-
       if (itemExists) {
-        console.log("Item already exists in this shelf");
         return { success: false, message: "Item already exists in this shelf" };
       }
 
-      // If item doesn't exist, proceed with adding it
       const apiMediaType = mediaTypeMap[mediaType];
       const apiStatus = status.toLowerCase();
 
@@ -190,14 +196,11 @@ export function useShelf() {
         creator: item.creator || ""
       };
 
-      console.log('Debug - Adding new item with payload:', payload);
-      const response = await api.post('/api/shelves/add_item', payload);
+      await api.post('/api/shelves/add_item', payload);
+      await fetchShelves();
       return { success: true, message: "Item added successfully" };
     } catch (error: any) {
-      console.error('Debug - Full error:', error);
-      if (axios.isAxiosError(error) && error.response) {
-        console.error('Debug - Response data:', error.response.data);
-      }
+      console.error('Add to shelf error:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -213,14 +216,7 @@ export function useShelf() {
         return [];
       }
 
-      console.log("Making API call with token:", token);
-      
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
       const apiMediaType = mediaTypeMap[mediaType].toLowerCase();
-      
-      console.log("Fetching from URL:", `${api.defaults.baseURL}/api/shelves/user/${apiMediaType}`);
-      
       const response = await api.get<Shelf[]>(`/api/shelves/user/${apiMediaType}`);
       
       if (!response.data) {
@@ -228,18 +224,7 @@ export function useShelf() {
         return [];
       }
 
-      return response.data.map((shelf: Shelf): TransformedShelf => ({
-        _id: shelf._id,
-        name: shelf.name,
-        items: shelf.items?.map((item: ShelfItem): TransformedShelfItem => ({
-          id: item.media_id,
-          media_id: item.media_id,
-          title: item.title,
-          cover_image: item.cover_image,
-          creator: item.creator,
-          added_at: item.added_at
-        })) || []
-      }));
+      return response.data;
     } catch (error) {
       console.error("Shelf fetch error:", error);
       return [];
@@ -248,5 +233,13 @@ export function useShelf() {
     }
   }, []);
 
-  return { loading, error, initializeShelves, addToShelf, getUserShelves };
+  return { 
+    shelves, 
+    loading, 
+    error, 
+    initializeShelves, 
+    addToShelf, 
+    getUserShelves,
+    fetchShelves 
+  };
 }
