@@ -81,44 +81,36 @@ async def signup(user_data: UserCreate):
 
 @router.post("/login")
 async def login(user_data: UserLogin):
-    print(f"Debug - Login attempt received:")
-    print(f"Debug - Email: {user_data.email}")
-    print(f"Debug - Password length: {len(user_data.password)}")
+    print(f"Debug - Login attempt for email: {user_data.email}")
     
-    try:
-        user = await User.find_one({"email": user_data.email})
-        print(f"Debug - User lookup result: {user is not None}")
+    user = await User.find_one({"email": user_data.email})
+    print(f"Debug - Found user: {user is not None}")
+    
+    if not user:
+        print("Debug - User not found")
+        raise HTTPException(status_code=400, detail="Invalid email or password")
         
-        if not user:
-            print("Debug - User not found in database")
-            raise HTTPException(status_code=400, detail="Invalid email or password")
-            
-        is_valid = verify_password(user_data.password, user.hashed_password)
-        print(f"Debug - Password verification result: {is_valid}")
-        
-        if not is_valid:
-            print("Debug - Invalid password")
-            raise HTTPException(status_code=400, detail="Invalid email or password")
-        
-        token = create_access_token({"sub": str(user.id)})
-        print("Debug - Access token created")
-        
-        response_data = {
-            "access_token": token, 
-            "token_type": "bearer",
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "username": user.username
-            }
+    is_valid = verify_password(user_data.password, user.hashed_password)
+    print(f"Debug - Password verification result: {is_valid}")
+    
+    if not is_valid:
+        print("Debug - Invalid password")
+        raise HTTPException(status_code=400, detail="Invalid email or password")
+    
+    token = create_access_token({"sub": str(user.id)})
+    print("Debug - Created access token")
+    
+    response_data = {
+        "access_token": token, 
+        "token_type": "bearer",
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username
         }
-        print("Debug - Sending successful login response")
-        return response_data
-        
-    except Exception as e:
-        print(f"Debug - Login error: {str(e)}")
-        print(f"Debug - Error type: {type(e)}")
-        raise
+    }
+    print(f"Debug - Sending response: {response_data}")
+    return response_data
 
 @router.get("/me")
 async def get_current_user_info(authorization: str = Header(None)):

@@ -98,23 +98,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setError(null);
 
       console.log("Login - Starting login attempt");
-      console.log("Login - API_BASE_URL:", API_BASE_URL);
       const url = `${API_BASE_URL}/api/auth/login`;
-      console.log("Login - Full request URL:", url);
+      console.log("Login - Request URL:", url);
 
-      const response = await axios.post(
-        url,
-        { email, password },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
+      const response = await axios.post(url, { email, password });
       console.log("Login - Response received:", {
         status: response.status,
-        statusText: response.statusText,
         data: response.data,
       });
 
@@ -135,18 +124,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("No access token in response");
       }
     } catch (error: any) {
-      console.error("Login - Error details:", {
+      console.error("Login - Error:", {
         message: error.message,
-        response: {
-          data: error.response?.data,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-        },
-        request: {
-          url: error.config?.url,
-          method: error.config?.method,
-          data: error.config?.data,
-        },
+        response: error.response?.data,
+        status: error.response?.status,
       });
 
       const message = error.response?.data?.detail || "Failed to login";
