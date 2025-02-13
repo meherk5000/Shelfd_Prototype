@@ -1,39 +1,20 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-const publicRoutes = [
-  '/', 
-  '/auth/sign-in', 
-  '/auth/sign-up',
-  '/search',
-  '/clubs'
-]
-
-const protectedPaths = [
-  '/profile',
-  '/shelf',
-  '/activity',
-  '/chat',
-  '/create'
-]
+// Public routes that don't require authentication
+const publicRoutes = ['/', '/auth/sign-in', '/auth/sign-up', '/search', '/clubs']
 
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
   const token = request.cookies.get('token')?.value
-  const isAuthPage = request.nextUrl.pathname.startsWith('/auth/')
-  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
 
-  // Allow API routes to pass through
-  if (isApiRoute) {
+  // Always allow public routes
+  if (publicRoutes.includes(pathname)) {
     return NextResponse.next()
   }
 
-  // If user is on auth page but already has token, redirect to home
-  if (isAuthPage && token) {
-    return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  // If user is not on auth page and has no token, redirect to sign in
-  if (!isAuthPage && !token) {
+  // If no token and trying to access protected route, redirect to sign in
+  if (!token) {
     return NextResponse.redirect(new URL('/auth/sign-in', request.url))
   }
 
@@ -42,6 +23,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico).*)',
   ],
 }
