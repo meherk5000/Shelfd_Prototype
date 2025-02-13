@@ -5,7 +5,7 @@ import httpx
 from pydantic import BaseModel
 from config import Settings
 from app.services.shelf_service import ShelfService
-from app.auth.auth_handler import get_current_user
+from app.routes.auth import get_current_user
 
 # router = APIRouter(
 #     prefix="/media",  # This sets the prefix for all routes in this router
