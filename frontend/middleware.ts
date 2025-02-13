@@ -18,23 +18,23 @@ const protectedPaths = [
 ]
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
   const token = request.cookies.get('token')?.value
+  const isAuthPage = request.nextUrl.pathname.startsWith('/auth/')
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
 
-  // Check if path is public
-  if (publicRoutes.includes(pathname)) {
-    // If user is authenticated and trying to access auth pages, redirect to shelf
-    if (token && pathname.startsWith('/auth/')) {
-      return NextResponse.redirect(new URL('/shelf', request.url))
-    }
+  // Allow API routes to pass through
+  if (isApiRoute) {
     return NextResponse.next()
   }
 
-  // Check protected routes
-  if (protectedPaths.some(path => pathname.startsWith(path))) {
-    if (!token) {
-      return NextResponse.redirect(new URL('/auth/sign-in', request.url))
-    }
+  // If user is on auth page but already has token, redirect to home
+  if (isAuthPage && token) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // If user is not on auth page and has no token, redirect to sign in
+  if (!isAuthPage && !token) {
+    return NextResponse.redirect(new URL('/auth/sign-in', request.url))
   }
 
   return NextResponse.next()
@@ -42,6 +42,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)',
   ],
 }
