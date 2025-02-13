@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Depends
 import httpx
 from pydantic import BaseModel
 from config import Settings
-from services.shelf_service import ShelfService
+from app.services.shelf_service import ShelfService
 
 # router = APIRouter(
 #     prefix="/media",  # This sets the prefix for all routes in this router
