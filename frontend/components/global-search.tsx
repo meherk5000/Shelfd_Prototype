@@ -18,7 +18,7 @@ interface SearchResult {
 }
 
 interface GroupedResults {
-  books: SearchResult[]; // Changed order here
+  books: SearchResult[];
   articles: SearchResult[];
   movies: SearchResult[];
   tv_shows: SearchResult[];

@@ -7,10 +7,6 @@ from config import Settings
 from app.services.shelf_service import ShelfService
 from app.services.auth import get_current_user
 
-# router = APIRouter(
-#     prefix="/media",  # This sets the prefix for all routes in this router
-#     tags=["media"]
-# )
 router = APIRouter()
 settings = Settings()
 
@@ -28,7 +24,7 @@ class GroupedSearchResults(BaseModel):
     books: List[SearchResult]
     articles: List[SearchResult] = []
 
-@router.get("/search/quick")  # This will become /media/search/quick
+@router.get("/search/quick")  
 async def search_quick(query: str):
     """Quick search across all media types"""
     if not query or len(query) < 2:
@@ -121,28 +117,28 @@ async def get_book_details(book_id: str):
     try:
         print(f"Fetching book details for ID: {book_id}")
         url = f"{settings.GOOGLE_BOOKS_BASE_URL}/volumes/{book_id}"
-        print(f"Making request to URL: {url}")  # Add this log
+        print(f"Making request to URL: {url}") 
         
         async with httpx.AsyncClient() as client:
-            # Add debug headers
+           
             headers = {
                 "Accept": "application/json",
                 "User-Agent": "Shelfd/1.0"
             }
             response = await client.get(url, headers=headers)
             print(f"Response status: {response.status_code}")
-            print(f"Response headers: {dict(response.headers)}")  # Add this log
-            print(f"Response body: {response.text}")  # Add this log
+            print(f"Response headers: {dict(response.headers)}")  
+            print(f"Response body: {response.text}") 
             
             if response.status_code == 404:
-                print(f"Book not found: {book_id}")  # Add this log
+                print(f"Book not found: {book_id}") 
                 raise HTTPException(
                     status_code=404,
                     detail=f"Book with ID {book_id} not found"
                 )
             
             if not response.is_success:
-                print(f"API error: {response.text}")  # Add this log
+                print(f"API error: {response.text}")  
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Google Books API error: {response.text}"
@@ -151,7 +147,7 @@ async def get_book_details(book_id: str):
             data = response.json()
             volume_info = data.get("volumeInfo", {})
             
-            # Transform the response to match your frontend expectations
+       
             book_data = {
                 "id": data["id"],
                 "title": volume_info.get("title", "Unknown Title"),
@@ -166,7 +162,7 @@ async def get_book_details(book_id: str):
                 "previewLink": volume_info.get("previewLink")
             }
             
-            print(f"Transformed book data: {book_data}")  # Debug log
+            print(f"Transformed book data: {book_data}") 
             return book_data
             
     except httpx.HTTPError as e:
