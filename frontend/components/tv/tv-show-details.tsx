@@ -6,6 +6,9 @@ import { MediaHeader } from "@/components/media/media-header";
 import { MediaTabs } from "@/components/media/media-tabs";
 import { getTVDetails } from "@/lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useAuth } from "@/lib/context/AuthContext";
+import { useRouter } from "next/navigation";
+import { ShelfButton } from "@/components/shelf-button";
 
 interface TVShowDetailsData {
   id: number;
@@ -34,26 +37,33 @@ export function TVShowDetails({ id }: { id: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("About");
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    const fetchTVDetails = async () => {
+    async function fetchTVDetails() {
       try {
-        setLoading(true);
-        setError(null);
         const data = await getTVDetails(id);
         setShow(data);
       } catch (err) {
         console.error("Error fetching TV show:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to fetch TV show details"
-        );
+        setError("Failed to load TV show details");
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     fetchTVDetails();
   }, [id]);
+
+  const handleWantToWatch = () => {
+    if (!isAuthenticated) {
+      // When trying to add to shelf, redirect to sign in with return URL
+      const returnUrl = encodeURIComponent(`/tv/${id}`);
+      router.push(`/auth/sign-in?returnUrl=${returnUrl}`);
+      return;
+    }
+  };
 
   if (loading) {
     return (
@@ -95,7 +105,19 @@ export function TVShowDetails({ id }: { id: number }) {
             tags={show.genres.map((g) => g.name)}
             primaryAction={{
               label: "Want to Watch",
-              onClick: () => {}, // Implement watchlist functionality
+              onClick: handleWantToWatch,
+              component: isAuthenticated ? (
+                <ShelfButton
+                  mediaType="TV Shows"
+                  item={{
+                    id: show.id.toString(),
+                    title: show.name,
+                    image_url: show.poster_path
+                      ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
+                      : undefined,
+                  }}
+                />
+              ) : undefined,
             }}
             secondaryActions={[
               {

@@ -1,0 +1,1 @@
+export type MediaType = "books" | "movies" | "tv-shows" | "articles"; 

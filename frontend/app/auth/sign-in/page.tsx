@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/lib/context/AuthContext";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,24 +13,94 @@ export default function SignIn() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [returnTo, setReturnTo] = useState("/");
+  const [hasRedirected, setHasRedirected] = useState(false);
 
-  const { login } = useAuth();
-  const router = useRouter();
+  const { login, isAuthenticated, user } = useAuth();
+  const searchParams = useSearchParams();
+
+  // Get and store the returnUrl when component mounts
+  useEffect(() => {
+    const returnUrl = searchParams.get("returnUrl");
+    if (returnUrl) {
+      setReturnTo(decodeURIComponent(returnUrl));
+      console.log(
+        "Sign-in page will redirect to:",
+        decodeURIComponent(returnUrl)
+      );
+    }
+  }, [searchParams]);
+
+  // Immediate check for token on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("token");
+      if (token && !hasRedirected) {
+        console.log("Token found, redirecting to:", returnTo);
+        setHasRedirected(true);
+        window.location.href = returnTo;
+      }
+    }
+  }, [returnTo, hasRedirected]);
+
+  // Handle already authenticated users - but only redirect once
+  useEffect(() => {
+    if (isAuthenticated && user && !hasRedirected) {
+      console.log("User already authenticated, redirecting to:", returnTo);
+      setHasRedirected(true);
+      window.location.href = returnTo;
+    }
+  }, [isAuthenticated, returnTo, user, hasRedirected]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Don't submit if already loading or redirecting
+    if (isLoading || hasRedirected) return;
+
     setError("");
     setIsLoading(true);
 
     try {
-      await login(email, password);
-      router.push("/");
+      console.log(`Attempting login for ${email} with redirect to ${returnTo}`);
+
+      // Make sure we use the returnTo value
+      if (returnTo !== "/" && window.location.search === "") {
+        // If we don't have returnUrl in URL, add it so login can use it
+        const newUrl = `${
+          window.location.pathname
+        }?returnUrl=${encodeURIComponent(returnTo)}`;
+        window.history.replaceState({}, "", newUrl);
+      }
+
+      const success = await login(email, password);
+
+      if (!success) {
+        console.log("Login was not successful");
+        setIsLoading(false);
+      } else {
+        console.log("Login successful, will be redirected by login function");
+        setHasRedirected(true);
+        // Login function will handle the redirect
+      }
     } catch (err: any) {
-      setError(err.message || "Invalid email or password");
-    } finally {
+      console.error("Error during sign-in form submission:", err);
+      setError(err.message || "Failed to sign in. Please try again.");
       setIsLoading(false);
     }
   };
+
+  // If already being redirected, show a simple loading screen
+  if (hasRedirected) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-lg">Redirecting to {returnTo}...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
@@ -47,6 +117,7 @@ export default function SignIn() {
             </Link>
           </p>
         </div>
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
@@ -58,6 +129,7 @@ export default function SignIn() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
               />
             </div>
             <div>
@@ -69,7 +141,16 @@ export default function SignIn() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
               />
+              <div className="text-right mt-1">
+                <Link
+                  href="/auth/forgot-password"
+                  className="text-sm text-primary hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
             </div>
           </div>
           <Button type="submit" className="w-full" disabled={isLoading}>
@@ -77,6 +158,11 @@ export default function SignIn() {
           </Button>
         </form>
         {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
+        {returnTo && returnTo !== "/" && (
+          <p className="text-xs text-center text-muted-foreground mt-4">
+            You'll be redirected to: {returnTo}
+          </p>
+        )}
       </div>
     </div>
   );

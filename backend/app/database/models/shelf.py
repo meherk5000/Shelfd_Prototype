@@ -21,6 +21,9 @@ class ShelfModel(Document):
     shelf_type: ShelfType
     status: ShelfStatus
     is_default: bool = False
+    description: Optional[str] = None
+    is_private: bool = False
+    has_collaborators: bool = False
     items: List[str] = []  # List of media IDs
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

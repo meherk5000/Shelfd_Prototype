@@ -1,21 +1,30 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/context/AuthContext";
 import { Layout } from "@/components/layout";
+import Link from "next/link";
 import { Feed } from "@/components/feed";
-import { useAuth } from "@/contexts/AuthContext";
 
 export default function Home() {
-  const { isAuthenticated, user } = useAuth();
+  const router = useRouter();
+  const { isAuthenticated, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <Layout>
-      <div className="container py-6">
-        {isAuthenticated && (
-          <h1 className="text-3xl font-bold mb-6">
-            Welcome back, {user?.username || "friend"}!
-          </h1>
-        )}
-        <Feed />
+      <div className="w-full px-4 md:px-6 max-w-full overflow-x-hidden">
+        <div className="max-w-[1200px] mx-auto">
+          <Feed />
+        </div>
       </div>
     </Layout>
   );

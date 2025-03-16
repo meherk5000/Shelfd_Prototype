@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import axios from "axios";
+import { useAuth } from "@/lib/context/AuthContext";
 
 interface SearchResult {
   id: string;
@@ -26,6 +27,7 @@ interface GroupedResults {
 
 export function GlobalSearch() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [results, setResults] = React.useState<GroupedResults>({
@@ -84,19 +86,24 @@ export function GlobalSearch() {
     console.log("Selected search result:", result);
     setOpen(false);
 
+    let targetPath = "";
     switch (result.type) {
       case "tv":
-        router.push(`/tv/${result.id}`);
+        targetPath = `/tv/${result.id}`;
         break;
       case "movie":
-        router.push(`/movies/${result.id}`);
+        targetPath = `/movies/${result.id}`;
         break;
       case "book":
-        router.push(`/books/${result.id}`);
+        targetPath = `/books/${result.id}`;
         break;
       default:
         console.error("Unknown media type:", result.type);
+        return;
     }
+
+    // Always allow navigation to media details
+    router.push(targetPath);
   };
 
   return (

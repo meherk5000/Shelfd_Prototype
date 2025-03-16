@@ -6,21 +6,23 @@ import { Header } from "./header";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
-      <div className="hidden md:block w-72 fixed inset-y-0">
+      <div className="hidden md:block w-48 fixed inset-y-0 border-r">
         <Sidebar />
       </div>
 
       {/* Main content */}
-      <div className="flex-1 md:pl-72">
+      <div className="flex-1 md:pl-48 flex flex-col">
         {/* Header */}
         <header className="sticky top-0 z-40 border-b bg-background">
           <Header />
         </header>
 
         {/* Page content */}
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 overflow-auto overflow-x-hidden">
+          {children}
+        </main>
       </div>
     </div>
   );

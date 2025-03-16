@@ -8,6 +8,11 @@ interface MediaHeaderProps {
   subtitle?: string;
   rating?: number;
   tags?: string[];
+  primaryAction?: {
+    label: string;
+    onClick: () => void;
+    component?: ReactElement;
+  };
   secondaryActions?: {
     label: string;
     onClick: () => void;
@@ -24,6 +29,7 @@ export function MediaHeader({
   subtitle,
   rating,
   tags,
+  primaryAction,
   secondaryActions,
 }: MediaHeaderProps) {
   return (
@@ -51,6 +57,14 @@ export function MediaHeader({
       )}
 
       <div className="flex gap-2">
+        {primaryAction &&
+          (primaryAction.component ? (
+            <div>{primaryAction.component}</div>
+          ) : (
+            <Button onClick={primaryAction.onClick}>
+              {primaryAction.label}
+            </Button>
+          ))}
         {secondaryActions && secondaryActions.length > 0 && (
           <div className="flex gap-2">
             {secondaryActions.map((action) =>

@@ -5,6 +5,9 @@ import { Loader2 } from "lucide-react";
 import { MediaHeader } from "@/components/media/media-header";
 import { MediaTabs } from "@/components/media/media-tabs";
 import { getMovieDetails } from "@/lib/api";
+import { useAuth } from "@/lib/context/AuthContext";
+import { useRouter } from "next/navigation";
+import { ShelfButton } from "@/components/shelf-button";
 
 interface MovieDetailsData {
   id: number;
@@ -30,6 +33,8 @@ export function MovieDetails({ id }: { id: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("About");
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     async function fetchMovieDetails() {
@@ -46,6 +51,15 @@ export function MovieDetails({ id }: { id: number }) {
 
     fetchMovieDetails();
   }, [id]);
+
+  const handleWantToWatch = () => {
+    if (!isAuthenticated) {
+      // When trying to add to shelf, redirect to sign in with return URL
+      const returnUrl = encodeURIComponent(`/movies/${id}`);
+      router.push(`/auth/sign-in?returnUrl=${returnUrl}`);
+      return;
+    }
+  };
 
   if (loading) {
     return (
@@ -84,7 +98,19 @@ export function MovieDetails({ id }: { id: number }) {
             tags={movie.genres.map((g) => g.name)}
             primaryAction={{
               label: "Want to Watch",
-              onClick: () => {}, // Implement watchlist functionality
+              onClick: handleWantToWatch,
+              component: isAuthenticated ? (
+                <ShelfButton
+                  mediaType="Movies"
+                  item={{
+                    id: movie.id.toString(),
+                    title: movie.title,
+                    image_url: movie.poster_path
+                      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+                      : undefined,
+                  }}
+                />
+              ) : undefined,
             }}
             secondaryActions={[
               {

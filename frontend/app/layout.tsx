@@ -1,17 +1,20 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import type React from "react";
-import { Providers } from "@/components/providers";
-import { AuthProvider } from "@/contexts/AuthContext";
-import LandingPage from "./landing/page";
-import { Toaster } from "react-hot-toast";
+import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider } from "@/lib/context/AuthContext";
+import { AuthDebug } from "@/components/auth-debug";
+import { ThemeProvider } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
 
 export const metadata: Metadata = {
   title: "Shelfd",
-  description: "Track and share your media journey",
+  description: "Track your media consumption",
 };
 
 export default function RootLayout({
@@ -21,17 +24,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head />
-      <body className={inter.className} suppressHydrationWarning>
-        <Providers>
-          <AuthProvider>{children}</AuthProvider>
-        </Providers>
-        <Toaster position="top-right" />
+      <head>
+        <title>Shelfd</title>
+        <meta
+          name="description"
+          content="Shelfd - A social platform for book lovers"
+        />
+      </head>
+      <body
+        className={cn("min-h-screen font-sans antialiased", inter.variable)}
+        suppressHydrationWarning
+      >
+        <AuthProvider>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+            {children}
+            <Toaster />
+            {process.env.NODE_ENV === "development" && <AuthDebug />}
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
-}
-
-export function Home() {
-  return <LandingPage />;
 }

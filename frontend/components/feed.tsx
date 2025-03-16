@@ -1,6 +1,19 @@
-import { Heart, MessageCircle, Repeat2, Share2, MoreHorizontal } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  Heart,
+  MessageCircle,
+  Repeat2,
+  Share2,
+  MoreHorizontal,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { UserCurrentMedia } from "@/components/user-current-media";
+import { useAuth } from "@/lib/context/AuthContext";
 
 const posts = [
   {
@@ -36,91 +49,19 @@ const posts = [
     type: "post",
     content: {
       text: "I. Love. This. Show. OMG!!!!",
-      media: { title: "Arcane", image: "/placeholder.svg?height=200&width=300" },
+      media: {
+        title: "Arcane",
+        image: "/placeholder.svg?height=200&width=300",
+      },
     },
     stats: { likes: 100, comments: 25, shares: 2 },
   },
-]
+];
 
 export function Feed() {
-  return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      {posts.map((post) => (
-        <article key={post.id} className="bg-card border rounded-lg p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <img
-                src={post.user.avatar || "/placeholder.svg"}
-                alt={post.user.name}
-                className="w-12 h-12 rounded-full"
-              />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold">{post.user.name}</h3>
-                  <span className="text-sm text-muted-foreground">{post.date}</span>
-                </div>
-                {post.type === "review" && (
-                  <div className="text-sm text-muted-foreground">
-                    <span>
-                      Reviewed {post.content.title} by {post.content.author}
-                    </span>
-                    {post.content.rating && (
-                      <span className="ml-2 text-yellow-500">{"★".repeat(Math.floor(post.content.rating))}</span>
-                    )}
-                  </div>
-                )}
-                {post.type === "post" && post.content.media && (
-                  <div className="text-sm text-muted-foreground">
-                    <span>Posted about {post.content.media.title}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm">
-                Follow +
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem>Report</DropdownMenuItem>
-                  <DropdownMenuItem>Block</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-          <p className="mb-4">{post.content.text}</p>
-          {post.content.media && (
-            <img
-              src={post.content.media.image || "/placeholder.svg"}
-              alt={post.content.media.title}
-              className="rounded-lg mb-4 max-w-full h-auto"
-            />
-          )}
-          <div className="flex items-center gap-6">
-            <Button variant="ghost" size="sm" className="gap-2">
-              <Heart className="w-4 h-4" />
-              {post.stats.likes}
-            </Button>
-            <Button variant="ghost" size="sm" className="gap-2">
-              <MessageCircle className="w-4 h-4" />
-              {post.stats.comments}
-            </Button>
-            <Button variant="ghost" size="sm" className="gap-2">
-              <Repeat2 className="w-4 h-4" />
-              {post.stats.shares}
-            </Button>
-            <Button variant="ghost" size="sm">
-              <Share2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </article>
-      ))}
-    </div>
-  )
-}
+  const { isAuthenticated } = useAuth();
 
+  return (
+    <div className="w-full">{isAuthenticated && <UserCurrentMedia />}</div>
+  );
+}

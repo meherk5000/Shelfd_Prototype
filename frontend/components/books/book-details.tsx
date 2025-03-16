@@ -7,6 +7,8 @@ import { MediaTabs } from "@/components/media/media-tabs";
 import { getBookDetails } from "@/lib/api";
 import { MediaActions } from "@/components/media-actions";
 import { ShelfButton } from "@/components/shelf-button";
+import { useAuth } from "@/lib/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 interface BookDetailsData {
   id: string;
@@ -29,6 +31,8 @@ export function BookDetails({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("About");
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     async function fetchBookDetails() {
@@ -45,6 +49,15 @@ export function BookDetails({ id }: { id: string }) {
 
     fetchBookDetails();
   }, [id]);
+
+  const handleWantToRead = () => {
+    if (!isAuthenticated) {
+      // When trying to add to shelf, redirect to sign in with return URL
+      const returnUrl = encodeURIComponent(`/books/${id}`);
+      router.push(`/auth/sign-in?returnUrl=${returnUrl}`);
+      return;
+    }
+  };
 
   if (loading) {
     return (
@@ -67,41 +80,42 @@ export function BookDetails({ id }: { id: string }) {
       <div className="grid grid-cols-1 md:grid-cols-[300px_1fr] gap-8">
         {/* Book Cover */}
         <div>
-          <img
-            src={book.image_url}
-            alt={book.title}
-            className="w-full rounded-lg shadow-lg"
-          />
+          {book.image_url && (
+            <img
+              src={book.image_url}
+              alt={book.title}
+              className="w-full rounded-lg shadow-lg"
+            />
+          )}
         </div>
 
         {/* Book Info */}
         <div>
           <MediaHeader
             title={book.title}
-            subtitle={book.author}
+            subtitle={`By ${book.author}`}
             rating={book.rating}
             tags={book.tags}
+            primaryAction={{
+              label: "Want to Read",
+              onClick: handleWantToRead,
+              component: isAuthenticated ? (
+                <ShelfButton
+                  mediaType="Books"
+                  item={{
+                    id: book.id,
+                    title: book.title,
+                    image_url: book.image_url,
+                    creator: book.author,
+                  }}
+                />
+              ) : undefined,
+            }}
             secondaryActions={[
               {
-                label: "Want to Read",
-                onClick: () => {
-                  // This will be handled by the ShelfButton component
-                },
-                component: (
-                  <ShelfButton
-                    mediaType="Books"
-                    item={{
-                      id: book.id,
-                      title: book.title,
-                      image_url: book.image_url,
-                      creator: book.author,
-                    }}
-                  />
-                ),
-              },
-              {
                 label: "Preview",
-                onClick: () => window.open(book.previewLink, "_blank"),
+                onClick: () =>
+                  book.previewLink && window.open(book.previewLink, "_blank"),
               },
             ]}
           />

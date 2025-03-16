@@ -7,9 +7,11 @@ interface MediaPreviewProps {
     _id: string;
     name: string;
     items: Array<{
-      id: string;
+      id?: string;
+      media_id?: string;
       title: string;
-      cover_image: string;
+      cover_image?: string;
+      image?: string;
       creator?: string;
     }>;
   };
@@ -34,22 +36,31 @@ export function MediaPreview({ shelf, mediaType }: MediaPreviewProps) {
         </span>
       </div>
       <div className="grid grid-cols-3 gap-2 aspect-[3/2] overflow-hidden rounded-md">
-        {items.slice(0, 3).map((item, index) => (
-          <div
-            key={item.id}
-            className={`relative overflow-hidden bg-muted ${
-              index === 0 ? "col-span-2 row-span-2" : ""
-            }`}
-          >
-            <Image
-              src={item.cover_image || "/placeholder.svg"}
-              alt={item.title}
-              width={500}
-              height={750}
-              className="h-full w-full object-cover transition-transform duration-200 hover:scale-105"
-            />
+        {items.slice(0, 3).map((item, index) => {
+          const imageUrl = item.cover_image || item.image || "/placeholder.svg";
+          return (
+            <div
+              key={`${shelf._id}-${item.id || item.media_id}-${index}`}
+              className={`relative overflow-hidden bg-muted ${
+                index === 0 ? "col-span-2 row-span-2" : ""
+              }`}
+            >
+              <Image
+                src={imageUrl}
+                alt={item.title}
+                width={500}
+                height={750}
+                className="h-full w-full object-cover transition-transform duration-200 hover:scale-105"
+                priority={index === 0}
+              />
+            </div>
+          );
+        })}
+        {items.length === 0 && (
+          <div className="col-span-3 aspect-[3/2] flex items-center justify-center bg-muted rounded-md">
+            <p className="text-sm text-muted-foreground">No items yet</p>
           </div>
-        ))}
+        )}
       </div>
     </Link>
   );

@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button"
+import { Button } from "@/components/ui/button";
 
 export function ProfileHeader() {
   return (
@@ -24,6 +24,5 @@ export function ProfileHeader() {
       </div>
       <Button variant="outline">Edit Profile</Button>
     </div>
-  )
+  );
 }
-

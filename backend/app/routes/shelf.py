@@ -3,8 +3,16 @@ from typing import List, Optional
 from ..database.models.shelf import ShelfModel, ShelfItemModel, MediaType, ShelfType
 from ..services.shelf_service import ShelfService
 from ..services.auth import get_current_user, oauth2_scheme
+from pydantic import BaseModel
 
 router = APIRouter()
+
+class CreateCustomShelfRequest(BaseModel):
+    name: str
+    media_type: str
+    description: Optional[str] = None
+    is_private: bool = False
+    has_collaborators: bool = False
 
 @router.post("/create_default")
 async def create_default_shelves(token: str = Depends(oauth2_scheme)):
@@ -37,6 +45,7 @@ async def get_user_shelves(
             shelf_dict = {
                 "_id": str(shelf.id),
                 "name": shelf.name,
+                "shelf_type": shelf.shelf_type,
                 "items": []
             }
             
@@ -74,7 +83,13 @@ async def add_to_shelf(
         user_id = await get_current_user(token)
         
         # Validate required fields are present
-        required_fields = ["media_type", "media_id", "status", "title", "shelf_type"]
+        if "shelf_id" in shelf_item:
+            # Adding to a custom shelf
+            required_fields = ["media_type", "media_id", "title", "shelf_id"]
+        else:
+            # Adding to a default shelf
+            required_fields = ["media_type", "media_id", "status", "title", "shelf_type"]
+            
         for field in required_fields:
             if field not in shelf_item or not shelf_item[field]:  # Check if field is empty
                 raise HTTPException(
@@ -83,27 +98,39 @@ async def add_to_shelf(
                 )
         
         try:
-            # Convert shelf_type to proper enum value
-            shelf_type_str = shelf_item["shelf_type"]
-            print("Debug - Shelf Type String:", shelf_type_str)  # Add debug logging
-            shelf_type = ShelfType[shelf_type_str]
-            print("Debug - Converted Shelf Type:", shelf_type)  # Add debug logging
-            
             media_type_str = shelf_item["media_type"].upper()
             print("Debug - Media Type String:", media_type_str)  # Add debug logging
             media_type = MediaType[media_type_str]
             print("Debug - Converted Media Type:", media_type)  # Add debug logging
             
-            result = await ShelfService.add_item_to_shelf(
-                user_id=user_id,
-                media_type=media_type,
-                media_id=shelf_item["media_id"],
-                status=shelf_item["status"],
-                title=shelf_item["title"],
-                shelf_type=shelf_type,
-                image_url=shelf_item.get("image_url"),
-                creator=shelf_item.get("creator")
-            )
+            if "shelf_id" in shelf_item:
+                # Adding to a custom shelf
+                result = await ShelfService.add_to_shelf(
+                    user_id=user_id,
+                    shelf_id=shelf_item["shelf_id"],
+                    media_id=shelf_item["media_id"],
+                    media_type=media_type,
+                    title=shelf_item["title"],
+                    creator=shelf_item.get("creator"),
+                    cover_image=shelf_item.get("image_url")
+                )
+            else:
+                # Adding to a default shelf
+                shelf_type_str = shelf_item["shelf_type"]
+                print("Debug - Shelf Type String:", shelf_type_str)  # Add debug logging
+                shelf_type = ShelfType[shelf_type_str]
+                print("Debug - Converted Shelf Type:", shelf_type)  # Add debug logging
+                
+                result = await ShelfService.add_item_to_shelf(
+                    user_id=user_id,
+                    media_type=media_type,
+                    media_id=shelf_item["media_id"],
+                    status=shelf_item["status"],
+                    title=shelf_item["title"],
+                    shelf_type=shelf_type,
+                    image_url=shelf_item.get("image_url"),
+                    creator=shelf_item.get("creator")
+                )
             return result
         except KeyError as e:
             raise HTTPException(
@@ -185,3 +212,50 @@ async def remove_from_shelf(
     except Exception as e:
         print(f"Debug - Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/custom")
+async def create_custom_shelf(
+    data: CreateCustomShelfRequest,
+    token: str = Depends(oauth2_scheme)
+):
+    try:
+        user_id = await get_current_user(token)
+        
+        # Convert media type string to enum
+        media_type_map = {
+            "Books": MediaType.BOOK,
+            "Movies": MediaType.MOVIE,
+            "TV Shows": MediaType.TV_SHOW,
+            "Articles": MediaType.ARTICLE
+        }
+        
+        media_type = media_type_map.get(data.media_type)
+        if not media_type:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid media type: {data.media_type}"
+            )
+        
+        shelf = await ShelfService.create_custom_shelf(
+            user_id=user_id,
+            name=data.name,
+            media_type=media_type,
+            description=data.description,
+            is_private=data.is_private,
+            has_collaborators=data.has_collaborators
+        )
+        
+        return {
+            "message": "Custom shelf created successfully",
+            "shelf": {
+                "id": str(shelf.id),
+                "name": shelf.name,
+                "media_type": shelf.media_type,
+                "description": shelf.description,
+                "is_private": shelf.is_private,
+                "has_collaborators": shelf.has_collaborators,
+                "items": []
+            }
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

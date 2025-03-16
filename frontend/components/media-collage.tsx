@@ -1,13 +1,13 @@
 interface MediaItem {
-  id: number
-  image: string
-  title: string
+  id: number;
+  image: string;
+  title: string;
 }
 
 interface MediaCollageProps {
-  title: string
-  count: string
-  items: MediaItem[]
+  title: string;
+  count: string;
+  items: MediaItem[];
 }
 
 export function MediaCollage({ title, count, items }: MediaCollageProps) {
@@ -26,12 +26,15 @@ export function MediaCollage({ title, count, items }: MediaCollageProps) {
             }`}
           >
             <div className={index === 0 ? "aspect-[4/3]" : "aspect-square"}>
-              <img src={item.image || "/placeholder.svg"} alt={item.title} className="h-full w-full object-cover" />
+              <img
+                src={item.image || "/placeholder.svg"}
+                alt={item.title}
+                className="h-full w-full object-cover"
+              />
             </div>
           </div>
         ))}
       </div>
     </section>
-  )
+  );
 }
-

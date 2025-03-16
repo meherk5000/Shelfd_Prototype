@@ -3,11 +3,19 @@
 import { GlobalSearch } from "./global-search";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/lib/context/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { User, Settings, LogOut } from "lucide-react";
 
 export function Header() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, logout } = useAuth();
   const pathname = usePathname();
 
   const getPageTitle = (path: string) => {
@@ -38,11 +46,11 @@ export function Header() {
   const pageInfo = getPageTitle(pathname);
 
   return (
-    <div className="flex h-16 items-center w-full px-6">
+    <div className="flex h-24 items-center w-full px-6">
       <div className="w-[150px]">
         <Link
           href={pageInfo.href}
-          className="font-semibold text-xl hover:text-primary transition-colors"
+          className="font-semibold text-3xl hover:text-primary transition-colors block"
         >
           {pageInfo.title}
         </Link>
@@ -51,21 +59,55 @@ export function Header() {
         <GlobalSearch />
       </div>
       <div className="flex items-center justify-end w-[150px]">
-        {isAuthenticated ? (
-          <Link href="/profile">
-            <img
-              src={user?.image || "/placeholder.svg?height=40&width=40"}
-              alt="Profile"
-              className="rounded-full w-10 h-10"
-            />
-          </Link>
+        {isAuthenticated && user ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="relative h-10 w-10 rounded-full"
+              >
+                <Avatar className="h-10 w-10">
+                  <AvatarImage
+                    src={user?.image || "/placeholder.svg"}
+                    alt={user?.username || "User"}
+                  />
+                  <AvatarFallback>
+                    {user?.username?.charAt(0).toUpperCase() || "U"}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <Link href="/profile" className="flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  <span>Profile</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/settings" className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  <span>Settings</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={logout}
+                className="text-red-500 hover:text-red-700 focus:text-red-700"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                <span>Sign out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <div className="flex gap-2">
             <Link href="/auth/sign-in">
-              <Button variant="ghost">Sign in</Button>
+              <Button size="lg" variant="ghost">
+                Sign in
+              </Button>
             </Link>
             <Link href="/auth/sign-up">
-              <Button>Sign up</Button>
+              <Button size="lg">Sign up</Button>
             </Link>
           </div>
         )}

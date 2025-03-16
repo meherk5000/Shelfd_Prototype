@@ -1,13 +1,13 @@
 interface MediaItem {
-  id: number
-  title: string
-  image: string
+  id: number;
+  title: string;
+  image: string;
 }
 
 interface MediaGridProps {
-  title: string
-  count: number
-  items: MediaItem[]
+  title: string;
+  count: number;
+  items: MediaItem[];
 }
 
 export function MediaGrid({ title, count, items }: MediaGridProps) {
@@ -21,7 +21,10 @@ export function MediaGrid({ title, count, items }: MediaGridProps) {
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
         {items.map((item) => (
-          <div key={item.id} className="group relative aspect-[2/3] overflow-hidden rounded-lg bg-muted">
+          <div
+            key={item.id}
+            className="group relative aspect-[2/3] overflow-hidden rounded-lg bg-muted"
+          >
             <img
               src={item.image || "/placeholder.svg"}
               alt={item.title}
@@ -36,6 +39,5 @@ export function MediaGrid({ title, count, items }: MediaGridProps) {
         ))}
       </div>
     </section>
-  )
+  );
 }
-

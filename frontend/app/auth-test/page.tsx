@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/lib/context/AuthContext";
 import { useState, useEffect } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "@/lib/api";
