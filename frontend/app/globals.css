@@ -49,3 +49,23 @@
   }
 }
 
+/* Additional utility classes for layout and overflow control */
+.card-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Ensure all content respects container boundaries */
+.overflow-hidden-strict {
+  overflow: hidden !important;
+  max-width: 100% !important;
+}
+
+/* Ensure all cards prevent text overflow */
+.card, 
+.rounded-lg, 
+.bg-card {
+  overflow: hidden;
+}
+

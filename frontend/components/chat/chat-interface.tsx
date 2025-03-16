@@ -61,6 +61,15 @@ const currentUser: User = {
   isOnline: true,
 };
 
+// Add Dustin to the mock users
+const dustinBot: User = {
+  id: "dustin",
+  name: "Dustin",
+  username: "dustin",
+  avatar: "/dustin.png",
+  isOnline: true,
+};
+
 const mockUsers: User[] = [
   {
     id: "user1",
@@ -104,7 +113,23 @@ const mockUsers: User[] = [
   },
 ];
 
+// Create a default Dustin conversation
+const dustinConversation: Conversation = {
+  id: "dustin-conv",
+  participants: [dustinBot],
+  lastMessage: {
+    id: "dustin-msg-last",
+    sender: dustinBot,
+    content: "How can I help you discover new books and movies today?",
+    timestamp: new Date(),
+    isRead: true,
+    isSent: true,
+  },
+  unreadCount: 0,
+};
+
 const mockConversations: Conversation[] = [
+  dustinConversation,
   {
     id: "conv1",
     participants: [mockUsers[0]],
@@ -177,7 +202,37 @@ const mockConversations: Conversation[] = [
   },
 ];
 
+// Add Dustin welcome messages
+const dustinMessages: Message[] = [
+  {
+    id: "dustin-msg1",
+    sender: dustinBot,
+    content: "👋 Hi there! I'm Dustin, your media discovery assistant.",
+    timestamp: new Date(Date.now() - 1000 * 60), // 1 minute ago
+    isRead: true,
+    isSent: true,
+  },
+  {
+    id: "dustin-msg2",
+    sender: dustinBot,
+    content:
+      "I can help you find new books, movies, TV shows, and articles based on your interests.",
+    timestamp: new Date(Date.now() - 1000 * 40), // 40 seconds ago
+    isRead: true,
+    isSent: true,
+  },
+  {
+    id: "dustin-msg3",
+    sender: dustinBot,
+    content: "How can I help you discover new books and movies today?",
+    timestamp: new Date(), // now
+    isRead: true,
+    isSent: true,
+  },
+];
+
 const mockMessages: Record<string, Message[]> = {
+  "dustin-conv": dustinMessages,
   conv1: [
     {
       id: "conv1-1",
@@ -359,7 +414,7 @@ export function ChatInterface() {
   const [conversations, setConversations] =
     useState<Conversation[]>(mockConversations);
   const [activeConversation, setActiveConversation] = useState<string | null>(
-    mockConversations[0]?.id || null
+    "dustin-conv" // Set Dustin as the default active conversation
   );
   const [messages, setMessages] =
     useState<Record<string, Message[]>>(mockMessages);
@@ -437,9 +492,9 @@ export function ChatInterface() {
   };
 
   return (
-    <div className="h-full flex border-t bg-background">
+    <div className="h-full flex border-t bg-background overflow-hidden">
       {/* Sidebar with conversation list */}
-      <div className="w-[320px] border-r flex flex-col bg-card">
+      <div className="w-[320px] flex-shrink-0 border-r flex flex-col bg-card overflow-hidden shadow-md relative z-10">
         <div className="p-4 border-b">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -492,7 +547,7 @@ export function ChatInterface() {
                           handleSelectConversation(conversation.id)
                         }
                       >
-                        <div className="relative">
+                        <div className="relative flex-shrink-0">
                           <Avatar>
                             <AvatarImage
                               src={
@@ -521,15 +576,15 @@ export function ChatInterface() {
                           )}
                         </div>
 
-                        <div className="flex-1 min-w-0 flex flex-col items-start">
+                        <div className="flex-1 min-w-0 flex flex-col items-start overflow-hidden w-[calc(100%-50px)]">
                           <div className="flex justify-between w-full">
-                            <span className="font-medium truncate">
+                            <span className="font-medium truncate max-w-[150px]">
                               {conversation.isGroup
                                 ? conversation.name
                                 : otherParticipant?.name}
                             </span>
                             {conversation.lastMessage && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-xs text-muted-foreground flex-shrink-0 ml-1">
                                 {formatMessageTime(
                                   conversation.lastMessage.timestamp
                                 )}
@@ -538,14 +593,16 @@ export function ChatInterface() {
                           </div>
 
                           {conversation.lastMessage && (
-                            <div className="flex items-center w-full mt-1">
-                              <p className="text-sm text-muted-foreground truncate mr-2">
+                            <div className="flex items-center w-full mt-1 overflow-hidden">
+                              <p className="text-sm text-muted-foreground truncate w-full max-w-full pr-1">
                                 {conversation.lastMessage.sender.id ===
                                 currentUser.id ? (
-                                  <span className="mr-1 opacity-70">You:</span>
+                                  <span className="inline-block mr-1 opacity-70">
+                                    You:
+                                  </span>
                                 ) : (
                                   conversation.isGroup && (
-                                    <span className="mr-1 opacity-70">
+                                    <span className="inline-block mr-1 opacity-70">
                                       {
                                         conversation.lastMessage.sender.name.split(
                                           " "
@@ -555,11 +612,13 @@ export function ChatInterface() {
                                     </span>
                                   )
                                 )}
-                                {conversation.lastMessage.content}
+                                <span className="truncate inline-block align-bottom max-w-[180px]">
+                                  {conversation.lastMessage.content}
+                                </span>
                               </p>
 
                               {conversation.unreadCount > 0 && (
-                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center ml-1">
                                   {conversation.unreadCount}
                                 </span>
                               )}
@@ -630,7 +689,7 @@ export function ChatInterface() {
       </div>
 
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden border-l">
         {activeConversation && currentConversation ? (
           <>
             {/* Chat header */}

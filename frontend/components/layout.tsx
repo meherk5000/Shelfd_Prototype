@@ -13,7 +13,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 md:pl-48 flex flex-col">
+      <div className="flex-1 md:pl-48 flex flex-col overflow-x-hidden">
         {/* Header */}
         <header className="sticky top-0 z-40 border-b bg-background">
           <Header />
