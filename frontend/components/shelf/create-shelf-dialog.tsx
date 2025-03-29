@@ -123,10 +123,13 @@ export function CreateShelfDialog() {
           Create New Shelf List
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent
+        className="sm:max-w-[500px]"
+        aria-describedby="create-shelf-description"
+      >
         <DialogHeader>
           <DialogTitle>Create New Shelf List</DialogTitle>
-          <DialogDescription>
+          <DialogDescription id="create-shelf-description">
             Create a new list to organize your media. You can add items to it
             later.
           </DialogDescription>

@@ -505,10 +505,13 @@ function UpdateProgressDialog({
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent
+        className="sm:max-w-[425px]"
+        aria-describedby="update-progress-description"
+      >
         <DialogHeader>
           <DialogTitle>Update Progress</DialogTitle>
-          <DialogDescription>
+          <DialogDescription id="update-progress-description">
             Track your progress for {media.title}
           </DialogDescription>
         </DialogHeader>

@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { AddToCustomShelfDialog } from "./add-to-custom-shelf-dialog";
+import { ShelfStatusChangeDialog } from "./shelf-status-change-dialog";
 
 interface ShelfButtonProps {
   mediaType: keyof MediaTypeMapping;
@@ -33,10 +34,17 @@ export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
   const { isAuthenticated } = useAuth();
   const [isAdded, setIsAdded] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<ShelfStatus>(
-    ShelfStatus.WANT_TO
+    mediaType === "Articles" ? ShelfStatus.SAVED : ShelfStatus.WANT_TO
   );
   const [customShelves, setCustomShelves] = useState<any[]>([]);
   const [isCustomShelfDialogOpen, setIsCustomShelfDialogOpen] = useState(false);
+  const [isStatusChangeDialogOpen, setIsStatusChangeDialogOpen] =
+    useState(false);
+  const [pendingFinishStatus, setPendingFinishStatus] =
+    useState<ShelfStatus | null>(null);
+  const [pendingShelfId, setPendingShelfId] = useState<string | undefined>(
+    undefined
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -70,6 +78,22 @@ export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
       return;
     }
 
+    // If the status is "Finished", show the rating dialog
+    if (status === ShelfStatus.FINISHED) {
+      setPendingFinishStatus(status as ShelfStatus);
+      setPendingShelfId(shelfId);
+      setIsStatusChangeDialogOpen(true);
+      return;
+    }
+
+    // Otherwise, proceed with adding to shelf
+    await completeAddToShelf(status, shelfId);
+  };
+
+  const completeAddToShelf = async (
+    status: ShelfStatus | string,
+    shelfId?: string
+  ) => {
     try {
       const result = await addToShelf(mediaType, status, item, shelfId);
       if (!result.success) {
@@ -107,6 +131,15 @@ export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
     }
   };
 
+  const handleDialogComplete = () => {
+    // After rating dialog is closed, complete the shelf addition
+    if (pendingFinishStatus) {
+      completeAddToShelf(pendingFinishStatus, pendingShelfId);
+      setPendingFinishStatus(null);
+      setPendingShelfId(undefined);
+    }
+  };
+
   const handleAddToCustomShelf = async (shelfId: string) => {
     await handleAddToShelf("", shelfId);
   };
@@ -139,7 +172,15 @@ export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
           return "Want to Watch";
       }
     } else {
-      return "Save";
+      // Articles
+      switch (status) {
+        case ShelfStatus.SAVED:
+          return "Save";
+        case ShelfStatus.FINISHED:
+          return "Finished";
+        default:
+          return "Save";
+      }
     }
   };
 
@@ -225,6 +266,15 @@ export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
         onClose={() => setIsCustomShelfDialogOpen(false)}
         onAddToShelf={handleAddToCustomShelf}
         mediaType={mediaType}
+      />
+
+      <ShelfStatusChangeDialog
+        open={isStatusChangeDialogOpen}
+        onOpenChange={setIsStatusChangeDialogOpen}
+        mediaId={item.id}
+        mediaType={mediaType}
+        mediaTitle={item.title}
+        onComplete={handleDialogComplete}
       />
     </>
   );

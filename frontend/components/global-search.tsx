@@ -97,6 +97,9 @@ export function GlobalSearch() {
       case "book":
         targetPath = `/books/${result.id}`;
         break;
+      case "article":
+        targetPath = `/article/${result.id}`;
+        break;
       default:
         console.error("Unknown media type:", result.type);
         return;

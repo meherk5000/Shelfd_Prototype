@@ -44,5 +44,10 @@ class ShelfItemModel(Document):
     cover_image: Optional[str] = None
     added_at: datetime = datetime.utcnow()
     
+    # New fields for ratings and reviews
+    rating: Optional[float] = None  # Store rating as float to support quarter stars (1, 1.25, 1.5, 1.75, etc.)
+    review: Optional[str] = None  # Text review
+    review_date: Optional[datetime] = None  # When the review was written/updated
+    
     class Settings:
         name = "shelf_items"

@@ -254,6 +254,29 @@ export const searchQuick = async (query: string) => {
   }
 };
 
+export const getArticleDetails = async (articleId: string) => {
+  try {
+    console.log("[Frontend] Fetching article with ID:", articleId);
+    
+    // Get article from the API
+    console.log(`[Frontend] Making request to: ${API_BASE_URL}/media/article/${articleId}`);
+    const response = await axios.get(
+      `${API_BASE_URL}/media/article/${articleId}`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    
+    console.log("[Frontend] Article data received:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error("[Frontend] Error fetching article details:", error);
+    throw error;
+  }
+};
+
 // Helper function to check if user is authenticated
 export const checkAuth = async () => {
   try {
@@ -264,5 +287,140 @@ export const checkAuth = async () => {
     return response.status === 200
   } catch (error) {
     return false
+  }
+}
+
+// Explore API Endpoints
+export async function getTrendingMedia(
+  tab: string = "All", 
+  options?: { 
+    minRating?: number, 
+    maxRating?: number, 
+    page?: number,
+    limit?: number
+  }
+) {
+  console.log(`Fetching trending media for tab: ${tab}`);
+  try {
+    // Build query parameters
+    const params = new URLSearchParams({
+      tab: tab
+    });
+    
+    // Add optional filters if provided
+    if (options?.minRating) params.append('min_rating', options.minRating.toString());
+    if (options?.maxRating) params.append('max_rating', options.maxRating.toString());
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/explore/trending?${params.toString()}`,
+      {
+        next: { revalidate: 3600 }, // Cache for 1 hour
+      }
+    );
+
+    if (!response.ok) {
+      console.error("Error fetching trending media:", response.statusText);
+      return { results: [] };
+    }
+
+    const data = await response.json();
+    console.log(`Received ${data.results.length} trending items`);
+    return data;
+  } catch (error) {
+    console.error("Failed to fetch trending media:", error);
+    return { results: [] };
+  }
+}
+
+export async function getNewReleases(
+  tab: string = "All", 
+  options?: { 
+    minRating?: number, 
+    maxRating?: number, 
+    fromDate?: string, 
+    toDate?: string,
+    page?: number,
+    limit?: number
+  }
+) {
+  console.log(`Fetching new releases for tab: ${tab}`);
+  try {
+    // Build query parameters
+    const params = new URLSearchParams({
+      tab: tab
+    });
+    
+    // Add optional filters if provided
+    if (options?.minRating) params.append('min_rating', options.minRating.toString());
+    if (options?.maxRating) params.append('max_rating', options.maxRating.toString());
+    if (options?.fromDate) params.append('from_date', options.fromDate);
+    if (options?.toDate) params.append('to_date', options.toDate);
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/explore/new-releases?${params.toString()}`,
+      {
+        next: { revalidate: 3600 }, // Cache for 1 hour
+      }
+    );
+
+    if (!response.ok) {
+      console.error("Error fetching new releases:", response.statusText);
+      return { results: [] };
+    }
+
+    const data = await response.json();
+    console.log(`Received ${data.results.length} new releases`);
+    return data;
+  } catch (error) {
+    console.error("Failed to fetch new releases:", error);
+    return { results: [] };
+  }
+}
+
+export async function getCategoryMedia(
+  category: string, 
+  tab: string = "All", 
+  options?: { 
+    minRating?: number, 
+    maxRating?: number, 
+    page?: number,
+    limit?: number
+  }
+) {
+  console.log(`Fetching ${category} media for tab: ${tab}`);
+  try {
+    // Build query parameters
+    const params = new URLSearchParams({
+      tab: tab
+    });
+    
+    // Add optional filters if provided
+    if (options?.minRating) params.append('min_rating', options.minRating.toString());
+    if (options?.maxRating) params.append('max_rating', options.maxRating.toString());
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/explore/category/${category}?${params.toString()}`,
+      {
+        next: { revalidate: 3600 }, // Cache for 1 hour
+      }
+    );
+
+    if (!response.ok) {
+      console.error(`Error fetching ${category} media:`, response.statusText);
+      return { results: [] };
+    }
+
+    const data = await response.json();
+    console.log(`Received ${data.results.length} items for ${category}`);
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch ${category} media:`, error);
+    return { results: [] };
   }
 }

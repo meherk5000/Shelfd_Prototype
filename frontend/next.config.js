@@ -9,7 +9,10 @@ const nextConfig = {
       'lh3.googleusercontent.com',
       'www.themoviedb.org',
       'images-na.ssl-images-amazon.com',
-      'storage.googleapis.com'
+      'storage.googleapis.com',
+      'images.aeonmedia.co',
+      'i.imgur.com',
+      'media.newyorker.com'
     ],
     remotePatterns: [
       {

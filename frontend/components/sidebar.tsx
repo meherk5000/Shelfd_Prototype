@@ -13,6 +13,7 @@ import {
   PlusCircle,
   User,
   LogOut,
+  Archive,
 } from "lucide-react";
 import { SignOutButton } from "./SignOutButton";
 import { cn } from "@/lib/utils";
@@ -22,12 +23,12 @@ import { useState, useEffect } from "react";
 const publicItems = [
   { icon: Home, label: "Home", href: "/" },
   { icon: Grid, label: "Clubs", href: "/clubs" },
-  { icon: Search, label: "Search", href: "/search" },
+  { icon: Search, label: "Explore", href: "/explore" },
 ];
 
 // Protected routes only for authenticated users
 const privateItems = [
-  { icon: BookOpen, label: "Shelf", href: "/shelf" },
+  { icon: Archive, label: "Shelf", href: "/shelf" },
   { icon: Bell, label: "Activity", href: "/activity" },
   { icon: MessageSquare, label: "Chat", href: "/chat" },
   { icon: PlusCircle, label: "Create", href: "/create" },

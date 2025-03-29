@@ -63,10 +63,13 @@ export function AddToCustomShelfDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent
+        className="sm:max-w-[425px]"
+        aria-describedby="shelf-dialog-description"
+      >
         <DialogHeader>
           <DialogTitle>Add to Custom Shelf</DialogTitle>
-          <DialogDescription>
+          <DialogDescription id="shelf-dialog-description">
             Choose a custom shelf to add this item to
           </DialogDescription>
         </DialogHeader>

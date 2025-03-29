@@ -8,6 +8,8 @@ from app.database.models.user import User
 from app.database.models.shelf import ShelfModel, ShelfItemModel
 from config import Settings
 import os
+import asyncio
+from app.services.article_service import ArticleService
 
 app = FastAPI(title="Shelfd API")
 
@@ -48,9 +50,23 @@ async def startup_db_client():
             document_models=[User, ShelfModel, ShelfItemModel]
         )
         print(f"Successfully connected to MongoDB and initialized Beanie!")
+        
+        # Fetch initial articles
+        asyncio.create_task(fetch_initial_articles())
     except Exception as e:
         print(f"Failed to connect to MongoDB: {str(e)}")
         raise e
+
+async def fetch_initial_articles():
+    """Fetches articles in the background after startup"""
+    try:
+        print("Fetching initial articles from RSS feeds...")
+        # Add a delay to ensure DB connection is fully established
+        await asyncio.sleep(2)
+        result = await ArticleService.fetch_and_store_articles()
+        print(f"Fetched {result['total']} articles, {result['new']} are new")
+    except Exception as e:
+        print(f"Error fetching initial articles: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
