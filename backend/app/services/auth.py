@@ -159,5 +159,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     except JWTError:
         raise credentials_exception
     
-    # You'll implement the user lookup once we set up the routes
-    return user_id
+    from ..database.models.user import User
+    from beanie import PydanticObjectId
+    
+    try:
+        user = await User.get(PydanticObjectId(user_id))
+        if user is None:
+            raise credentials_exception
+        return user
+    except Exception:
+        raise credentials_exception

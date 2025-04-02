@@ -33,6 +33,10 @@ class ShelfService:
     async def create_default_shelves(user_id: str, media_type: MediaType) -> List[ShelfModel]:
         default_shelves = []
         
+        # Convert user_id to string if it's a User object
+        if hasattr(user_id, 'id'):
+            user_id = str(user_id.id)
+        
         if media_type == MediaType.ARTICLE:
             statuses = ["saved", "finished"]
             names = ["Saved", "Finished"]
@@ -123,6 +127,10 @@ class ShelfService:
         try:
             # Debug the query parameters
             print(f"Debug - Querying shelves for user {user_id} and media type {media_type}")
+            
+            # Convert user_id to string if it's a User object
+            if hasattr(user_id, 'id'):
+                user_id = str(user_id.id)
             
             # Get all shelves for this user and media type
             shelves = await ShelfModel.find({

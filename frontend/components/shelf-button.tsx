@@ -27,9 +27,14 @@ interface ShelfButtonProps {
     image_url?: string;
     creator?: string;
   };
+  onShelfUpdated?: () => void;
 }
 
-export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
+export function ShelfButton({
+  mediaType,
+  item,
+  onShelfUpdated,
+}: ShelfButtonProps) {
   const { addToShelf, getCustomShelves, loading } = useShelf();
   const { isAuthenticated } = useAuth();
   const [isAdded, setIsAdded] = useState(false);
@@ -119,6 +124,11 @@ export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
           item.title
         } has been added to your ${mediaType.toLowerCase()} shelf.`,
       });
+
+      // Call the onShelfUpdated callback if provided
+      if (onShelfUpdated) {
+        onShelfUpdated();
+      }
     } catch (error: any) {
       console.error("Failed to add to shelf:", error);
       toast({
@@ -274,6 +284,7 @@ export function ShelfButton({ mediaType, item }: ShelfButtonProps) {
         mediaId={item.id}
         mediaType={mediaType}
         mediaTitle={item.title}
+        mediaImage={item.image_url}
         onComplete={handleDialogComplete}
       />
     </>

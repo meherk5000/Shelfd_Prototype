@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useReviews } from "@/lib/hooks/use-reviews";
 import { useRatings } from "@/lib/hooks/use-ratings";
 import { StarRating } from "@/components/ui/star-rating";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +22,7 @@ interface ShelfStatusChangeDialogProps {
   mediaId: string;
   mediaType: string;
   mediaTitle: string;
+  mediaImage?: string;
   onComplete?: () => void;
 }
 
@@ -30,11 +32,13 @@ export function ShelfStatusChangeDialog({
   mediaId,
   mediaType,
   mediaTitle,
+  mediaImage,
   onComplete,
 }: ShelfStatusChangeDialogProps) {
   const [rating, setRating] = useState<number>(0);
   const [review, setReview] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const { submitReview } = useReviews();
   const { submitRating } = useRatings();
 
   // Reset form when dialog opens
@@ -61,13 +65,9 @@ export function ShelfStatusChangeDialog({
 
     setSubmitting(true);
     try {
-      // Fix the media type normalization
-      // The issue is that the current code is transforming "Movies" to "MOVIE"
-      // But we need it to be just "MOVIE" without any transformation
-
       // Debug the values being sent
       console.log(
-        `Rating submission - Media Type: ${mediaType}, Media ID: ${mediaId}, Rating: ${rating}`
+        `Review submission - Media Type: ${mediaType}, Media ID: ${mediaId}, Rating: ${rating}`
       );
 
       let normalizedType;
@@ -91,21 +91,35 @@ export function ShelfStatusChangeDialog({
 
       console.log(`Normalized media type: ${normalizedType}`);
 
-      const result = await submitRating(
+      // Submit to both systems for compatibility
+      // Try the new review system first
+      const reviewResult = await submitReview(
         normalizedType,
         mediaId,
         rating,
-        review || undefined
+        review || undefined,
+        false // containsSpoilers parameter
       );
 
-      if (result.success) {
+      // Also try the legacy system (will add to shelf if not there)
+      const ratingResult = await submitRating(
+        normalizedType,
+        mediaId,
+        rating,
+        review || undefined,
+        mediaTitle,
+        mediaImage
+      );
+
+      // Use either result for UI feedback
+      if (reviewResult.success || ratingResult.success) {
         onOpenChange(false);
         if (onComplete) {
           onComplete();
         }
       }
     } catch (error) {
-      console.error("Error submitting rating:", error);
+      console.error("Error submitting review:", error);
     } finally {
       setSubmitting(false);
     }

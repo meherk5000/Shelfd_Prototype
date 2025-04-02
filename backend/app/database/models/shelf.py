@@ -42,7 +42,7 @@ class ShelfItemModel(Document):
     title: str
     creator: Optional[str] = None
     cover_image: Optional[str] = None
-    added_at: datetime = datetime.utcnow()
+    added_at: datetime = Field(default_factory=datetime.utcnow)
     
     # New fields for ratings and reviews
     rating: Optional[float] = None  # Store rating as float to support quarter stars (1, 1.25, 1.5, 1.75, etc.)
@@ -51,3 +51,7 @@ class ShelfItemModel(Document):
     
     class Settings:
         name = "shelf_items"
+        indexes = [
+            [("user_id", 1), ("shelf_id", 1)],  # Compound index
+            [("user_id", 1), ("media_id", 1)],  # Compound index
+        ]

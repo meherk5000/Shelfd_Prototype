@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Loader2, Star } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { MediaHeader } from "@/components/media/media-header";
 import { MediaTabs } from "@/components/media/media-tabs";
 import { getMovieDetails } from "@/lib/api";
@@ -9,7 +9,8 @@ import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { ShelfButton } from "@/components/shelf-button";
 import { ReviewForm } from "@/components/media/review-form";
-import { useRatings } from "@/lib/hooks/use-ratings";
+import { ReviewList } from "@/components/media/review-list";
+import { useReviews } from "@/lib/hooks/use-reviews";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 
@@ -37,14 +38,13 @@ export function MovieDetails({ id }: { id: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("About");
-  const [userRating, setUserRating] = useState<number | null>(null);
-  const [userReview, setUserReview] = useState<string | null>(null);
   const [isInShelf, setIsInShelf] = useState(false);
-  const [avgRating, setAvgRating] = useState<number | null>(null);
-  const [totalRatings, setTotalRatings] = useState(0);
+  const [userReview, setUserReview] = useState<any>(null);
+  const [refreshReviews, setRefreshReviews] = useState(0);
+
   const { isAuthenticated } = useAuth();
   const router = useRouter();
-  const { getRating } = useRatings();
+  const { getUserReview } = useReviews();
 
   const fetchMovieDetails = useCallback(async () => {
     try {
@@ -58,37 +58,36 @@ export function MovieDetails({ id }: { id: number }) {
     }
   }, [id]);
 
-  const fetchUserRating = useCallback(async () => {
+  const fetchUserReview = useCallback(async () => {
     if (!isAuthenticated) return;
 
     try {
-      const result = await getRating("movie", id.toString());
-      if (result.success && result.data) {
-        setUserRating(result.data.user_rating);
-        setUserReview(result.data.user_review);
-        setIsInShelf(result.data.in_shelf);
-        setAvgRating(result.data.avg_rating);
-        setTotalRatings(result.data.total_ratings);
+      const result = await getUserReview("MOVIE", id.toString());
+      if (result.exists) {
+        setUserReview(result.review);
+      } else {
+        setUserReview(null);
       }
+
+      // Check if the movie is in user's shelf (this would need to be implemented)
+      // For now, we'll just assume it is if they have a review
+      setIsInShelf(result.exists);
     } catch (error) {
-      console.error("Error fetching user rating:", error);
+      console.error("Error fetching user review:", error);
     }
-  }, [id, isAuthenticated, getRating]);
+  }, [id, isAuthenticated, getUserReview]);
 
-  const handleRatingComplete = useCallback(() => {
-    fetchUserRating();
-  }, [fetchUserRating]);
-
-  const handleAddToShelf = useCallback(async () => {
-    await fetchUserRating();
-  }, [fetchUserRating]);
+  const handleReviewSuccess = useCallback(() => {
+    fetchUserReview();
+    setRefreshReviews((prev) => prev + 1); // Trigger review list refresh
+  }, [fetchUserReview]);
 
   useEffect(() => {
     fetchMovieDetails();
     if (isAuthenticated) {
-      fetchUserRating();
+      fetchUserReview();
     }
-  }, [fetchMovieDetails, fetchUserRating, isAuthenticated]);
+  }, [fetchMovieDetails, fetchUserReview, isAuthenticated]);
 
   const handleWantToWatch = () => {
     if (!isAuthenticated) {
@@ -98,6 +97,12 @@ export function MovieDetails({ id }: { id: number }) {
       return;
     }
   };
+
+  const handleShelfUpdate = useCallback(() => {
+    // When a movie is added to or removed from a shelf, update isInShelf
+    setIsInShelf(true);
+    fetchUserReview();
+  }, [fetchUserReview]);
 
   if (loading) {
     return (
@@ -147,6 +152,7 @@ export function MovieDetails({ id }: { id: number }) {
                       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
                       : undefined,
                   }}
+                  onShelfUpdated={handleShelfUpdate}
                 />
               ) : undefined,
             }}
@@ -219,16 +225,19 @@ export function MovieDetails({ id }: { id: number }) {
           )}
 
           {activeTab === "Reviews & Rating" && (
-            <div className="space-y-6">
+            <div className="space-y-8">
               {isAuthenticated ? (
                 <ReviewForm
                   mediaId={id.toString()}
                   mediaType="MOVIE"
-                  initialRating={userRating || 0}
-                  initialReview={userReview || ""}
-                  onComplete={handleRatingComplete}
-                  inShelf={isInShelf}
-                  onAddToShelf={handleAddToShelf}
+                  isInShelf={isInShelf}
+                  initialRating={userReview?.rating || 0}
+                  initialReview={userReview?.review_text || ""}
+                  initialContainsSpoilers={
+                    userReview?.contains_spoilers || false
+                  }
+                  reviewId={userReview?.id}
+                  onSuccess={handleReviewSuccess}
                 />
               ) : (
                 <div className="bg-muted p-6 rounded-lg text-center">
@@ -243,71 +252,11 @@ export function MovieDetails({ id }: { id: number }) {
 
               <Separator className="my-6" />
 
-              <div>
-                <h2 className="text-xl font-semibold mb-4">
-                  Community Ratings
-                </h2>
-                {totalRatings > 0 ? (
-                  <div className="flex items-center gap-4">
-                    <div className="bg-muted p-4 rounded-lg flex items-center flex-col justify-center w-32 h-32">
-                      <div className="text-3xl font-bold">
-                        {avgRating?.toFixed(1) || "0"}
-                      </div>
-                      <div className="flex mt-1">
-                        <Star
-                          className={`h-4 w-4 ${
-                            avgRating
-                              ? "text-yellow-400 fill-yellow-400"
-                              : "text-gray-300"
-                          }`}
-                        />
-                        <Star
-                          className={`h-4 w-4 ${
-                            avgRating && avgRating >= 2
-                              ? "text-yellow-400 fill-yellow-400"
-                              : "text-gray-300"
-                          }`}
-                        />
-                        <Star
-                          className={`h-4 w-4 ${
-                            avgRating && avgRating >= 3
-                              ? "text-yellow-400 fill-yellow-400"
-                              : "text-gray-300"
-                          }`}
-                        />
-                        <Star
-                          className={`h-4 w-4 ${
-                            avgRating && avgRating >= 4
-                              ? "text-yellow-400 fill-yellow-400"
-                              : "text-gray-300"
-                          }`}
-                        />
-                        <Star
-                          className={`h-4 w-4 ${
-                            avgRating && avgRating >= 5
-                              ? "text-yellow-400 fill-yellow-400"
-                              : "text-gray-300"
-                          }`}
-                        />
-                      </div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {totalRatings}{" "}
-                        {totalRatings === 1 ? "rating" : "ratings"}
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">
-                        Average rating from {totalRatings}{" "}
-                        {totalRatings === 1 ? "user" : "users"}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">
-                    No ratings yet. Be the first to rate this movie!
-                  </p>
-                )}
-              </div>
+              <ReviewList
+                mediaId={id.toString()}
+                mediaType="MOVIE"
+                refreshTrigger={refreshReviews}
+              />
             </div>
           )}
 

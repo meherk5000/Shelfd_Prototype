@@ -1,11 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.database.client import connect_to_mongo, close_mongo_connection
-from app.routes import media, auth, shelf
+from app.routes import media, auth, shelf, reviews, clubs
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.database.models.user import User
 from app.database.models.shelf import ShelfModel, ShelfItemModel
+from app.database.models.review import Review, ReviewLike
+from app.database.models.club import Club
+from app.database.models.club_post import ClubPost
+from app.database.models.club_thread import ClubThread
+from app.database.models.club_milestone import ClubMilestone
 from config import Settings
 import os
 import asyncio
@@ -26,10 +32,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Ensure uploads directory exists
+os.makedirs("uploads/club_covers", exist_ok=True)
+
+# Mount the uploads directory to serve static files through multiple routes
+app.mount("/club_covers", StaticFiles(directory="uploads/club_covers"), name="club_covers")
+app.mount("/api/club_covers", StaticFiles(directory="uploads/club_covers"), name="api_club_covers")
+
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(media.router, prefix="/media", tags=["media"])
 app.include_router(shelf.router, prefix="/api/shelves", tags=["shelves"])
+app.include_router(reviews.router, prefix="/api", tags=["reviews"])
+app.include_router(clubs.router, prefix="/api/clubs", tags=["clubs"])
 
 @app.on_event("startup")
 async def startup_db_client():
@@ -47,7 +62,7 @@ async def startup_db_client():
         
         await init_beanie(
             database=client[settings.MONGODB_NAME],
-            document_models=[User, ShelfModel, ShelfItemModel]
+            document_models=[User, ShelfModel, ShelfItemModel, Review, ReviewLike, Club, ClubPost, ClubThread, ClubMilestone]
         )
         print(f"Successfully connected to MongoDB and initialized Beanie!")
         

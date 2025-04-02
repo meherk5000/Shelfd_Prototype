@@ -26,16 +26,29 @@ async def create_default_shelves(token: str = Depends(oauth2_scheme)):
 
 @router.get("/user/{media_type}")
 async def get_user_shelves(
-    media_type: MediaType,
+    media_type: str,
     token: str = Depends(oauth2_scheme)
 ):
     try:
         # Debug logging
         print(f"Debug - Received media_type: {media_type}")
-        print(f"Debug - Valid media types: {[m.value for m in MediaType]}")
         
-        user_id = await get_current_user(token)
-        shelves = await ShelfService.get_user_shelves(user_id, media_type)
+        # Convert media type string to enum
+        try:
+            media_type_enum = MediaType(media_type)
+            print(f"Debug - Converted to MediaType enum: {media_type_enum}")
+        except ValueError:
+            print(f"Debug - Invalid media type: {media_type}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid media type: {media_type}"
+            )
+        
+        user = await get_current_user(token)
+        user_id = str(user.id)  # Convert User object ID to string
+        print(f"Debug - Using user_id: {user_id}")
+        
+        shelves = await ShelfService.get_user_shelves(user_id, media_type_enum)
         
         if not shelves:
             return []
@@ -81,7 +94,9 @@ async def add_to_shelf(
     token: str = Depends(oauth2_scheme)
 ):
     try:
-        user_id = await get_current_user(token)
+        user = await get_current_user(token)
+        user_id = str(user.id)  # Convert User object ID to string
+        print(f"Debug - Using user_id: {user_id}")
         
         # Validate required fields are present
         if "shelf_id" in shelf_item:

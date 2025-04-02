@@ -135,6 +135,8 @@ export function useShelf() {
       const mappedType = mediaTypeMap[mediaType];
       
       console.log('Fetching shelves for media type:', mappedType);
+      console.log('API URL:', `${API_BASE_URL}/api/shelves/user/${mappedType}`);
+      
       const response = await axios.get(
         `${API_BASE_URL}/api/shelves/user/${mappedType}`
       );
@@ -144,7 +146,18 @@ export function useShelf() {
       
       return response.data;
     } catch (error) {
-      console.error("Error fetching shelves:", error);
+      if (axios.isAxiosError(error)) {
+        console.error("Error fetching shelves:", error);
+        console.error("Error details:", {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          mediaType,
+          mappedType: mediaTypeMap[mediaType]
+        });
+      } else {
+        console.error("Unknown error:", error);
+      }
       throw error;
     }
   }, [isAuthenticated]);

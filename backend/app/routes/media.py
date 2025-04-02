@@ -102,6 +102,8 @@ async def search_quick(query: str):
                     "title": item.get("volumeInfo", {}).get("title", "Unknown Title"),
                     "subtitle": item.get("volumeInfo", {}).get("authors", [""])[0] if item.get("volumeInfo", {}).get("authors") else None,
                     "image_url": item.get("volumeInfo", {}).get("imageLinks", {}).get("thumbnail"),
+                    "authors": item.get("volumeInfo", {}).get("authors", []),
+                    "published_date": item.get("volumeInfo", {}).get("publishedDate"),
                     "type": "book"
                 }
                 for item in book_data.get("items", [])[:5]

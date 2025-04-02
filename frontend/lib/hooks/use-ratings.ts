@@ -59,7 +59,9 @@ export function useRatings() {
     mediaType: string, 
     mediaId: string, 
     rating: number, 
-    review?: string
+    review?: string,
+    mediaTitle?: string,
+    imageUrl?: string
   ): Promise<RatingResponse> => {
     setLoading(true);
     setError(null);
@@ -96,7 +98,9 @@ export function useRatings() {
         media_id: mediaId,
         media_type: mediaType, // Use the mediaType directly as passed to the function
         rating: rating,
-        review: review
+        review: review,
+        title: mediaTitle, // Add title for shelf creation if needed
+        image_url: imageUrl // Add image_url for shelf creation if needed
       };
       
       console.log('[useRatings] Payload:', payload);

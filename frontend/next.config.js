@@ -3,6 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   images: {
     domains: [
+      'localhost',
       'books.google.com',
       'image.tmdb.org',
       'avatars.githubusercontent.com',
@@ -26,8 +27,20 @@ const nextConfig = {
       {
         protocol: 'http',
         hostname: 'books.google.com',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
       }
     ]
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:8000/api/:path*',
+      },
+    ];
   },
   async headers() {
     return [

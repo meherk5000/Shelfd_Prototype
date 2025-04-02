@@ -1,62 +1,69 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useReviews } from "@/lib/hooks/use-reviews";
+import { HalfStarRating } from "@/components/ui/half-star-rating";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { StarRating } from "@/components/ui/star-rating";
-import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 import {
   Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
-  CardContent,
-  CardFooter,
 } from "@/components/ui/card";
-import { ArrowRight, Save } from "lucide-react";
-import { useRatings } from "@/lib/hooks/use-ratings";
-import { useAuth } from "@/lib/context/AuthContext";
 
 interface ReviewFormProps {
   mediaId: string;
   mediaType: string;
+  isInShelf?: boolean;
   initialRating?: number;
   initialReview?: string;
-  onComplete?: () => void;
-  inShelf?: boolean;
-  onAddToShelf?: () => Promise<void>;
+  initialContainsSpoilers?: boolean;
+  reviewId?: string;
+  onSuccess?: () => void;
 }
 
 export function ReviewForm({
   mediaId,
   mediaType,
+  isInShelf = false,
   initialRating = 0,
   initialReview = "",
-  onComplete,
-  inShelf = true,
-  onAddToShelf,
+  initialContainsSpoilers = false,
+  reviewId,
+  onSuccess,
 }: ReviewFormProps) {
-  const [rating, setRating] = useState<number>(initialRating || 0);
-  const [review, setReview] = useState(initialReview || "");
+  const [rating, setRating] = useState(initialRating);
+  const [review, setReview] = useState(initialReview);
+  const [containsSpoilers, setContainsSpoilers] = useState(
+    initialContainsSpoilers
+  );
   const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
+
+  const { submitReview, updateReview, deleteReview } = useReviews();
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
-  const { submitRating } = useRatings();
 
+  // Reset form when initial values change
   useEffect(() => {
-    // Update state when props change
-    setRating(initialRating || 0);
-    setReview(initialReview || "");
-    setLoading(false);
-  }, [initialRating, initialReview]);
+    setRating(initialRating);
+    setReview(initialReview);
+    setContainsSpoilers(initialContainsSpoilers);
+  }, [initialRating, initialReview, initialContainsSpoilers]);
 
-  const handleSubmit = async () => {
-    if (rating === 0) {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!isInShelf) {
       toast({
-        title: "Rating required",
-        description: "Please select a rating before submitting",
         variant: "destructive",
+        title: "Add to shelf first",
+        description: "Please add this item to your shelf before reviewing it.",
       });
       return;
     }
@@ -64,110 +71,158 @@ export function ReviewForm({
     setSubmitting(true);
 
     try {
-      const result = await submitRating(
-        mediaType,
-        mediaId,
-        rating,
-        review.trim() || undefined
-      );
+      // If we have a reviewId, update the existing review
+      if (reviewId) {
+        const result = await updateReview(reviewId, {
+          rating,
+          reviewText: review.trim() || undefined,
+          containsSpoilers,
+        });
 
-      if (result.success) {
-        if (onComplete) {
-          onComplete();
+        if (result.success) {
+          onSuccess?.();
+        }
+      } else {
+        // Otherwise create a new review
+        const result = await submitReview(
+          mediaType,
+          mediaId,
+          rating,
+          review.trim() || undefined,
+          containsSpoilers
+        );
+
+        if (result.success) {
+          onSuccess?.();
         }
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error("Error submitting review:", error);
       toast({
+        variant: "destructive",
         title: "Error",
         description: "Failed to submit your review. Please try again.",
-        variant: "destructive",
       });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) {
-    return (
-      <Card className="w-full">
-        <CardContent className="pt-6">
-          <div className="flex justify-center">
-            <div className="animate-pulse h-40 w-full bg-muted rounded"></div>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const handleDelete = async () => {
+    if (!reviewId) return;
 
-  if (!inShelf) {
+    if (!window.confirm("Are you sure you want to delete your review?")) {
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const result = await deleteReview(reviewId);
+
+      if (result.success) {
+        setRating(0);
+        setReview("");
+        setContainsSpoilers(false);
+        onSuccess?.();
+      }
+    } catch (error) {
+      console.error("Error deleting review:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to delete your review. Please try again.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!isInShelf) {
     return (
-      <Card className="w-full border-dashed border-2">
-        <CardContent className="pt-6 flex flex-col items-center justify-center text-center space-y-4 py-8">
-          <p className="text-muted-foreground">
+      <Card className="border border-dashed border-gray-300 bg-gray-50">
+        <CardHeader>
+          <CardTitle className="text-lg">Add a Review</CardTitle>
+          <CardDescription>
             Add this {mediaType.toLowerCase()} to your shelf to rate and review
-            it
-          </p>
-          <Button onClick={onAddToShelf} className="mt-2">
-            Add to Shelf <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        </CardContent>
+          </CardDescription>
+        </CardHeader>
       </Card>
     );
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle className="text-lg font-medium">
-          Your Rating & Review
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="rating">Rating</Label>
-          <div className="flex justify-center md:justify-start py-2">
-            <StarRating
-              value={rating}
-              onChange={setRating}
-              size="lg"
-              precision="quarter"
-              showValue={true}
+    <Card>
+      <form onSubmit={handleSubmit}>
+        <CardHeader>
+          <CardTitle className="text-lg">
+            {reviewId ? "Edit Your Rating & Review" : "Add a Rating & Review"}
+          </CardTitle>
+          <CardDescription>
+            Share your thoughts about this {mediaType.toLowerCase()}
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="rating">Your Rating</Label>
+            <div className="pb-2">
+              <HalfStarRating value={rating} onChange={setRating} size="lg" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="review">
+              Review <span className="text-gray-400 text-sm">(optional)</span>
+            </Label>
+            <Textarea
+              id="review"
+              placeholder="Write your review here..."
+              value={review}
+              onChange={(e) => setReview(e.target.value)}
+              rows={5}
+              className="resize-none"
             />
           </div>
-        </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="review">
-            Review{" "}
-            <span className="text-sm text-muted-foreground">(Optional)</span>
-          </Label>
-          <Textarea
-            id="review"
-            placeholder="Share your thoughts about this title..."
-            value={review}
-            onChange={(e) => setReview(e.target.value)}
-            rows={4}
-            className="resize-none"
-          />
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button
-          onClick={handleSubmit}
-          disabled={submitting || rating === 0}
-          className="w-full"
-        >
-          {submitting ? (
-            <>Submitting...</>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              Save Rating & Review
-            </>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="spoilers"
+              checked={containsSpoilers}
+              onCheckedChange={(checked: boolean | "indeterminate") =>
+                setContainsSpoilers(checked === true)
+              }
+            />
+            <Label htmlFor="spoilers" className="text-sm cursor-pointer">
+              This review contains spoilers
+            </Label>
+          </div>
+        </CardContent>
+
+        <CardFooter className="flex justify-between">
+          {reviewId && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleDelete}
+              disabled={submitting}
+            >
+              Delete Review
+            </Button>
           )}
-        </Button>
-      </CardFooter>
+
+          <Button type="submit" disabled={submitting || rating === 0}>
+            {submitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : (
+              <>Save Rating & Review</>
+            )}
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   );
 }
