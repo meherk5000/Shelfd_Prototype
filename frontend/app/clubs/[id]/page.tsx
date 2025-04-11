@@ -40,6 +40,8 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/config";
 import { Command } from "cmdk";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 
 // Define book type
 interface Book {
@@ -90,10 +92,17 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     updateClubBook,
     joinClub,
     leaveClub,
+    deleteClub,
   } = useClubs();
 
   const [members, setMembers] = useState<any[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
+
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showCreateThreadDialog, setShowCreateThreadDialog] = useState(false);
 
   useEffect(() => {
     if (clubId) {
@@ -342,13 +351,32 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     try {
       const success = await leaveClub(club.id);
       if (success) {
-        // Refresh club data to update member status
-        await loadClub();
         toast.success("Successfully left the club");
+        router.push("/clubs"); // Redirect to clubs page
       }
     } catch (error) {
       console.error("Error leaving club:", error);
       toast.error("Failed to leave club");
+    }
+  };
+
+  const handleDeleteClub = async () => {
+    if (!club) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this club? This action cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const success = await deleteClub(club.id);
+      if (success) {
+        router.push("/clubs"); // Redirect to clubs page
+      }
+    } catch (error) {
+      console.error("Error deleting club:", error);
+      toast.error("Failed to delete club");
     }
   };
 
@@ -401,65 +429,62 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
   const renderBookInfo = () => {
     if (club?.book_title) {
       return (
-        <div className="mb-6 flex items-start gap-4 bg-card rounded-lg p-4 border">
-          <div className="shrink-0">
-            {club.book_cover ? (
-              <img
-                src={club.book_cover}
-                alt={club.book_title}
-                className="w-24 h-32 object-cover rounded-md"
-              />
-            ) : (
-              <div className="w-24 h-32 bg-muted flex items-center justify-center rounded-md">
-                <BookOpen className="w-8 h-8 text-muted-foreground" />
-              </div>
-            )}
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold">Currently Reading</h2>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                {club.book_id ? (
-                  <Link
-                    href={`/media/books/${club.book_id}`}
-                    className="text-lg font-semibold hover:underline"
-                  >
-                    {club.book_title}
-                  </Link>
-                ) : (
-                  <span className="text-lg font-semibold">
-                    {club.book_title}
-                  </span>
-                )}
-                {club.is_creator && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setIsBookSearchOpen(true)}
-                    >
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Update Book
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRemoveBook}
-                      disabled={isLoading}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Remove Book
-                    </Button>
-                  </div>
-                )}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                by {club.book_author}
+        <div className="mb-6 bg-card rounded-lg p-4 border">
+          <h2 className="text-lg font-semibold mb-4">Currently Reading</h2>
+          <div className="flex items-start gap-4">
+            <Link
+              href={`/media/books/${club.book_id}`}
+              className="shrink-0 hover:opacity-80 transition-opacity"
+            >
+              {club.book_cover ? (
+                <Image
+                  src={club.book_cover}
+                  alt={club.book_title}
+                  width={120}
+                  height={180}
+                  className="rounded-md object-cover"
+                  priority
+                />
+              ) : (
+                <div className="w-[120px] h-[180px] bg-muted flex items-center justify-center rounded-md">
+                  <BookOpen className="w-8 h-8 text-muted-foreground" />
+                </div>
+              )}
+            </Link>
+            <div className="flex-1">
+              <Link
+                href={`/media/books/${club.book_id}`}
+                className="hover:underline"
+              >
+                <h3 className="text-xl font-semibold">{club.book_title}</h3>
+              </Link>
+              <p className="text-muted-foreground">by {club.book_author}</p>
+              <p className="mt-4 text-sm">
+                Join the discussion in the threads below.
               </p>
+
+              {club.is_creator && (
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsBookSearchOpen(true)}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Update Book
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRemoveBook}
+                    disabled={isLoading}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Remove Book
+                  </Button>
+                </div>
+              )}
             </div>
-            <p className="mt-2 text-sm">
-              Join the discussion in the threads below.
-            </p>
           </div>
         </div>
       );
@@ -477,35 +502,18 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">{club.name}</h1>
         <div className="flex gap-2">
-          {!club.is_member ? (
-            <Button
-              variant="default"
-              onClick={handleJoinClub}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Joining...
-                </>
-              ) : (
-                "Join Club"
-              )}
+          {club.is_creator ? (
+            <Button variant="destructive" onClick={handleDeleteClub}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete Club
+            </Button>
+          ) : club.is_member ? (
+            <Button variant="outline" onClick={handleLeaveClub}>
+              Leave Club
             </Button>
           ) : (
-            <Button
-              variant="outline"
-              onClick={handleLeaveClub}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Leaving...
-                </>
-              ) : (
-                "Leave Club"
-              )}
+            <Button variant="default" onClick={handleJoinClub}>
+              Join Club
             </Button>
           )}
         </div>
@@ -599,9 +607,11 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
                           }`}
                         >
                           {book.image_url ? (
-                            <img
+                            <Image
                               src={book.image_url}
                               alt={book.title}
+                              width={80}
+                              height={120}
                               className="h-24 w-16 object-cover rounded"
                             />
                           ) : (
@@ -679,40 +689,18 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
                 No discussion threads yet
               </h3>
               <p className="text-muted-foreground mb-4">
-                Start the first conversation about this book club!
+                {club.is_creator
+                  ? "Start the first conversation about this book club!"
+                  : "Check back later for discussions!"}
               </p>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button>Create Thread</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Thread</DialogTitle>
-                    <DialogDescription>
-                      Start a new discussion thread for this club.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {/* Add thread creation form here later */}
-                  <DialogFooter>
-                    <Button>Create Thread</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Discussion Threads</h3>
+              {club.is_creator && (
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button size="sm">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      New Thread
-                    </Button>
+                    <Button>Create Thread</Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>Create New Thread</DialogTitle>
+                      <DialogTitle>Create Thread</DialogTitle>
                       <DialogDescription>
                         Start a new discussion thread for this club.
                       </DialogDescription>
@@ -723,6 +711,34 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Discussion Threads</h3>
+                {club.is_creator && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button size="sm">
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        Create Thread
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create Thread</DialogTitle>
+                        <DialogDescription>
+                          Start a new discussion thread for this club.
+                        </DialogDescription>
+                      </DialogHeader>
+                      {/* Add thread creation form here later */}
+                      <DialogFooter>
+                        <Button>Create Thread</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
               </div>
               {/* List of threads */}
               {threads.map((thread) => (
@@ -733,6 +749,11 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
                   <div className="flex justify-between">
                     <div>
                       <h4 className="font-semibold text-md">{thread.title}</h4>
+                      {thread.description && (
+                        <p className="text-muted-foreground text-sm mt-1">
+                          {thread.description}
+                        </p>
+                      )}
                       <div className="flex items-center mt-2 space-x-3">
                         <div className="flex items-center text-xs text-muted-foreground">
                           <Avatar className="h-6 w-6 mr-1">
@@ -746,12 +767,12 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
                         </div>
                         {thread.created_at && (
                           <div className="text-xs text-muted-foreground">
+                            Created{" "}
                             {formatDistanceToNow(new Date(thread.created_at), {
                               addSuffix: true,
                             })}
                           </div>
                         )}
-                        {/* Can add reply count here later */}
                       </div>
                     </div>
                   </div>
@@ -767,36 +788,14 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
               <Calendar className="mx-auto h-12 w-12 text-muted-foreground/60 mb-3" />
               <h3 className="text-lg font-medium mb-2">No milestones set</h3>
               <p className="text-muted-foreground mb-4">
-                Create reading milestones to track your club's progress
+                {club.is_creator
+                  ? "Create reading milestones to track your club's progress"
+                  : "No reading milestones have been set by the club creator yet"}
               </p>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button>Create Milestone</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create Milestone</DialogTitle>
-                    <DialogDescription>
-                      Add a new milestone to your reading schedule.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {/* Add milestone creation form here later */}
-                  <DialogFooter>
-                    <Button>Create Milestone</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Reading Schedule</h3>
+              {club.is_creator && (
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button size="sm">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      Add Milestone
-                    </Button>
+                    <Button>Create Milestone</Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
@@ -811,6 +810,34 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Reading Schedule</h3>
+                {club.is_creator && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button size="sm">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Add Milestone
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Create Milestone</DialogTitle>
+                        <DialogDescription>
+                          Add a new milestone to your reading schedule.
+                        </DialogDescription>
+                      </DialogHeader>
+                      {/* Add milestone creation form here later */}
+                      <DialogFooter>
+                        <Button>Create Milestone</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                )}
               </div>
               {/* List of milestones */}
               {milestones.map((milestone) => (

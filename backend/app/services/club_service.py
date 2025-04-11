@@ -71,7 +71,7 @@ class ClubService:
             query["$text"] = {"$search": search}
 
         total = await Club.find(query).count()
-        clubs = await Club.find(query).skip(skip).limit(limit).to_list()
+        clubs = await Club.find(query).sort([("created_at", -1)]).skip(skip).limit(limit).to_list()
         return clubs, total
 
     @staticmethod
@@ -115,22 +115,45 @@ class ClubService:
     @staticmethod
     async def leave_club(club_id: PydanticObjectId, user: User) -> Club:
         """Leave a club."""
+        print(f"DEBUG - Leave club: Attempting to leave club {club_id} for user {user.id}")
         club = await ClubService.get_club(club_id)
         
-        # Get creator ID
-        creator_id = str(club.creator.id) if hasattr(club.creator, 'id') else str(club.creator._id)
+        # Get creator ID by fetching the creator first
+        creator = await club.creator.fetch()
+        print(f"DEBUG - Leave club: Creator ID = {creator.id}, User ID = {user.id}")
         
-        # Get member IDs directly
-        member_ids = [str(member.id) if hasattr(member, 'id') else str(member._id) for member in club.members]
-        
-        if str(user.id) == creator_id:
+        # Check if user is the creator
+        if str(user.id) == str(creator.id):
+            print(f"DEBUG - Leave club: User is creator, cannot leave")
             raise HTTPException(status_code=400, detail="Creator cannot leave the club")
             
-        if str(user.id) not in member_ids:
+        # Check if user is a member and remove them
+        user_id_str = str(user.id)
+        original_member_count = len(club.members)
+        print(f"DEBUG - Leave club: Original member count = {original_member_count}")
+        
+        # Get member IDs for debugging
+        member_ids = []
+        for member in club.members:
+            if isinstance(member, Link):
+                member_ids.append(str(member.ref.id))
+            else:
+                member_ids.append(str(member.id))
+        print(f"DEBUG - Leave club: Current members = {member_ids}")
+        
+        # Remove the member using ref.id for Link objects
+        club.members = [
+            member for member in club.members 
+            if (isinstance(member, Link) and str(member.ref.id) != user_id_str) or
+               (not isinstance(member, Link) and str(member.id) != user_id_str)
+        ]
+        
+        # If member count didn't change, user wasn't a member
+        if len(club.members) == original_member_count:
+            print(f"DEBUG - Leave club: Member count didn't change, user not found in members list")
             raise HTTPException(status_code=400, detail="Not a member of this club")
 
-        # Filter members to remove the user's Link
-        club.members = [member for member in club.members if str(member.id if hasattr(member, 'id') else member._id) != str(user.id)]
+        print(f"DEBUG - Leave club: New member count = {len(club.members)}")
         await club.save()
         return club
 
@@ -266,9 +289,9 @@ class ClubService:
         # Get the club to verify it exists
         club = await ClubService.get_club(club_id)
         
-        # Verify user is the creator
-        if creator.id != club.creator.id:
-            raise HTTPException(status_code=403, detail="Only the club creator can create threads")
+        # Verify user is the creator/moderator
+        if str(creator.id) != str(club.creator.id):
+            raise HTTPException(status_code=403, detail="Only moderators can create discussion threads")
         
         # Generate mock chapters based on the book title
         # In a real application, this would come from a book API or database
@@ -394,7 +417,7 @@ class ClubService:
             creator=Link(current_user, User),
             title=f"Start reading {club.book_title}",
             description=f"Begin your journey with {club.book_title} by {club.book_author}",
-            date=today,
+            milestone_date=today,
             is_auto_generated=True
         )
         await start_milestone.insert()
@@ -407,7 +430,7 @@ class ClubService:
             creator=Link(current_user, User),
             title=f"Finish {club.book_title}",
             description=f"Complete reading {club.book_title} and join the reflection discussion",
-            date=end_date,
+            milestone_date=end_date,
             is_auto_generated=True
         )
         await end_milestone.insert() 

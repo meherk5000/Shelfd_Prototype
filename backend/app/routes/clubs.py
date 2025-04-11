@@ -249,12 +249,12 @@ async def create_post(
     post = await ClubService.create_post(club_id, current_user, request.content)
     return await format_post_response(post)
 
-@router.delete("/{club_id}")
+@router.delete("/{club_id}", response_model=None)
 async def delete_club(
     club_id: PydanticObjectId,
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a club."""
+    """Delete a club and all its associated data."""
     await ClubService.delete_club(club_id, current_user)
     return {"message": "Club deleted successfully"}
 

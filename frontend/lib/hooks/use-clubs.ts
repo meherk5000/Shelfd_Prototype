@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { API_BASE_URL } from "@/lib/config";
 
 // Utility function to normalize club cover image URLs
 export const normalizeImageUrl = (url: string | undefined | null): string | undefined => {
@@ -520,19 +521,12 @@ export function useClubs() {
     setError(null);
 
     try {
-      console.log(`Attempting to delete club: ${clubId}`);
-      
       const response = await fetch(`/api/clubs/${clubId}`, {
         method: "DELETE",
         headers: getAuthHeaders(),
       });
-      
+
       const data = await response.json();
-      console.log(`Delete club response:`, {
-        status: response.status,
-        ok: response.ok,
-        data
-      });
 
       if (!response.ok) {
         throw new Error(data.detail || "Failed to delete club");
@@ -541,7 +535,6 @@ export function useClubs() {
       toast.success("Club deleted successfully!");
       return true;
     } catch (err) {
-      console.error("Error deleting club:", err);
       const message = err instanceof Error ? err.message : "Failed to delete club";
       setError(message);
       toast.error(message);
@@ -808,46 +801,39 @@ export function useClubs() {
     }
   };
 
-  const updateClubBook = async (
-    clubId: string,
-    bookData: {
-      book_id: string;
-      book_title: string;
-      book_author: string;
-      book_cover?: string;
-    }
-  ) => {
+  const updateClubBook = async (clubId: string, bookData: {
+    book_id: string;
+    book_title: string;
+    book_author: string;
+    book_cover: string;
+  }): Promise<{ success: boolean; message?: string }> => {
     setLoading(true);
     setError(null);
 
     try {
-      console.log('Updating club book:', { clubId, bookData });
-      
+      const token = localStorage.getItem("token");
       const response = await fetch(`/api/clubs/${clubId}/book`, {
         method: "PUT",
         headers: {
-          ...getAuthHeaders(),
           "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
         },
         body: JSON.stringify(bookData),
       });
 
       const data = await response.json();
-      console.log('Update book response:', { status: response.status, data });
 
       if (!response.ok) {
-        const errorMessage = data.detail?.error || data.detail?.message || data.detail || "Failed to update club book";
-        setError(errorMessage);
-        return { success: false, message: errorMessage };
+        throw new Error(data.detail || "Failed to update club book");
       }
 
-      toast.success("Book updated successfully!");
-      return { success: true, data };
+      return { success: true };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to update club book";
-      setError(message);
       console.error("Error updating club book:", err);
-      return { success: false, message };
+      return { 
+        success: false, 
+        message: err instanceof Error ? err.message : "Failed to update club book" 
+      };
     } finally {
       setLoading(false);
     }
