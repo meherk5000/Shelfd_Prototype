@@ -30,6 +30,7 @@ import {
   Search,
   MessageSquare,
   Star,
+  Users,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -85,11 +86,16 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     createMilestone,
     getClubMilestones,
     updateClubBook,
+    getAuthHeaders,
   } = useClubs();
+
+  const [members, setMembers] = useState<any[]>([]);
+  const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
   useEffect(() => {
     if (clubId) {
       loadClub();
+      loadMembers(clubId);
     }
   }, [clubId]);
 
@@ -183,6 +189,31 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
       // Set milestones to empty array on error and display toast
       setMilestones([]);
       // Don't propagate the error - handle it here
+    }
+  };
+
+  const loadMembers = async (clubId: string) => {
+    setIsLoadingMembers(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`/api/clubs/${clubId}/members`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch members");
+      }
+
+      const data = await response.json();
+      setMembers(data);
+    } catch (error) {
+      console.error("Error loading members:", error);
+      toast.error("Failed to load club members");
+    } finally {
+      setIsLoadingMembers(false);
     }
   };
 
@@ -340,6 +371,26 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
         <p className="text-muted-foreground">{club.description}</p>
       )}
 
+      {/* Club Info Section */}
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback>
+              {club.creator_username?.substring(0, 2).toUpperCase() || "U"}
+            </AvatarFallback>
+          </Avatar>
+          <span>Created by {club.creator_username}</span>
+        </div>
+        <span>•</span>
+        <div className="flex items-center gap-2">
+          <span>{club.member_count} members</span>
+        </div>
+        <span>•</span>
+        <div className="flex items-center gap-2">
+          <span>{club.is_private ? "Private" : "Public"} club</span>
+        </div>
+      </div>
+
       {renderBookInfo()}
 
       {/* Pick Club Book Button */}
@@ -461,6 +512,10 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
           <TabsTrigger value="schedule" className="flex gap-2 items-center">
             <Calendar className="w-4 h-4" />
             Schedule
+          </TabsTrigger>
+          <TabsTrigger value="members" className="flex gap-2 items-center">
+            <Users className="w-4 h-4" />
+            Members
           </TabsTrigger>
         </TabsList>
 
@@ -644,6 +699,51 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
                           </div>
                         )}
                       </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="members" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold">Club Members</h3>
+            <div className="text-sm text-muted-foreground">
+              {members.length} members
+            </div>
+          </div>
+
+          {isLoadingMembers ? (
+            <div className="flex justify-center items-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin" />
+            </div>
+          ) : members.length === 0 ? (
+            <div className="text-center p-8 border rounded-lg bg-muted/20">
+              <Users className="mx-auto h-12 w-12 text-muted-foreground/60 mb-3" />
+              <h3 className="text-lg font-medium mb-2">No members yet</h3>
+              <p className="text-muted-foreground">
+                Be the first to join this club!
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {members.map((member) => (
+                <Card key={member.id} className="p-4">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback>
+                        {member.username?.substring(0, 2).toUpperCase() || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="font-medium">{member.username}</div>
+                      {member.is_creator && (
+                        <div className="text-xs text-muted-foreground">
+                          Club Creator
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Card>

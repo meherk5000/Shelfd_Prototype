@@ -214,27 +214,36 @@ export function Clubs() {
             {club.description}
           </p>
         )}
-        <div className="flex items-center justify-between">
+        <div className="space-y-2">
+          {/* Creator information */}
           <div className="flex items-center text-sm text-muted-foreground">
-            <Users className="w-4 h-4 mr-1" />
-            <span>{club.member_count} members</span>
+            <span className="font-medium">Created by:</span>
+            <span className="ml-1">{club.creator_username}</span>
           </div>
-          {!club.is_creator && (
-            <Button
-              variant={club.is_member ? "outline" : "default"}
-              size="sm"
-              onClick={() => handleJoinLeave(club)}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : club.is_member ? (
-                "Leave"
-              ) : (
-                "Join"
-              )}
-            </Button>
-          )}
+
+          {/* Members information */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center text-sm text-muted-foreground">
+              <Users className="w-4 h-4 mr-1" />
+              <span>{club.member_count} members</span>
+            </div>
+            {!club.is_creator && (
+              <Button
+                variant={club.is_member ? "outline" : "default"}
+                size="sm"
+                onClick={() => handleJoinLeave(club)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : club.is_member ? (
+                  "Leave"
+                ) : (
+                  "Join"
+                )}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>

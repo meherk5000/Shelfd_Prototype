@@ -168,12 +168,17 @@ export default function CreateClubPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name || !mediaType) {
-      toast.error("Please fill in all required fields");
+    // Validate required fields
+    if (!name) {
+      toast.error("Please enter a club name");
       return;
     }
 
-    // Book fields are now optional, even for book clubs
+    if (!mediaType) {
+      toast.error("Please select a media type");
+      return;
+    }
+
     try {
       const result = await createClub(
         name,
@@ -188,28 +193,14 @@ export default function CreateClubPage() {
         bookCoverUrl || undefined
       );
 
-      if (result.success && result.data?.clubs?.[0]) {
-        // Log the club ID for debugging
-        const clubId = result.data.clubs[0].id;
-        console.log("Club created successfully with ID:", clubId);
-
+      if (result.success && result.clubId) {
         // Show success message
         toast.success("Club created successfully!");
 
-        // Give the server a moment to fully process the club creation
-        setTimeout(() => {
-          try {
-            window.location.href = `/clubs/${clubId}`;
-          } catch (navError) {
-            console.error("Navigation error:", navError);
-            // Fallback to clubs page if there's an issue
-            router.push("/clubs");
-          }
-        }, 1000);
+        // Redirect to the new club's page
+        router.push(`/clubs/${result.clubId}`);
       } else {
-        toast.error(
-          "Error creating club: " + (result.message || "Unknown error")
-        );
+        toast.error(result.message || "Failed to create club");
       }
     } catch (error) {
       console.error("Error in club creation:", error);
@@ -231,7 +222,9 @@ export default function CreateClubPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Club Name</Label>
+              <Label htmlFor="name">
+                Club Name <span className="text-destructive">*</span>
+              </Label>
               <Input
                 id="name"
                 placeholder="Enter club name"
@@ -239,7 +232,13 @@ export default function CreateClubPage() {
                 onChange={(e) => setName(e.target.value)}
                 required
                 maxLength={100}
+                className={!name ? "border-destructive" : ""}
               />
+              {!name && (
+                <p className="text-sm text-destructive">
+                  Club name is required
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -295,9 +294,14 @@ export default function CreateClubPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="mediaType">Club Type</Label>
+              <Label htmlFor="mediaType">
+                Club Type <span className="text-destructive">*</span>
+              </Label>
               <Select value={mediaType} onValueChange={setMediaType} required>
-                <SelectTrigger id="mediaType">
+                <SelectTrigger
+                  id="mediaType"
+                  className={!mediaType ? "border-destructive" : ""}
+                >
                   <SelectValue placeholder="Select club type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -308,6 +312,11 @@ export default function CreateClubPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {!mediaType && (
+                <p className="text-sm text-destructive">
+                  Please select a club type
+                </p>
+              )}
             </div>
 
             {mediaType === "book" && (

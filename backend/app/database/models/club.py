@@ -12,12 +12,13 @@ class Club(Document):
     members: List[Link[User]] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    media_type: str = Field(..., pattern="^(book|movie|tv|any)$")  # Type of media this club focuses on
+    media_type: str = Field(..., pattern="^(book|movie|tv)$")  # Type of media this club focuses on
     is_private: bool = Field(default=False)  # Whether the club is invite-only
     cover_image: Optional[str] = None  # URL to the cover image
     book_title: Optional[str] = None  # Title of the book associated with the club
     book_author: Optional[str] = None  # Author of the book
     book_cover: Optional[str] = None  # URL to the book cover image
+    book_id: Optional[str] = None  # ID of the book in the database
     
     class Settings:
         name = "clubs"
@@ -35,7 +36,9 @@ class Club(Document):
                 "name": "Sci-Fi Book Club",
                 "description": "A club for science fiction book lovers",
                 "media_type": "book",
-                "is_private": False
+                "is_private": False,
+                "book_title": "Dune",
+                "book_author": "Frank Herbert"
             }
         }
     } 

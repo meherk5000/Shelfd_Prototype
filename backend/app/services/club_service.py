@@ -22,8 +22,13 @@ class ClubService:
         book_title: Optional[str] = None,
         book_author: Optional[str] = None,
         book_cover: Optional[str] = None,
+        book_id: Optional[str] = None,
     ) -> Club:
         """Create a new club."""
+        # Validate media type
+        if media_type not in ["book", "movie", "tv"]:
+            raise HTTPException(status_code=400, detail="Invalid media type")
+
         club = Club(
             name=name,
             description=description,
@@ -34,6 +39,7 @@ class ClubService:
             book_title=book_title,
             book_author=book_author,
             book_cover=book_cover,
+            book_id=book_id,
         )
         
         # Add creator as a member

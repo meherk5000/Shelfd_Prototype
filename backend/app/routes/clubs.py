@@ -29,9 +29,23 @@ class CreateClubRequest(BaseModel):
     description: Optional[str] = Field(None, max_length=1000)
     is_private: bool = Field(default=False)
     cover_image: Optional[str] = None
-    book_title: Optional[str] = None  # Only for book clubs
-    book_author: Optional[str] = None  # Only for book clubs
-    book_cover: Optional[str] = None  # Only for book clubs
+    book_title: Optional[str] = None
+    book_author: Optional[str] = None
+    book_cover: Optional[str] = None
+    book_id: Optional[str] = None  # Add this field to match frontend
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "name": "Sci-Fi Book Club",
+                "media_type": "book",
+                "description": "A club for science fiction book lovers",
+                "is_private": False,
+                "book_title": "Dune",
+                "book_author": "Frank Herbert"
+            }
+        }
+    }
 
 class CreatePostRequest(BaseModel):
     content: str

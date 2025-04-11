@@ -338,48 +338,93 @@ export function useClubs() {
     setLoading(true);
     setError(null);
 
-    const formData = new FormData();
-    formData.append("name", name);
-    formData.append("media_type", mediaType);
+    // Validate required fields
+    if (!name) {
+      setError("Club name is required");
+      return { success: false, message: "Club name is required" };
+    }
+
+    if (!mediaType) {
+      setError("Media type is required");
+      return { success: false, message: "Media type is required" };
+    }
+
+    const requestData: any = {
+      name,
+      media_type: mediaType,
+    };
 
     if (description) {
-      formData.append("description", description);
+      requestData.description = description;
     }
 
     if (isPrivate !== undefined) {
-      formData.append("is_private", isPrivate.toString());
+      requestData.is_private = isPrivate;
     }
 
     if (coverImage) {
-      formData.append("cover_image", coverImage);
+      // If there's a cover image, we need to upload it first
+      const formData = new FormData();
+      formData.append("file", coverImage);
+      const uploadResponse = await fetch("/api/clubs/upload-cover", {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: formData,
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json();
+        throw new Error(errorData.detail || "Failed to upload cover image");
+      }
+      
+      const { url } = await uploadResponse.json();
+      requestData.cover_image = url;
     }
 
     // Only add book info if at least the title is provided
     if (bookTitle) {
-      formData.append("book_title", bookTitle);
+      requestData.book_title = bookTitle;
       
       if (bookAuthor) {
-        formData.append("book_author", bookAuthor);
+        requestData.book_author = bookAuthor;
       }
 
       if (bookId) {
-        formData.append("book_id", bookId);
+        requestData.book_id = bookId;
       }
 
       if (bookCoverUrl) {
-        formData.append("book_cover_url", bookCoverUrl);
+        requestData.book_cover = bookCoverUrl;
       }
       
       if (bookCover) {
-        formData.append("book_cover", bookCover);
+        // If there's a book cover, upload it first
+        const formData = new FormData();
+        formData.append("file", bookCover);
+        const uploadResponse = await fetch("/api/clubs/upload-cover", {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: formData,
+        });
+        
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json();
+          throw new Error(errorData.detail || "Failed to upload book cover");
+        }
+        
+        const { url } = await uploadResponse.json();
+        requestData.book_cover = url;
       }
     }
 
     try {
       const response = await fetch("/api/clubs/create", {
         method: "POST",
-        headers: getFormDataHeaders(),
-        body: formData,
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestData),
       });
 
       const data = await response.json();
@@ -389,7 +434,15 @@ export function useClubs() {
         return { success: false, message: data.detail };
       }
 
-      return { success: true, data };
+      // Show success message
+      toast.success("Club created successfully!");
+
+      // Return the club data for redirection
+      return { 
+        success: true, 
+        data,
+        clubId: data.id // Make sure we return the club ID
+      };
     } catch (err) {
       setError("Error creating club");
       console.error("Error creating club:", err);
