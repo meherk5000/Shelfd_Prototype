@@ -71,6 +71,7 @@ class ClubResponse(BaseModel):
     book_title: Optional[str] = None
     book_author: Optional[str] = None
     book_cover: Optional[str] = None
+    book_id: Optional[str] = None
 
     model_config = {
         "from_attributes": True
@@ -365,8 +366,13 @@ async def update_club_book(
             raise HTTPException(status_code=404, detail="Club not found")
         
         # Check if user is creator/admin
-        if str(club.creator_id) != str(current_user.id):
-            raise HTTPException(status_code=403, detail="Only the club creator can update book information")
+        if hasattr(club.creator, 'fetch'):
+            creator = await club.creator.fetch()
+            if str(creator.id) != str(current_user.id):
+                raise HTTPException(status_code=403, detail="Only the club creator can update book information")
+        else:
+            if str(club.creator.id) != str(current_user.id):
+                raise HTTPException(status_code=403, detail="Only the club creator can update book information")
             
         # Update book information
         club.book_id = request.book_id
@@ -384,7 +390,49 @@ async def update_club_book(
         
         return await format_club_response(club, current_user)
     except Exception as e:
+        print(f"Error updating club book: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update club book: {str(e)}")
+
+@router.get("/{club_id}/members")
+async def get_club_members(
+    club_id: PydanticObjectId,
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Get all members of a club."""
+    try:
+        club = await ClubService.get_club(club_id)
+        
+        # Get creator ID properly
+        if hasattr(club.creator, 'fetch'):
+            creator = await club.creator.fetch()
+            creator_id = str(creator.id)
+        else:
+            creator_id = str(club.creator.id)
+        
+        # Format members for response
+        members = []
+        for member in club.members:
+            if hasattr(member, 'fetch'):
+                user = await member.fetch()
+            else:
+                user = member
+                
+            members.append({
+                "id": str(user.id),
+                "username": user.username,
+                "is_creator": str(user.id) == creator_id,
+                "avatar_url": getattr(user, 'avatar_url', None)
+            })
+        
+        return members
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        print(f"Error in get_club_members: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to fetch club members", "message": str(e)}
+        )
 
 # Helper functions
 async def format_club_response(club: Club, current_user: Optional[User] = None) -> ClubResponse:
@@ -427,6 +475,7 @@ async def format_club_response(club: Club, current_user: Optional[User] = None) 
         "book_title": club.book_title,
         "book_author": club.book_author,
         "book_cover": club.book_cover,
+        "book_id": club.book_id,
     }
 
 async def format_post_response(post: ClubPost) -> ClubPostResponse:

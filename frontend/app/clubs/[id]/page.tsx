@@ -31,6 +31,8 @@ import {
   MessageSquare,
   Star,
   Users,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -86,7 +88,8 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     createMilestone,
     getClubMilestones,
     updateClubBook,
-    getAuthHeaders,
+    joinClub,
+    leaveClub,
   } = useClubs();
 
   const [members, setMembers] = useState<any[]>([]);
@@ -203,15 +206,28 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
         },
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error("Failed to fetch members");
+        throw new Error(
+          data.detail?.error ||
+            data.detail?.message ||
+            "Failed to fetch members"
+        );
       }
 
-      const data = await response.json();
-      setMembers(data);
+      if (Array.isArray(data)) {
+        setMembers(data);
+      } else {
+        console.error("Invalid members data format:", data);
+        throw new Error("Invalid members data format");
+      }
     } catch (error) {
       console.error("Error loading members:", error);
-      toast.error("Failed to load club members");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to load club members"
+      );
+      setMembers([]);
     } finally {
       setIsLoadingMembers(false);
     }
@@ -264,34 +280,98 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     if (!selectedBook || !club) return;
 
     try {
-      // Extract author name from the first author in the array
-      const authorName =
-        selectedBook.authors && selectedBook.authors.length > 0
-          ? selectedBook.authors[0]
-          : "Unknown Author";
-
-      const result = await updateClubBook(
-        club.id,
-        selectedBook.id,
-        selectedBook.title,
-        authorName,
-        selectedBook.image_url
-      );
+      const result = await updateClubBook(club.id, {
+        book_id: selectedBook.id,
+        book_title: selectedBook.title,
+        book_author: selectedBook.authors?.[0] || "Unknown Author",
+        book_cover: selectedBook.image_url,
+      });
 
       if (result.success) {
+        // Close the dialog first
+        setIsBookSearchOpen(false);
+        setSelectedBook(null);
+        setSearchQuery("");
+        setSearchResults([]);
+
+        // Show success message
         toast.success(
           `"${selectedBook.title}" was added to your club!\nDiscussion threads for each chapter have been created.`
         );
-        setClub(result.data);
-        setIsBookSearchOpen(false);
-        loadThreads(club.id);
-        loadMilestones(club.id);
+
+        // Refresh club data to show the new book
+        await loadClub();
       } else {
-        toast.error("Failed to add book to club");
+        toast.error(result.message || "Failed to add book to club");
       }
     } catch (error) {
-      console.error("Error adding book:", error);
-      toast.error("An error occurred while adding the book");
+      console.error("Error adding book to club:", error);
+      toast.error("Failed to add book to club");
+    }
+  };
+
+  const handleJoinClub = async () => {
+    if (!club) return;
+
+    try {
+      console.log("Attempting to join club:", {
+        clubId: club.id,
+        clubName: club.name,
+        isPrivate: club.is_private,
+        isMember: club.is_member,
+      });
+
+      const success = await joinClub(club.id);
+      if (success) {
+        // Refresh club data to update member status
+        await loadClub();
+        toast.success("Successfully joined the club!");
+      } else {
+        console.error("Failed to join club - joinClub returned false");
+        toast.error("Failed to join club");
+      }
+    } catch (error) {
+      console.error("Error in handleJoinClub:", error);
+      toast.error("Failed to join club");
+    }
+  };
+
+  const handleLeaveClub = async () => {
+    if (!club) return;
+
+    try {
+      const success = await leaveClub(club.id);
+      if (success) {
+        // Refresh club data to update member status
+        await loadClub();
+        toast.success("Successfully left the club");
+      }
+    } catch (error) {
+      console.error("Error leaving club:", error);
+      toast.error("Failed to leave club");
+    }
+  };
+
+  const handleRemoveBook = async () => {
+    if (!club) return;
+
+    try {
+      const result = await updateClubBook(club.id, {
+        book_id: "",
+        book_title: "",
+        book_author: "",
+        book_cover: "",
+      });
+
+      if (result.success) {
+        await loadClub();
+        toast.success("Book removed successfully");
+      } else {
+        toast.error(result.message || "Failed to remove book");
+      }
+    } catch (error) {
+      console.error("Error removing book:", error);
+      toast.error("Failed to remove book");
     }
   };
 
@@ -337,12 +417,46 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
           </div>
           <div>
             <h2 className="text-lg font-semibold">Currently Reading</h2>
-            <h3 className="text-xl font-bold">{club.book_title}</h3>
-            {club.book_author && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                {club.book_id ? (
+                  <Link
+                    href={`/media/books/${club.book_id}`}
+                    className="text-lg font-semibold hover:underline"
+                  >
+                    {club.book_title}
+                  </Link>
+                ) : (
+                  <span className="text-lg font-semibold">
+                    {club.book_title}
+                  </span>
+                )}
+                {club.is_creator && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsBookSearchOpen(true)}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Update Book
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRemoveBook}
+                      disabled={isLoading}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Remove Book
+                    </Button>
+                  </div>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">
                 by {club.book_author}
               </p>
-            )}
+            </div>
             <p className="mt-2 text-sm">
               Join the discussion in the threads below.
             </p>
@@ -363,7 +477,37 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">{club.name}</h1>
         <div className="flex gap-2">
-          {!club.is_member && <Button variant="default">Join Club</Button>}
+          {!club.is_member ? (
+            <Button
+              variant="default"
+              onClick={handleJoinClub}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Joining...
+                </>
+              ) : (
+                "Join Club"
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={handleLeaveClub}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Leaving...
+                </>
+              ) : (
+                "Leave Club"
+              )}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -374,12 +518,20 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
       {/* Club Info Section */}
       <div className="flex items-center gap-4 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
-          <Avatar className="h-6 w-6">
-            <AvatarFallback>
-              {club.creator_username?.substring(0, 2).toUpperCase() || "U"}
-            </AvatarFallback>
+          <Avatar className="h-8 w-8">
+            <AvatarImage
+              src={club.creator_avatar}
+              alt={club.creator_username}
+            />
+            <AvatarFallback>{club.creator_username[0]}</AvatarFallback>
           </Avatar>
-          <span>Created by {club.creator_username}</span>
+          <div>
+            <p className="text-sm text-muted-foreground">Created by</p>
+            <p className="font-medium">
+              {club.creator_username}
+              {club.is_creator && " (You)"}
+            </p>
+          </div>
         </div>
         <span>•</span>
         <div className="flex items-center gap-2">

@@ -98,12 +98,14 @@ class ClubService:
         """Join a club."""
         club = await ClubService.get_club(club_id)
         
-        # Fetch all member users
-        members = await asyncio.gather(*[member.fetch() for member in club.members])
-        member_ids = [member.id for member in members]
-        
-        if user.id in member_ids:
-            raise HTTPException(status_code=400, detail="Already a member of this club")
+        # Check if user is already a member
+        for member in club.members:
+            if hasattr(member, 'fetch'):
+                fetched_member = await member.fetch()
+                if str(fetched_member.id) == str(user.id):
+                    raise HTTPException(status_code=400, detail="Already a member of this club")
+            elif str(member.id) == str(user.id):
+                raise HTTPException(status_code=400, detail="Already a member of this club")
 
         # Add user as a member
         club.members.append(Link(user, User))
@@ -115,19 +117,20 @@ class ClubService:
         """Leave a club."""
         club = await ClubService.get_club(club_id)
         
-        # Fetch creator and members
-        creator = await club.creator.fetch()
-        members = await asyncio.gather(*[member.fetch() for member in club.members])
-        member_ids = [member.id for member in members]
+        # Get creator ID
+        creator_id = str(club.creator.id) if hasattr(club.creator, 'id') else str(club.creator._id)
         
-        if user.id == creator.id:
+        # Get member IDs directly
+        member_ids = [str(member.id) if hasattr(member, 'id') else str(member._id) for member in club.members]
+        
+        if str(user.id) == creator_id:
             raise HTTPException(status_code=400, detail="Creator cannot leave the club")
             
-        if user.id not in member_ids:
+        if str(user.id) not in member_ids:
             raise HTTPException(status_code=400, detail="Not a member of this club")
 
         # Filter members to remove the user's Link
-        club.members = [member for member in club.members if member.id != user.id]
+        club.members = [member for member in club.members if str(member.id if hasattr(member, 'id') else member._id) != str(user.id)]
         await club.save()
         return club
 
@@ -329,7 +332,7 @@ class ClubService:
         # Delete existing auto-generated threads
         await ClubThread.find(
             {"club_id": club.id, "is_auto_generated": True}
-        ).delete_all()
+        ).delete()
         
         # Simple chapter generation (we can make this more sophisticated)
         # For now, create 10 chapter threads + special threads
@@ -337,18 +340,19 @@ class ClubService:
         
         # Add special threads first
         special_threads = [
-            {"title": "Author's Note", "description": f"Discuss the author's perspective on {club.book_title}"},
-            {"title": "Introduction", "description": f"Start your journey with {club.book_title}"},
-            {"title": "Glossary", "description": "Key terms and concepts from the book"},
+            {"title": "Author's Note", "description": f"Discuss the author's perspective on {club.book_title}", "thread_type": "general"},
+            {"title": "Introduction", "description": f"Start your journey with {club.book_title}", "thread_type": "general"},
+            {"title": "Glossary", "description": "Key terms and concepts from the book", "thread_type": "general"},
         ]
         
         for thread in special_threads:
             threads_to_create.append(
                 ClubThread(
-                    club_id=club.id,
-                    creator_id=current_user.id,
+                    club=Link(club, Club),
+                    creator=Link(current_user, User),
                     title=thread["title"],
                     description=thread["description"],
+                    thread_type=thread["thread_type"],
                     is_auto_generated=True
                 )
             )
@@ -357,10 +361,12 @@ class ClubService:
         for i in range(1, 11):  # 10 chapters
             threads_to_create.append(
                 ClubThread(
-                    club_id=club.id,
-                    creator_id=current_user.id,
+                    club=Link(club, Club),
+                    creator=Link(current_user, User),
                     title=f"Chapter {i}",
                     description=f"Discussion for Chapter {i} of {club.book_title}",
+                    thread_type="chapter",
+                    chapter_number=i,
                     is_auto_generated=True
                 )
             )
@@ -368,39 +374,40 @@ class ClubService:
         # Add final "reflection" thread
         threads_to_create.append(
             ClubThread(
-                club_id=club.id,
-                creator_id=current_user.id,
+                club=Link(club, Club),
+                creator=Link(current_user, User),
                 title="Reflection",
                 description=f"Share your final thoughts on {club.book_title}",
+                thread_type="general",
                 is_auto_generated=True
             )
         )
         
         # Insert all threads
         for thread in threads_to_create:
-            await thread.create()
+            await thread.insert()
             
         # Create a milestone for starting the book
         today = datetime.now()
         start_milestone = ClubMilestone(
-            club_id=club.id,
+            club=Link(club, Club),
+            creator=Link(current_user, User),
             title=f"Start reading {club.book_title}",
             description=f"Begin your journey with {club.book_title} by {club.book_author}",
             date=today,
-            creator_id=current_user.id,
             is_auto_generated=True
         )
-        await start_milestone.create()
+        await start_milestone.insert()
         
         # Create a milestone for finishing the book (30 days later)
         from datetime import timedelta
         end_date = today + timedelta(days=30)
         end_milestone = ClubMilestone(
-            club_id=club.id,
+            club=Link(club, Club),
+            creator=Link(current_user, User),
             title=f"Finish {club.book_title}",
             description=f"Complete reading {club.book_title} and join the reflection discussion",
             date=end_date,
-            creator_id=current_user.id,
             is_auto_generated=True
         )
-        await end_milestone.create() 
+        await end_milestone.insert() 

@@ -368,7 +368,7 @@ export function useClubs() {
       formData.append("file", coverImage);
       const uploadResponse = await fetch("/api/clubs/upload-cover", {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: getFormDataHeaders(),
         body: formData,
       });
       
@@ -403,7 +403,7 @@ export function useClubs() {
         formData.append("file", bookCover);
         const uploadResponse = await fetch("/api/clubs/upload-cover", {
           method: "POST",
-          headers: getAuthHeaders(),
+          headers: getFormDataHeaders(),
           body: formData,
         });
         
@@ -420,18 +420,16 @@ export function useClubs() {
     try {
       const response = await fetch("/api/clubs/create", {
         method: "POST",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(requestData),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail || "Failed to create club");
-        return { success: false, message: data.detail };
+        const errorMessage = data.detail?.error || data.detail?.message || data.detail || "Failed to create club";
+        setError(errorMessage);
+        return { success: false, message: errorMessage };
       }
 
       // Show success message
@@ -444,9 +442,10 @@ export function useClubs() {
         clubId: data.id // Make sure we return the club ID
       };
     } catch (err) {
-      setError("Error creating club");
+      const message = err instanceof Error ? err.message : "Failed to create club";
+      setError(message);
       console.error("Error creating club:", err);
-      return { success: false, message: "Network error" };
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
@@ -457,12 +456,19 @@ export function useClubs() {
     setError(null);
 
     try {
+      console.log(`Attempting to join club: ${clubId}`);
+      
       const response = await fetch(`/api/clubs/${clubId}/join`, {
         method: "POST",
         headers: getAuthHeaders(),
       });
-
+      
       const data = await response.json();
+      console.log(`Join club response:`, {
+        status: response.status,
+        ok: response.ok,
+        data
+      });
 
       if (!response.ok) {
         throw new Error(data.detail || "Failed to join club");
@@ -471,6 +477,7 @@ export function useClubs() {
       toast.success("Successfully joined club!");
       return true;
     } catch (err) {
+      console.error("Error joining club:", err);
       const message = err instanceof Error ? err.message : "Failed to join club";
       setError(message);
       toast.error(message);
@@ -803,38 +810,44 @@ export function useClubs() {
 
   const updateClubBook = async (
     clubId: string,
-    bookId: string,
-    bookTitle: string,
-    bookAuthor: string,
-    bookCover?: string
+    bookData: {
+      book_id: string;
+      book_title: string;
+      book_author: string;
+      book_cover?: string;
+    }
   ) => {
     setLoading(true);
     setError(null);
 
     try {
+      console.log('Updating club book:', { clubId, bookData });
+      
       const response = await fetch(`/api/clubs/${clubId}/book`, {
         method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          book_id: bookId,
-          book_title: bookTitle,
-          book_author: bookAuthor,
-          book_cover: bookCover,
-        }),
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bookData),
       });
 
       const data = await response.json();
+      console.log('Update book response:', { status: response.status, data });
 
       if (!response.ok) {
-        setError(data.detail || "Failed to update club book");
-        return { success: false, data: null };
+        const errorMessage = data.detail?.error || data.detail?.message || data.detail || "Failed to update club book";
+        setError(errorMessage);
+        return { success: false, message: errorMessage };
       }
 
+      toast.success("Book updated successfully!");
       return { success: true, data };
     } catch (err) {
-      setError("Error updating club book");
+      const message = err instanceof Error ? err.message : "Failed to update club book";
+      setError(message);
       console.error("Error updating club book:", err);
-      return { success: false, data: null };
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
