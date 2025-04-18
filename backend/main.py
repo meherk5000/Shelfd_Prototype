@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.database.client import connect_to_mongo, close_mongo_connection
 from app.routes import media, auth, shelf, reviews, clubs
+from app.routers import club_messages
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.database.models.user import User
@@ -12,6 +13,7 @@ from app.database.models.club import Club
 from app.database.models.club_post import ClubPost
 from app.database.models.club_thread import ClubThread
 from app.database.models.club_milestone import ClubMilestone
+from app.database.models.club_message import ClubMessage
 from config import Settings
 import os
 import asyncio
@@ -23,13 +25,15 @@ app = FastAPI(title="Shelfd API")
 settings = Settings()
 print(f"CORS Origins configured: {settings.CORS_ORIGINS}")
 
-# CORS middleware configuration
+# CORS middleware configuration with more detailed settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["http://localhost:3000"],  # Restrict to Next.js development server
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Ensure uploads directory exists
@@ -45,6 +49,7 @@ app.include_router(media.router, prefix="/media", tags=["media"])
 app.include_router(shelf.router, prefix="/api/shelves", tags=["shelves"])
 app.include_router(reviews.router, prefix="/api", tags=["reviews"])
 app.include_router(clubs.router, prefix="/api/clubs", tags=["clubs"])
+app.include_router(club_messages.router, tags=["club_messages"])
 
 @app.on_event("startup")
 async def startup_db_client():
@@ -60,11 +65,26 @@ async def startup_db_client():
         # Test the connection
         await client.admin.command('ping')
         
+        # Initialize Beanie with all models
         await init_beanie(
             database=client[settings.MONGODB_NAME],
-            document_models=[User, ShelfModel, ShelfItemModel, Review, ReviewLike, Club, ClubPost, ClubThread, ClubMilestone]
+            document_models=[
+                User, 
+                ShelfModel, 
+                ShelfItemModel, 
+                Review, 
+                ReviewLike, 
+                Club, 
+                ClubPost, 
+                ClubThread, 
+                ClubMilestone, 
+                ClubMessage
+            ]
         )
-        print(f"Successfully connected to MongoDB and initialized Beanie!")
+        
+        print("Successfully connected to MongoDB and initialized models!")
+        print(f"Database name: {settings.MONGODB_NAME}")
+        print(f"Collections initialized: {[model.Settings.name for model in [User, ShelfModel, ShelfItemModel, Review, ReviewLike, Club, ClubPost, ClubThread, ClubMilestone, ClubMessage]]}")
         
         # Fetch initial articles
         asyncio.create_task(fetch_initial_articles())

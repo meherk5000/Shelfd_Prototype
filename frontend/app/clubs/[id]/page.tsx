@@ -41,7 +41,8 @@ import { API_BASE_URL } from "@/lib/config";
 import { Command } from "cmdk";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
+import { DiscussionChat } from "@/components/clubs/discussion-chat";
 
 // Define book type
 interface Book {
@@ -57,14 +58,9 @@ interface Book {
 // This is the recommended approach for client components in Next.js.
 // The warning in the console is expected and can be ignored as this component
 // is marked with "use client" directive at the top of the file.
-type PageParams = {
-  id: string;
-};
-
-export default function ClubDetailPage({ params }: { params: PageParams }) {
-  // Use React.use() to unwrap the params promise
-  const paramsData = React.use(params) as PageParams;
-  const clubId = paramsData.id;
+export default function ClubDetailPage() {
+  const params = useParams();
+  const clubId = params.id as string;
 
   const [isLoading, setIsLoading] = useState(true);
   const [club, setClub] = useState<ClubData | null>(null);
@@ -73,6 +69,11 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
   const [milestones, setMilestones] = useState<ClubMilestoneData[]>([]);
   const [activeTab, setActiveTab] = useState("discussion");
   const [isBookSearchOpen, setIsBookSearchOpen] = useState(false);
+
+  // State for Create Thread Dialog
+  const [showCreateThreadDialog, setShowCreateThreadDialog] = useState(false);
+  const [newThreadTitle, setNewThreadTitle] = useState("");
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
 
   // Book search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -102,7 +103,6 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showCreateThreadDialog, setShowCreateThreadDialog] = useState(false);
 
   useEffect(() => {
     if (clubId) {
@@ -116,6 +116,15 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     if (!debouncedQuery || debouncedQuery.length < 2) return;
     handleSearch();
   }, [debouncedQuery]);
+
+  // useEffect to reset dialog state when it closes
+  useEffect(() => {
+    if (!showCreateThreadDialog) {
+      setError(null);
+      setNewThreadTitle("");
+      setIsCreatingThread(false);
+    }
+  }, [showCreateThreadDialog]);
 
   const loadClub = async () => {
     setIsLoading(true);
@@ -291,9 +300,9 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     try {
       const result = await updateClubBook(club.id, {
         book_id: selectedBook.id,
-        book_title: selectedBook.title,
+        book_title: selectedBook.title || "",
         book_author: selectedBook.authors?.[0] || "Unknown Author",
-        book_cover: selectedBook.image_url,
+        book_cover: selectedBook.image_url || "",
       });
 
       if (result.success) {
@@ -403,6 +412,30 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
     }
   };
 
+  const handleCreateThread = async () => {
+    if (!clubId || !newThreadTitle.trim()) {
+      toast.error("Thread title cannot be empty.");
+      return;
+    }
+    setIsCreatingThread(true);
+    try {
+      const result = await createThread(clubId, newThreadTitle);
+      if (result.success) {
+        toast.success("Thread created successfully!");
+        setNewThreadTitle(""); // Clear input
+        setShowCreateThreadDialog(false); // Close dialog
+        await loadThreads(clubId); // Refresh thread list
+      } else {
+        toast.error(result.message || "Failed to create thread.");
+      }
+    } catch (error) {
+      console.error("Error creating thread:", error);
+      toast.error("An unexpected error occurred while creating the thread.");
+    } finally {
+      setIsCreatingThread(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">
@@ -432,32 +465,33 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
         <div className="mb-6 bg-card rounded-lg p-4 border">
           <h2 className="text-lg font-semibold mb-4">Currently Reading</h2>
           <div className="flex items-start gap-4">
-            <Link
-              href={`/media/books/${club.book_id}`}
+            {/* <Link
+              href={`/media/books/${club?.book_id}`}
               className="shrink-0 hover:opacity-80 transition-opacity"
-            >
-              {club.book_cover ? (
-                <Image
-                  src={club.book_cover}
-                  alt={club.book_title}
-                  width={120}
-                  height={180}
-                  className="rounded-md object-cover"
-                  priority
-                />
-              ) : (
-                <div className="w-[120px] h-[180px] bg-muted flex items-center justify-center rounded-md">
-                  <BookOpen className="w-8 h-8 text-muted-foreground" />
-                </div>
-              )}
-            </Link>
+            > */}
+            {club.book_cover ? (
+              <Image
+                src={club.book_cover}
+                alt={club.book_title}
+                width={120}
+                height={180}
+                className="rounded-md object-cover"
+                priority
+                style={{ height: "auto" }}
+              />
+            ) : (
+              <div className="w-[120px] h-[180px] bg-muted flex items-center justify-center rounded-md">
+                <BookOpen className="w-8 h-8 text-muted-foreground" />
+              </div>
+            )}
+            {/* </Link> */}
             <div className="flex-1">
-              <Link
-                href={`/media/books/${club.book_id}`}
+              {/* <Link
+                href={`/media/books/${club?.book_id}`}
                 className="hover:underline"
-              >
-                <h3 className="text-xl font-semibold">{club.book_title}</h3>
-              </Link>
+              > */}
+              <h3 className="text-xl font-semibold">{club.book_title}</h3>
+              {/* </Link> */}
               <p className="text-muted-foreground">by {club.book_author}</p>
               <p className="mt-4 text-sm">
                 Join the discussion in the threads below.
@@ -528,7 +562,7 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
             <AvatarImage
-              src={club.creator_avatar}
+              // src={club?.creator_avatar} // Removed due to type error
               alt={club.creator_username}
             />
             <AvatarFallback>{club.creator_username[0]}</AvatarFallback>
@@ -682,104 +716,7 @@ export default function ClubDetailPage({ params }: { params: PageParams }) {
         </TabsList>
 
         <TabsContent value="discussion" className="space-y-4">
-          {threads.length === 0 ? (
-            <div className="text-center p-8 border rounded-lg bg-muted/20">
-              <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/60 mb-3" />
-              <h3 className="text-lg font-medium mb-2">
-                No discussion threads yet
-              </h3>
-              <p className="text-muted-foreground mb-4">
-                {club.is_creator
-                  ? "Start the first conversation about this book club!"
-                  : "Check back later for discussions!"}
-              </p>
-              {club.is_creator && (
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button>Create Thread</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create Thread</DialogTitle>
-                      <DialogDescription>
-                        Start a new discussion thread for this club.
-                      </DialogDescription>
-                    </DialogHeader>
-                    {/* Add thread creation form here later */}
-                    <DialogFooter>
-                      <Button>Create Thread</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Discussion Threads</h3>
-                {club.is_creator && (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button size="sm">
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        Create Thread
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Create Thread</DialogTitle>
-                        <DialogDescription>
-                          Start a new discussion thread for this club.
-                        </DialogDescription>
-                      </DialogHeader>
-                      {/* Add thread creation form here later */}
-                      <DialogFooter>
-                        <Button>Create Thread</Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </div>
-              {/* List of threads */}
-              {threads.map((thread) => (
-                <Card
-                  key={thread.id}
-                  className="p-4 hover:shadow-md transition-shadow"
-                >
-                  <div className="flex justify-between">
-                    <div>
-                      <h4 className="font-semibold text-md">{thread.title}</h4>
-                      {thread.description && (
-                        <p className="text-muted-foreground text-sm mt-1">
-                          {thread.description}
-                        </p>
-                      )}
-                      <div className="flex items-center mt-2 space-x-3">
-                        <div className="flex items-center text-xs text-muted-foreground">
-                          <Avatar className="h-6 w-6 mr-1">
-                            <AvatarFallback>
-                              {thread.creator_username
-                                ?.substring(0, 2)
-                                .toUpperCase() || "U"}
-                            </AvatarFallback>
-                          </Avatar>
-                          {thread.creator_username || "Anonymous"}
-                        </div>
-                        {thread.created_at && (
-                          <div className="text-xs text-muted-foreground">
-                            Created{" "}
-                            {formatDistanceToNow(new Date(thread.created_at), {
-                              addSuffix: true,
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          )}
+          <DiscussionChat clubId={clubId} isMember={club.is_member} />
         </TabsContent>
 
         <TabsContent value="schedule" className="space-y-4">

@@ -8,13 +8,13 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 
-from app.config import settings
-from app.models.user import User
+from config import settings
+from app.database.models.user import User
 
 router = APIRouter()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 class Token(BaseModel):
@@ -62,7 +62,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(
-        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
     return encoded_jwt
 
@@ -75,18 +75,17 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
         )
-        email: str = payload.get("sub")
-        if email is None:
+        user_id = payload.get("sub")
+        if user_id is None:
             raise credentials_exception
-        token_data = TokenData(username=email)
+        user = await User.get(PydanticObjectId(user_id))
+        if user is None:
+            raise credentials_exception
+        return user
     except JWTError:
         raise credentials_exception
-    user = await get_user(email=token_data.username)
-    if user is None:
-        raise credentials_exception
-    return user
 
 
 @router.post("/register", response_model=Token)

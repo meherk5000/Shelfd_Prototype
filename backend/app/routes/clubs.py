@@ -321,25 +321,6 @@ async def get_club_milestones(
     milestones = await ClubService.get_club_milestones(club_id)
     return [await format_milestone_response(milestone) for milestone in milestones]
 
-@router.post("/{club_id}/threads", response_model=List[ThreadResponse])
-async def create_threads(
-    club_id: PydanticObjectId,
-    current_user: User = Depends(get_current_user),
-):
-    """Create discussion threads for a book club."""
-    # Get the club to get the book title
-    club = await ClubService.get_club(club_id)
-    
-    if club.media_type != "book" or not club.book_title:
-        raise HTTPException(status_code=400, detail="Club must be a book club with a book title")
-    
-    threads = await ClubService.create_threads_for_book(
-        club_id=club_id,
-        creator=current_user,
-        book_title=club.book_title,
-    )
-    return [await format_thread_response(thread) for thread in threads]
-
 @router.get("/{club_id}/threads", response_model=List[ThreadResponse])
 async def get_club_threads(
     club_id: PydanticObjectId,

@@ -719,16 +719,27 @@ export function useClubs() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/clubs/${clubId}/threads`, {
+      const token = localStorage.getItem("token");
+      console.log("Token from localStorage:", token);
+      if (!token) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/clubs/${clubId}/threads`, {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           title,
           description
         }),
       });
 
+      console.log("Response status:", response.status);
       const data = await response.json();
+      console.log("Response data:", data);
 
       if (!response.ok) {
         throw new Error(data.detail || "Failed to create thread");
@@ -758,7 +769,7 @@ export function useClubs() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/clubs/${clubId}/threads`, {
+      const response = await fetch(`${API_BASE_URL}/api/clubs/${clubId}/threads`, {
         headers: getAuthHeaders(),
       });
 
