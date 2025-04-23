@@ -51,32 +51,22 @@ async def create_message(
         # Check if user is a member or creator of the club
         is_member = False
         try:
+            # Check if user is a member
             for member in club.members:
-                try:
-                    if hasattr(member, 'fetch'):
-                        fetched_member = await member.fetch()
-                        if str(fetched_member.id) == str(current_user.id):
-                            is_member = True
-                            break
-                    elif str(member.id) == str(current_user.id):
-                        is_member = True
-                        break
-                except Exception as e:
-                    logger.warning(f"Error fetching member: {str(e)}")
-                    continue
-                    
+                member_id = str(member.id) if hasattr(member, 'id') else str(member.ref.id)
+                if member_id == str(current_user.id):
+                    is_member = True
+                    break
+            
             if is_member:
                 logger.info(f"User {current_user.id} is a member of club {club_id}")
             
             # Check if user is the creator
-            try:
-                creator = await club.creator.fetch()
-                is_creator = str(creator.id) == str(current_user.id)
-                if is_creator:
-                    logger.info(f"User {current_user.id} is the creator of club {club_id}")
-            except Exception as e:
-                logger.error(f"Error fetching creator: {str(e)}")
-                is_creator = False
+            creator_id = str(club.creator.id) if hasattr(club.creator, 'id') else str(club.creator.ref.id)
+            is_creator = creator_id == str(current_user.id)
+            
+            if is_creator:
+                logger.info(f"User {current_user.id} is the creator of club {club_id}")
             
             if not is_member and not is_creator:
                 logger.error(f"User {current_user.id} not authorized to post in club {club_id}")
@@ -98,14 +88,11 @@ async def create_message(
                 await new_message.save()
                 logger.info(f"Message saved successfully with ID {new_message.id}")
                 
-                # Fetch the author details
-                author = await new_message.author.fetch()
-                
                 response = MessageResponse(
                     id=str(new_message.id),
                     club_id=club_id,
                     author_id=str(current_user.id),
-                    author_username=author.username,
+                    author_username=current_user.username,
                     content=new_message.content,
                     created_at=new_message.created_at
                 )
@@ -171,32 +158,22 @@ async def get_club_messages(
         # Check if user is a member or creator
         is_member = False
         try:
+            # Check if user is a member
             for member in club.members:
-                try:
-                    if hasattr(member, 'fetch'):
-                        fetched_member = await member.fetch()
-                        if str(fetched_member.id) == str(current_user.id):
-                            is_member = True
-                            break
-                    elif str(member.id) == str(current_user.id):
-                        is_member = True
-                        break
-                except Exception as e:
-                    logger.warning(f"Error fetching member: {str(e)}")
-                    continue
-                    
+                member_id = str(member.id) if hasattr(member, 'id') else str(member.ref.id)
+                if member_id == str(current_user.id):
+                    is_member = True
+                    break
+            
             if is_member:
                 logger.info(f"User {current_user.id} is a member of club {club_id}")
             
             # Check if user is the creator
-            try:
-                creator = await club.creator.fetch()
-                is_creator = str(creator.id) == str(current_user.id)
-                if is_creator:
-                    logger.info(f"User {current_user.id} is the creator of club {club_id}")
-            except Exception as e:
-                logger.error(f"Error fetching creator: {str(e)}")
-                is_creator = False
+            creator_id = str(club.creator.id) if hasattr(club.creator, 'id') else str(club.creator.ref.id)
+            is_creator = creator_id == str(current_user.id)
+            
+            if is_creator:
+                logger.info(f"User {current_user.id} is the creator of club {club_id}")
             
             if not is_member and not is_creator:
                 logger.error(f"User {current_user.id} not authorized to view messages in club {club_id}")

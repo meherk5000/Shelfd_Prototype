@@ -137,27 +137,53 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || isSending) return;
 
+    setIsSending(true);
+    const messageContent = newMessage;
     setNewMessage("");
-    try {
-      const response = await fetch(`/api/clubs/${clubId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content: newMessage }),
-      });
 
-      if (!response.ok) {
-        throw new Error("Failed to send message");
+    try {
+      // Check if we have a token
+      const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Please log in to send messages");
+        router.push("/login");
+        return;
       }
 
+      console.log("Attempting to send message:", {
+        clubId,
+        content: messageContent,
+        hasToken: !!token,
+      });
+
+      await createMessage(clubId, { content: messageContent });
+      console.log("Message sent successfully");
       await loadMessages();
       scrollToBottom(() => {});
     } catch (error) {
       console.error("Error sending message:", error);
-      toast.error("Failed to send message. Please try again.");
+      if (error instanceof Error) {
+        if (error.message === "Not authenticated") {
+          toast.error("Please log in to send messages");
+          router.push("/login");
+        } else {
+          console.error("Detailed error:", {
+            message: error.message,
+            stack: error.stack,
+            clubId,
+            isMember,
+          });
+          toast.error(`Failed to send message: ${error.message}`);
+        }
+      } else {
+        toast.error("Failed to send message. Please try again.");
+      }
+      // Restore the message if sending failed
+      setNewMessage(messageContent);
+    } finally {
+      setIsSending(false);
     }
   };
 
