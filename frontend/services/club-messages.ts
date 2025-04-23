@@ -1,4 +1,5 @@
 import { api } from "../lib/api";
+import axios from "axios";
 
 export interface MessageCreate {
   content: string;
@@ -29,12 +30,29 @@ export const createMessage = async (clubId: string, data: MessageCreate): Promis
     console.log('Message created successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Error creating message:', {
-      error,
-      clubId,
-      data,
-      token: token ? 'present' : 'missing'
-    });
+    if (axios.isAxiosError(error)) {
+      console.error('Axios error creating message:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        error: error.message,
+        clubId,
+        requestData: data,
+        token: token ? 'present' : 'missing'
+      });
+      
+      // If we have a detailed error message from the backend, use it
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+    } else {
+      console.error('Non-Axios error creating message:', {
+        error,
+        clubId,
+        requestData: data,
+        token: token ? 'present' : 'missing'
+      });
+    }
     throw error;
   }
 };
@@ -55,11 +73,27 @@ export const getMessages = async (clubId: string): Promise<MessageResponse[]> =>
     console.log('Messages fetched successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Error fetching messages:', {
-      error,
-      clubId,
-      token: token ? 'present' : 'missing'
-    });
+    if (axios.isAxiosError(error)) {
+      console.error('Axios error fetching messages:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        error: error.message,
+        clubId,
+        token: token ? 'present' : 'missing'
+      });
+      
+      // If we have a detailed error message from the backend, use it
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+    } else {
+      console.error('Non-Axios error fetching messages:', {
+        error,
+        clubId,
+        token: token ? 'present' : 'missing'
+      });
+    }
     throw error;
   }
 }; 

@@ -50,64 +50,92 @@ async def create_message(
         
         # Check if user is a member or creator of the club
         is_member = False
-        for member in club.members:
-            if hasattr(member, 'fetch'):
-                fetched_member = await member.fetch()
-                if str(fetched_member.id) == str(current_user.id):
-                    is_member = True
-                    break
-            elif str(member.id) == str(current_user.id):
-                is_member = True
-                break
+        try:
+            for member in club.members:
+                try:
+                    if hasattr(member, 'fetch'):
+                        fetched_member = await member.fetch()
+                        if str(fetched_member.id) == str(current_user.id):
+                            is_member = True
+                            break
+                    elif str(member.id) == str(current_user.id):
+                        is_member = True
+                        break
+                except Exception as e:
+                    logger.warning(f"Error fetching member: {str(e)}")
+                    continue
+                    
+            if is_member:
+                logger.info(f"User {current_user.id} is a member of club {club_id}")
+            
+            # Check if user is the creator
+            try:
+                creator = await club.creator.fetch()
+                is_creator = str(creator.id) == str(current_user.id)
+                if is_creator:
+                    logger.info(f"User {current_user.id} is the creator of club {club_id}")
+            except Exception as e:
+                logger.error(f"Error fetching creator: {str(e)}")
+                is_creator = False
+            
+            if not is_member and not is_creator:
+                logger.error(f"User {current_user.id} not authorized to post in club {club_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You must be a member of the club to post messages"
+                )
+            
+            try:
+                # Create the message with proper relationships
+                new_message = ClubMessage(
+                    club=club,
+                    author=current_user,
+                    content=message.content
+                )
                 
-        if is_member:
-            logger.info(f"User {current_user.id} is a member of club {club_id}")
-        
-        # Check if user is the creator
-        creator = await club.creator.fetch()
-        is_creator = str(creator.id) == str(current_user.id)
-        if is_creator:
-            logger.info(f"User {current_user.id} is the creator of club {club_id}")
-        
-        if not is_member and not is_creator:
-            logger.error(f"User {current_user.id} not authorized to post in club {club_id}")
+                # Save the message
+                logger.info(f"Saving message to database")
+                await new_message.save()
+                logger.info(f"Message saved successfully with ID {new_message.id}")
+                
+                # Fetch the author details
+                author = await new_message.author.fetch()
+                
+                response = MessageResponse(
+                    id=str(new_message.id),
+                    club_id=club_id,
+                    author_id=str(current_user.id),
+                    author_username=author.username,
+                    content=new_message.content,
+                    created_at=new_message.created_at
+                )
+                logger.info(f"Successfully created message: {response}")
+                return response
+            except Exception as e:
+                logger.error(f"Error creating or saving message: {str(e)}")
+                logger.exception("Full traceback:")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error creating or saving message: {str(e)}"
+                )
+            
+        except Exception as e:
+            logger.error(f"Error in membership check: {str(e)}")
+            logger.exception("Full traceback:")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You must be a member of the club to post messages"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error checking club membership: {str(e)}"
             )
-        
-        # Create the message with proper relationships
-        new_message = ClubMessage(
-            club=club,
-            author=current_user,
-            content=message.content
-        )
-        
-        # Save the message
-        logger.info(f"Saving message to database")
-        await new_message.save()
-        logger.info(f"Message saved successfully with ID {new_message.id}")
-        
-        # Fetch the author details
-        author = await new_message.author.fetch()
-        
-        response = MessageResponse(
-            id=str(new_message.id),
-            club_id=club_id,
-            author_id=str(current_user.id),
-            author_username=author.username,
-            content=new_message.content,
-            created_at=new_message.created_at
-        )
-        logger.info(f"Successfully created message: {response}")
-        return response
-        
+            
+    except HTTPException as he:
+        # Re-raise HTTP exceptions
+        raise he
     except Exception as e:
-        logger.error(f"Error creating message: {str(e)}")
+        logger.error(f"Unexpected error creating message: {str(e)}")
         logger.exception("Full traceback:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create message: {str(e)}"
+            detail=f"Unexpected error creating message: {str(e)}"
         )
 
 @router.get("/{club_id}/messages", response_model=List[MessageResponse])

@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Send } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { format, parseISO } from "date-fns";
+import { utcToZonedTime } from "date-fns-tz";
 import {
   createMessage,
   getMessages,
@@ -29,17 +30,27 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout>();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  type ScrollCallback = () => void;
+  const scrollToBottom = useCallback((callback?: ScrollCallback) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      if (callback) callback();
+    }
+  }, []);
 
   const loadMessages = useCallback(async () => {
     try {
       setError(null);
       const fetchedMessages = await getMessages(clubId);
-      setMessages(fetchedMessages);
+      // Sort messages by created_at in ascending order (oldest first)
+      const sortedMessages = [...fetchedMessages].sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      setMessages(sortedMessages);
       // Reset retry count on successful load
       setRetryCount(0);
     } catch (error) {
@@ -60,7 +71,8 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
               }/3)`
             );
             // Try again after a short delay
-            setTimeout(() => void loadMessages(), 2000);
+            const retryFn = () => loadMessages();
+            setTimeout(retryFn, 2000);
           } else {
             toast.error(
               "Failed to load messages after multiple attempts. Please try refreshing the page."
@@ -92,38 +104,60 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
   }, [clubId, error, loadMessages]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Scroll to bottom when messages change
+    scrollToBottom(() => {});
+  }, [messages, scrollToBottom]);
+
+  const formatTimestamp = (dateString: string) => {
+    try {
+      // Parse the UTC date string
+      const utcDate = parseISO(dateString);
+
+      // Convert to local timezone
+      const localDate = utcToZonedTime(
+        utcDate,
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+      );
+
+      const now = new Date();
+      const isToday = localDate.toDateString() === now.toDateString();
+
+      if (isToday) {
+        // Show time like "8:10 PM"
+        return format(localDate, "h:mm a");
+      } else {
+        // Show date and time like "Apr 18, 8:10 PM"
+        return format(localDate, "MMM d, h:mm a");
+      }
+    } catch (error) {
+      console.error("Error formatting timestamp:", error);
+      return dateString; // Fallback to original string if parsing fails
+    }
+  };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || isSending) return;
+    if (!newMessage.trim()) return;
 
-    setIsSending(true);
+    setNewMessage("");
     try {
-      const message = await createMessage(clubId, {
-        content: newMessage.trim(),
+      const response = await fetch(`/api/clubs/${clubId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: newMessage }),
       });
-      setMessages((prev) => [...prev, message]);
-      setNewMessage("");
-      toast.success("Message sent!");
-      scrollToBottom();
 
-      // Reset error state if message sends successfully
-      setError(null);
-      setRetryCount(0);
+      if (!response.ok) {
+        throw new Error("Failed to send message");
+      }
+
+      await loadMessages();
+      scrollToBottom(() => {});
     } catch (error) {
       console.error("Error sending message:", error);
-      if (error instanceof Error) {
-        if (error.message === "Not authenticated") {
-          toast.error("Please log in to send messages");
-          router.push("/login");
-        } else {
-          toast.error("Failed to send message. Please try again.");
-        }
-      }
-    } finally {
-      setIsSending(false);
+      toast.error("Failed to send message. Please try again.");
     }
   };
 
@@ -164,7 +198,10 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
       </div>
 
       <Card className="p-4">
-        <div className="space-y-4 max-h-[500px] overflow-y-auto">
+        <div
+          ref={messagesContainerRef}
+          className="space-y-4 max-h-[500px] overflow-y-auto"
+        >
           {messages.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No messages yet. Start the conversation!
@@ -184,9 +221,7 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
                       {message.author_username}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(message.created_at), {
-                        addSuffix: true,
-                      })}
+                      {formatTimestamp(message.created_at)}
                     </span>
                   </div>
                   <p className="text-sm mt-1">{message.content}</p>
