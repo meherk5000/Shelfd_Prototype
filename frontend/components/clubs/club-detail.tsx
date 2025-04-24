@@ -7,6 +7,7 @@ import {
   ClubThreadData,
   ClubMilestoneData,
   ClubPostData,
+  normalizeImageUrl,
 } from "@/lib/hooks/use-clubs";
 import Link from "next/link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -30,6 +31,8 @@ import {
   Search,
   MessageSquare,
   Star,
+  Clapperboard,
+  Tv,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -38,12 +41,19 @@ import { API_BASE_URL } from "@/lib/config";
 import { Command } from "cmdk";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 
-interface Book {
+// Generic Media Interface (can be expanded later if needed)
+interface MediaItem {
   id: string;
   title: string;
-  authors?: string[];
   image_url?: string;
+  authors?: string[];
   published_date?: string;
+  release_date?: string;
+  overview?: string;
+  media_type?: "book" | "movie" | "tv_show";
+  // Specific fields from backend responses
+  director?: string; // For movies
+  creator?: string; // For TV shows
 }
 
 interface ClubDetailProps {
@@ -57,12 +67,13 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
   const [threads, setThreads] = useState<ClubThreadData[]>([]);
   const [milestones, setMilestones] = useState<ClubMilestoneData[]>([]);
   const [activeTab, setActiveTab] = useState("discussion");
-  const [isBookSearchOpen, setIsBookSearchOpen] = useState(false);
+  // Renamed state for generic media search
+  const [isMediaSearchOpen, setIsMediaSearchOpen] = useState(false);
 
-  // Book search state
+  // Media search state
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Book[]>([]);
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [searchResults, setSearchResults] = useState<MediaItem[]>([]); // Use generic type
+  const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null); // Use generic type
   const [isSearching, setIsSearching] = useState(false);
   const debouncedQuery = useDebounce(searchQuery, 300);
 
@@ -75,6 +86,8 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     createMilestone,
     getClubMilestones,
     updateClubBook,
+    updateClubMovie,
+    updateClubTVShow,
   } = useClubs();
 
   useEffect(() => {
@@ -85,9 +98,9 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
 
   // Update search when debounced query changes
   useEffect(() => {
-    if (!debouncedQuery || debouncedQuery.length < 2) return;
+    if (!debouncedQuery || debouncedQuery.length < 2 || !club) return; // Ensure club data is available
     handleSearch();
-  }, [debouncedQuery]);
+  }, [debouncedQuery, club]); // Add club as dependency
 
   const loadClub = async () => {
     setIsLoading(true);
@@ -171,31 +184,41 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim() || !club) return; // Ensure club data is available
 
     setIsSearching(true);
     try {
+      // Include media type in the search query
+      const mediaType = club.media_type;
       const response = await fetch(
         `${API_BASE_URL}/media/search/quick?query=${encodeURIComponent(
           searchQuery
-        )}`
+        )}&type=${mediaType}` // Added type parameter
       );
 
       if (!response.ok) {
         console.warn(
-          `API endpoint returned ${response.status}: ${API_BASE_URL}/media/search/quick`
+          `API endpoint returned ${response.status}: ${API_BASE_URL}/media/search/quick?type=${mediaType}`
         );
-        toast.error("Book search API is not available");
+        toast.error(
+          `${
+            mediaType.charAt(0).toUpperCase() + mediaType.slice(1)
+          } search API is not available`
+        );
         setSearchResults([]);
         return;
       }
 
       const data = await response.json();
-      const books = data.books || [];
-      setSearchResults(books);
+      // Assume backend returns results in a consistent 'results' field
+      const results = (data.results || []).map((item: any) => ({
+        ...item,
+        media_type: mediaType, // Add media_type if not returned by backend
+      }));
+      setSearchResults(results);
     } catch (err) {
-      console.error("Error searching books:", err);
-      toast.error("Failed to search for books");
+      console.error(`Error searching ${club.media_type}s:`, err);
+      toast.error(`Failed to search for ${club.media_type}s`);
       setSearchResults([]);
     } finally {
       setIsSearching(false);
@@ -208,41 +231,79 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     }
   };
 
-  const handleSelectBook = (book: Book) => {
-    setSelectedBook(book);
+  const handleSelectMedia = (media: MediaItem) => {
+    setSelectedMedia(media);
   };
 
-  const handleAddBook = async () => {
-    if (!selectedBook || !club) return;
+  const handleAddMedia = async () => {
+    if (!selectedMedia || !club) return;
+
+    setIsLoading(true); // Changed from setLoading to setIsLoading to match state variable
+    let result: { success: boolean; message?: string; data?: ClubData } | null =
+      null;
 
     try {
-      const authorName =
-        selectedBook.authors && selectedBook.authors.length > 0
-          ? selectedBook.authors[0]
-          : "Unknown Author";
+      switch (club.media_type) {
+        case "book":
+          const authorName =
+            selectedMedia.authors && selectedMedia.authors.length > 0
+              ? selectedMedia.authors[0]
+              : "Unknown Author";
+          result = await updateClubBook(club.id, {
+            // Pass object as expected
+            book_id: selectedMedia.id,
+            book_title: selectedMedia.title,
+            book_author: authorName,
+            book_cover: selectedMedia.image_url || "",
+          });
+          break;
+        case "movie":
+          result = await updateClubMovie(club.id, {
+            movie_id: selectedMedia.id,
+            movie_title: selectedMedia.title,
+            movie_director: selectedMedia.director, // Assuming director field exists in MediaItem
+            movie_cover: selectedMedia.image_url,
+          });
+          break;
+        case "tv_show":
+          result = await updateClubTVShow(club.id, {
+            tv_show_id: selectedMedia.id,
+            tv_show_title: selectedMedia.title,
+            tv_show_creator: selectedMedia.creator, // Assuming creator field exists in MediaItem
+            tv_show_cover: selectedMedia.image_url,
+          });
+          break;
+        default:
+          toast.error("Unsupported media type");
+          setIsLoading(false);
+          return;
+      }
 
-      const result = await updateClubBook(
-        club.id,
-        selectedBook.id,
-        selectedBook.title,
-        authorName,
-        selectedBook.image_url
-      );
-
-      if (result.success) {
+      if (result?.success && result.data) {
+        // Check for data property
         toast.success(
-          `"${selectedBook.title}" was added to your club!\nDiscussion threads for each chapter have been created.`
+          `"${selectedMedia.title}" was added to your club!`
+          // Add back discussion thread creation message if backend handles it for movies/tv
+          // + `\nDiscussion threads might have been created.`
         );
-        setClub(result.data);
-        setIsBookSearchOpen(false);
-        loadThreads(club.id);
-        loadMilestones(club.id);
+        setClub(result.data); // Update club state with the response data
+        setIsMediaSearchOpen(false);
+        setSelectedMedia(null); // Clear selection
+        // Optionally reload threads/milestones if adding media affects them
+        // loadThreads(club.id);
+        // loadMilestones(club.id);
       } else {
-        toast.error("Failed to add book to club");
+        toast.error(
+          `Failed to add ${club.media_type} to club: ${
+            result?.message || "Unknown error"
+          }`
+        );
       }
     } catch (error) {
-      console.error("Error adding book:", error);
-      toast.error("An error occurred while adding the book");
+      console.error(`Error adding ${club.media_type}:`, error);
+      toast.error(`An error occurred while adding the ${club.media_type}`);
+    } finally {
+      setIsLoading(false); // Ensure loading state is reset
     }
   };
 
@@ -268,34 +329,65 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     );
   }
 
-  const renderBookInfo = () => {
-    if (club?.book_title) {
+  const renderMediaInfo = () => {
+    if (!club) return null;
+
+    let title: string | undefined;
+    let detail: string | undefined;
+    let cover: string | undefined;
+    let IconComponent: React.ElementType = BookOpen; // Default icon
+
+    switch (club.media_type) {
+      case "book":
+        title = club.book_title;
+        detail = club.book_author ? `by ${club.book_author}` : undefined;
+        cover = club.book_cover;
+        IconComponent = BookOpen;
+        break;
+      case "movie":
+        title = club.movie_title;
+        // Ensure movie_director exists on club object (fetched from API)
+        detail = club.movie_director
+          ? `Directed by ${club.movie_director}`
+          : undefined;
+        cover = club.movie_cover;
+        IconComponent = Clapperboard;
+        break;
+      case "tv_show":
+        title = club.tv_show_title;
+        // Ensure tv_show_creator exists on club object (fetched from API)
+        detail = club.tv_show_creator
+          ? `Created by ${club.tv_show_creator}`
+          : undefined;
+        cover = club.tv_show_cover;
+        IconComponent = Tv;
+        break;
+    }
+
+    if (title) {
       return (
         <div className="mb-6 flex items-start gap-4 bg-card rounded-lg p-4 border">
           <div className="shrink-0">
-            {club.book_cover ? (
+            {cover ? (
               <img
-                src={club.book_cover}
-                alt={club.book_title}
+                // Use normalizeImageUrl if cover URLs need normalization like club covers
+                src={normalizeImageUrl(cover) || cover}
+                alt={title}
                 className="w-24 h-32 object-cover rounded-md"
               />
             ) : (
               <div className="w-24 h-32 bg-muted flex items-center justify-center rounded-md">
-                <BookOpen className="w-8 h-8 text-muted-foreground" />
+                <IconComponent className="w-8 h-8 text-muted-foreground" />
               </div>
             )}
           </div>
           <div>
-            <h2 className="text-lg font-semibold">Currently Reading</h2>
-            <h3 className="text-xl font-bold">{club.book_title}</h3>
-            {club.book_author && (
-              <p className="text-sm text-muted-foreground">
-                by {club.book_author}
-              </p>
+            <h2 className="text-lg font-semibold">Current Pick</h2>
+            <h3 className="text-xl font-bold">{title}</h3>
+            {detail && (
+              <p className="text-sm text-muted-foreground">{detail}</p>
             )}
-            <p className="mt-2 text-sm">
-              Join the discussion in the threads below.
-            </p>
+            <p className="mt-2 text-sm">Join the discussion below.</p>
           </div>
         </div>
       );
@@ -303,8 +395,49 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     return null;
   };
 
-  const showPickBookButton =
-    club?.media_type === "book" && club?.is_creator && !club?.book_title;
+  // Check if the creator should see the button to pick media
+  const showPickMediaButton =
+    club?.is_creator &&
+    ((club.media_type === "book" && !club.book_title) ||
+      (club.media_type === "movie" && !club.movie_title) ||
+      (club.media_type === "tv_show" && !club.tv_show_title));
+
+  // Helper to get media type specific text/icon
+  const getMediaTypeDetails = (mediaType: string | undefined) => {
+    switch (mediaType) {
+      case "movie":
+        return {
+          noun: "Movie",
+          nounPlural: "Movies",
+          verb: "Watch",
+          icon: Clapperboard,
+          searchPlaceholder: "Search for a movie by title...",
+          creatorFieldLabel: "Director",
+        };
+      case "tv_show":
+        return {
+          noun: "TV Show",
+          nounPlural: "TV Shows",
+          verb: "Watch",
+          icon: Tv,
+          searchPlaceholder: "Search for a TV show by title...",
+          creatorFieldLabel: "Creator",
+        };
+      case "book":
+      default:
+        return {
+          noun: "Book",
+          nounPlural: "Books",
+          verb: "Read",
+          icon: BookOpen,
+          searchPlaceholder: "Search for a book by title or author...",
+          creatorFieldLabel: "Author",
+        };
+    }
+  };
+
+  const mediaDetails = getMediaTypeDetails(club?.media_type);
+  const MediaIcon = mediaDetails.icon;
 
   return (
     <div className="px-4 py-6 max-w-[1200px] mx-auto space-y-6">
@@ -319,29 +452,35 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
         <p className="text-muted-foreground">{club.description}</p>
       )}
 
-      {renderBookInfo()}
+      {renderMediaInfo()}
 
-      {showPickBookButton && (
+      {showPickMediaButton && (
         <div className="flex flex-col items-center justify-center py-8 bg-muted/30 rounded-lg border border-dashed border-muted-foreground/25">
-          <BookOpen className="w-12 h-12 text-muted-foreground mb-4" />
-          <h3 className="text-xl font-medium mb-2">No book selected yet</h3>
+          <MediaIcon className="w-12 h-12 text-muted-foreground mb-4" />
+          <h3 className="text-xl font-medium mb-2">
+            No {mediaDetails.noun.toLowerCase()} selected yet
+          </h3>
           <p className="text-muted-foreground text-center max-w-md mb-4">
-            As the club creator, you can select a book to read. This will
-            automatically create discussion threads for each chapter.
+            As the club creator, you can select a{" "}
+            {mediaDetails.noun.toLowerCase()} to{" "}
+            {mediaDetails.verb.toLowerCase()}. This may create discussion
+            features later.
           </p>
-          <Dialog open={isBookSearchOpen} onOpenChange={setIsBookSearchOpen}>
+          <Dialog open={isMediaSearchOpen} onOpenChange={setIsMediaSearchOpen}>
             <DialogTrigger asChild>
               <Button size="lg" className="gap-2">
-                <BookOpen className="w-4 h-4" />
-                Pick Club Book
+                <MediaIcon className="w-4 h-4" />
+                Pick Club {mediaDetails.noun}
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Pick a Book for Your Club</DialogTitle>
+                <DialogTitle>
+                  Pick a {mediaDetails.noun} for Your Club
+                </DialogTitle>
                 <DialogDescription>
-                  Search for a book to add to your club. This will generate
-                  discussion threads for each chapter.
+                  Search for a {mediaDetails.noun.toLowerCase()} to add to your
+                  club.
                 </DialogDescription>
               </DialogHeader>
 
@@ -355,7 +494,7 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Search for a book by title or author..."
+                    placeholder={mediaDetails.searchPlaceholder}
                     className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </div>
@@ -366,46 +505,72 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
                     </div>
                   ) : searchResults.length > 0 ? (
                     <div className="space-y-2">
-                      {searchResults.map((book) => (
+                      {searchResults.map((media) => (
                         <div
-                          key={book.id}
-                          onClick={() => handleSelectBook(book)}
+                          key={`${media.media_type}-${media.id}`} // Use composite key
+                          onClick={() => handleSelectMedia(media)}
                           className={`flex items-center gap-4 p-2 rounded-md hover:bg-accent cursor-pointer ${
-                            selectedBook?.id === book.id ? "bg-accent" : ""
+                            selectedMedia?.id === media.id &&
+                            selectedMedia?.media_type === media.media_type
+                              ? "bg-accent"
+                              : ""
                           }`}
                         >
-                          {book.image_url ? (
+                          {media.image_url ? (
                             <img
-                              src={book.image_url}
-                              alt={book.title}
+                              src={media.image_url} // Assuming search returns full URLs
+                              alt={media.title}
                               className="h-24 w-16 object-cover rounded"
                             />
                           ) : (
                             <div className="h-24 w-16 bg-muted flex items-center justify-center rounded">
-                              <BookOpen className="h-6 w-6 text-muted-foreground" />
+                              <MediaIcon className="h-6 w-6 text-muted-foreground" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="font-medium truncate">
-                              {book.title}
+                              {media.title}
                             </div>
-                            {book.authors && book.authors.length > 0 && (
+                            {/* Conditionally display author/director/creator */}
+                            {media.authors &&
+                              media.authors.length > 0 &&
+                              media.media_type === "book" && (
+                                <div className="text-sm text-muted-foreground">
+                                  by {media.authors.join(", ")}
+                                </div>
+                              )}
+                            {media.director && media.media_type === "movie" && (
                               <div className="text-sm text-muted-foreground">
-                                by {book.authors.join(", ")}
+                                Directed by {media.director}
                               </div>
                             )}
-                            {book.published_date && (
-                              <div className="text-xs text-muted-foreground mt-1">
-                                Published {book.published_date.split("-")[0]}
-                              </div>
-                            )}
+                            {media.creator &&
+                              media.media_type === "tv_show" && (
+                                <div className="text-sm text-muted-foreground">
+                                  Created by {media.creator}
+                                </div>
+                              )}
+                            {/* Conditionally display published/release date */}
+                            {media.published_date &&
+                              media.media_type === "book" && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Published {media.published_date.split("-")[0]}
+                                </div>
+                              )}
+                            {media.release_date &&
+                              (media.media_type === "movie" ||
+                                media.media_type === "tv_show") && (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  Released {media.release_date.split("-")[0]}
+                                </div>
+                              )}
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : searchQuery.length >= 2 ? (
                     <div className="p-4 text-center text-sm text-muted-foreground">
-                      No books found.
+                      No {mediaDetails.nounPlural.toLowerCase()} found.
                     </div>
                   ) : null}
                 </div>
@@ -413,12 +578,16 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
 
               <DialogFooter>
                 <Button
-                  onClick={handleAddBook}
-                  disabled={!selectedBook}
+                  onClick={handleAddMedia}
+                  disabled={!selectedMedia || isLoading} // Use isLoading state
                   className="gap-2"
                 >
-                  <BookOpen className="w-4 h-4" />
-                  Add Book to Club
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <MediaIcon className="w-4 h-4" />
+                  )}
+                  Add {mediaDetails.noun} to Club
                 </Button>
               </DialogFooter>
             </DialogContent>

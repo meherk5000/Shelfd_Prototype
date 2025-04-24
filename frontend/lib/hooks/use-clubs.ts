@@ -47,6 +47,12 @@ export interface ClubData {
   book_title?: string;
   book_author?: string;
   book_cover?: string;
+  movie_title?: string;
+  movie_director?: string;
+  movie_cover?: string;
+  tv_show_title?: string;
+  tv_show_creator?: string;
+  tv_show_cover?: string;
 }
 
 export interface ClubPostData {
@@ -329,123 +335,106 @@ export function useClubs() {
     mediaType: string,
     description?: string,
     isPrivate?: boolean,
-    coverImage?: File,
-    bookTitle?: string,
-    bookAuthor?: string,
-    bookCover?: File,
-    bookId?: string,
-    bookCoverUrl?: string
+    coverImage?: File
   ) => {
+    console.log("[Frontend] Starting club creation with data:", {
+      name,
+      mediaType,
+      description,
+      isPrivate,
+      hasCoverImage: !!coverImage
+    });
+
     setLoading(true);
     setError(null);
 
     // Validate required fields
     if (!name) {
+      console.log("[Frontend] Validation failed: Club name is required");
       setError("Club name is required");
       return { success: false, message: "Club name is required" };
     }
 
     if (!mediaType) {
+      console.log("[Frontend] Validation failed: Media type is required");
       setError("Media type is required");
       return { success: false, message: "Media type is required" };
     }
 
-    const requestData: any = {
-      name,
-      media_type: mediaType,
+    // Map frontend media types to backend format
+    const mediaTypeMap: Record<string, string> = {
+      "books": "book",
+      "movies": "movie",
+      "tv-shows": "tv"
     };
 
-    if (description) {
-      requestData.description = description;
+    const backendMediaType = mediaTypeMap[mediaType];
+    if (!backendMediaType) {
+      console.log("[Frontend] Validation failed: Invalid media type");
+      setError("Invalid media type");
+      return { success: false, message: "Invalid media type" };
     }
 
-    if (isPrivate !== undefined) {
-      requestData.is_private = isPrivate;
-    }
+    const requestData: any = {
+      name,
+      media_type: backendMediaType,
+      ...(description && { description }),
+      is_private: isPrivate,
+    };
 
+    console.log("[Frontend] Prepared initial request data:", requestData);
+
+    // Handle cover image upload if provided
     if (coverImage) {
-      // If there's a cover image, we need to upload it first
-      const formData = new FormData();
-      formData.append("file", coverImage);
-      const uploadResponse = await fetch("/api/clubs/upload-cover", {
-        method: "POST",
-        headers: getFormDataHeaders(),
-        body: formData,
-      });
-      
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json();
-        throw new Error(errorData.detail || "Failed to upload cover image");
-      }
-      
-      const { url } = await uploadResponse.json();
-      requestData.cover_image = url;
-    }
-
-    // Only add book info if at least the title is provided
-    if (bookTitle) {
-      requestData.book_title = bookTitle;
-      
-      if (bookAuthor) {
-        requestData.book_author = bookAuthor;
-      }
-
-      if (bookId) {
-        requestData.book_id = bookId;
-      }
-
-      if (bookCoverUrl) {
-        requestData.book_cover = bookCoverUrl;
-      }
-      
-      if (bookCover) {
-        // If there's a book cover, upload it first
-        const formData = new FormData();
-        formData.append("file", bookCover);
-        const uploadResponse = await fetch("/api/clubs/upload-cover", {
-          method: "POST",
-          headers: getFormDataHeaders(),
-          body: formData,
-        });
-        
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json();
-          throw new Error(errorData.detail || "Failed to upload book cover");
+      try {
+        const imageUrl = await uploadCoverImage(coverImage);
+        if (imageUrl) {
+          requestData.cover_image = imageUrl;
         }
-        
-        const { url } = await uploadResponse.json();
-        requestData.book_cover = url;
+      } catch (err) {
+        console.error("[Frontend] Failed to upload cover image:", err);
+        // Continue with club creation even if image upload fails
       }
     }
 
     try {
-      const response = await fetch("/api/clubs/create", {
+      console.log("[Frontend] Sending club creation request with data:", requestData);
+      console.log("[Frontend] Headers being sent:", getAuthHeaders());
+
+      const response = await fetch("/api/clubs/create", { 
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(requestData),
       });
 
+      console.log("[Frontend] Club creation response status:", response.status);
       const data = await response.json();
+      console.log("[Frontend] Club creation response data:", data);
 
       if (!response.ok) {
         const errorMessage = data.detail?.error || data.detail?.message || data.detail || "Failed to create club";
+        console.error("[Frontend] Club creation failed:", errorMessage);
         setError(errorMessage);
+        if (response.status === 422) {
+            toast.error(`Failed to create club: ${errorMessage}`);
+        } else {
+            toast.error(errorMessage);
+        }
         return { success: false, message: errorMessage };
       }
 
-      // Show success message
+      console.log("[Frontend] Club created successfully:", data);
       toast.success("Club created successfully!");
 
-      // Return the club data for redirection
       return { 
         success: true, 
         data,
-        clubId: data.id // Make sure we return the club ID
+        clubId: data.id
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create club";
+      console.error("[Frontend] Unexpected error during club creation:", err);
       setError(message);
-      console.error("Error creating club:", err);
       return { success: false, message };
     } finally {
       setLoading(false);
@@ -817,7 +806,7 @@ export function useClubs() {
     book_title: string;
     book_author: string;
     book_cover: string;
-  }): Promise<{ success: boolean; message?: string }> => {
+  }): Promise<{ success: boolean; message?: string; data?: ClubData }> => {
     setLoading(true);
     setError(null);
 
@@ -838,13 +827,72 @@ export function useClubs() {
         throw new Error(data.detail || "Failed to update club book");
       }
 
-      return { success: true };
+      return { success: true, data };
     } catch (err) {
       console.error("Error updating club book:", err);
       return { 
         success: false, 
         message: err instanceof Error ? err.message : "Failed to update club book" 
       };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Add update functions for Movie and TV Show
+  const updateClubMovie = async (clubId: string, movieData: {
+    movie_id: string;
+    movie_title: string;
+    movie_director?: string;
+    movie_cover?: string;
+  }): Promise<{ success: boolean; message?: string; data?: ClubData }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/clubs/${clubId}/movie`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(movieData),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to update club movie");
+      }
+      return { success: true, data };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update club movie";
+      setError(message);
+      toast.error(message);
+      return { success: false, message };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateClubTVShow = async (clubId: string, tvShowData: {
+    tv_show_id: string;
+    tv_show_title: string;
+    tv_show_creator?: string;
+    tv_show_cover?: string;
+  }): Promise<{ success: boolean; message?: string; data?: ClubData }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/clubs/${clubId}/tvshow`, { // Endpoint might be /tv_show or similar
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(tvShowData),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to update club TV show");
+      }
+      return { success: true, data };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to update club TV show";
+      setError(message);
+      toast.error(message);
+      return { success: false, message };
     } finally {
       setLoading(false);
     }
@@ -869,5 +917,7 @@ export function useClubs() {
     createThread,
     getClubThreads,
     updateClubBook,
+    updateClubMovie,
+    updateClubTVShow,
   };
 }

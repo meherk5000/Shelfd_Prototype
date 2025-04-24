@@ -1,10 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['date-fns', 'date-fns-tz'],
-  experimental: {
-    esmExternals: false // This will force Next.js to handle all ESM imports as CommonJS
-  },
   images: {
     domains: [
       'localhost',

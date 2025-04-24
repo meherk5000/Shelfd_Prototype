@@ -6,8 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader2, Send } from "lucide-react";
-import { format, parseISO } from "date-fns";
-import { utcToZonedTime } from "date-fns-tz";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+import relativeTime from "dayjs/plugin/relativeTime";
 import {
   createMessage,
   getMessages,
@@ -15,6 +17,11 @@ import {
 } from "@/services/club-messages";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+
+// Configure dayjs plugins
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(relativeTime);
 
 interface DiscussionChatProps {
   clubId: string;
@@ -31,7 +38,7 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
   const [retryCount, setRetryCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout>();
+  const pollIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   type ScrollCallback = () => void;
   const scrollToBottom = useCallback((callback?: ScrollCallback) => {
@@ -110,24 +117,18 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
 
   const formatTimestamp = (dateString: string) => {
     try {
-      // Parse the UTC date string
-      const utcDate = parseISO(dateString);
+      const utcDate = dayjs.utc(dateString);
+      const localDate = utcDate.tz(dayjs.tz.guess()); // Guess local timezone
 
-      // Convert to local timezone
-      const localDate = utcToZonedTime(
-        utcDate,
-        Intl.DateTimeFormat().resolvedOptions().timeZone
-      );
-
-      const now = new Date();
-      const isToday = localDate.toDateString() === now.toDateString();
+      const now = dayjs();
+      const isToday = localDate.isSame(now, "day");
 
       if (isToday) {
         // Show time like "8:10 PM"
-        return format(localDate, "h:mm a");
+        return localDate.format("h:mm A");
       } else {
         // Show date and time like "Apr 18, 8:10 PM"
-        return format(localDate, "MMM d, h:mm a");
+        return localDate.format("MMM D, h:mm A");
       }
     } catch (error) {
       console.error("Error formatting timestamp:", error);

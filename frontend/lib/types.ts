@@ -18,4 +18,12 @@ export interface ClubData {
   book_author: string | null;
   book_cover: string | null;
   book_id: string | null;
+  movie_title: string | null;
+  movie_director: string | null;
+  movie_cover: string | null;
+  movie_id: string | null;
+  tv_show_title: string | null;
+  tv_show_creator: string | null;
+  tv_show_cover: string | null;
+  tv_show_id: string | null;
 } 

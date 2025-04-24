@@ -1,13 +1,14 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
-from beanie import PydanticObjectId
-from pydantic import BaseModel, Field
+from beanie import PydanticObjectId, Link
+from pydantic import BaseModel, Field, validator
 import asyncio
 import os
 import shutil
 import uuid
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
+import logging
 
 from ..database.models.user import User
 from ..database.models.club import Club
@@ -17,6 +18,10 @@ from ..database.models.club_thread import ClubThread
 from ..services.club_service import ClubService
 from ..services.auth import get_current_user
 
+# Set up logging
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
 router = APIRouter(tags=["clubs"])
 
 # Ensure the uploads directory exists
@@ -25,24 +30,40 @@ os.makedirs("uploads/club_covers", exist_ok=True)
 # Request/Response models
 class CreateClubRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    media_type: str = Field(..., pattern="^(book|movie|tv)$")
     description: Optional[str] = Field(None, max_length=1000)
+    media_type: str = Field(..., pattern="^(book|movie|tv)$")
     is_private: bool = Field(default=False)
     cover_image: Optional[str] = None
+    
+    # Book-specific fields (optional)
     book_title: Optional[str] = None
     book_author: Optional[str] = None
     book_cover: Optional[str] = None
-    book_id: Optional[str] = None  # Add this field to match frontend
-
+    book_id: Optional[str] = None
+    
+    # Movie-specific fields (optional)
+    movie_title: Optional[str] = None
+    movie_director: Optional[str] = None
+    movie_year: Optional[int] = None
+    movie_poster: Optional[str] = None
+    movie_id: Optional[str] = None
+    
+    # TV Show-specific fields (optional)
+    tv_title: Optional[str] = None
+    tv_creator: Optional[str] = None
+    tv_year: Optional[int] = None
+    tv_poster: Optional[str] = None
+    tv_id: Optional[str] = None
+    tv_season: Optional[int] = None
+    tv_episode: Optional[int] = None
+    
     model_config = {
         "json_schema_extra": {
             "example": {
                 "name": "Sci-Fi Book Club",
                 "media_type": "book",
                 "description": "A club for science fiction book lovers",
-                "is_private": False,
-                "book_title": "Dune",
-                "book_author": "Frank Herbert"
+                "is_private": False
             }
         }
     }
@@ -118,28 +139,54 @@ class ThreadResponse(BaseModel):
 class UpdateClubBookRequest(BaseModel):
     book_id: str
     book_title: str
-    book_author: str
+    book_author: Optional[str] = None
     book_cover: Optional[str] = None
 
+class UpdateClubMovieRequest(BaseModel):
+    movie_id: str
+    movie_title: str
+    movie_director: Optional[str] = None
+    movie_year: Optional[int] = None
+    movie_poster: Optional[str] = None
+
+class UpdateClubTVShowRequest(BaseModel):
+    tv_id: str
+    tv_title: str
+    tv_creator: Optional[str] = None
+    tv_year: Optional[int] = None
+    tv_poster: Optional[str] = None
+    tv_season: Optional[int] = None
+    tv_episode: Optional[int] = None
+
 # Routes
-@router.post("/create", response_model=ClubResponse)
+@router.post("/create", response_model=Club)
 async def create_club(
     request: CreateClubRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """Create a new club."""
-    club = await ClubService.create_club(
-        name=request.name,
-        creator=current_user,
-        media_type=request.media_type,
-        description=request.description,
-        is_private=request.is_private,
-        cover_image=request.cover_image,
-        book_title=request.book_title,
-        book_author=request.book_author,
-        book_cover=request.book_cover,
-    )
-    return await format_club_response(club, current_user)
+    current_user: User = Depends(get_current_user)
+) -> Club:
+    logger.debug("[Backend] Received club creation request with data: %s", request.model_dump())
+    logger.debug("[Backend] Current user: %s (ID: %s)", current_user.username, current_user.id)
+    
+    try:
+        club_data = request.model_dump()
+        logger.debug("[Backend] Processed request data: %s", club_data)
+        
+        club_data["creator"] = current_user.id
+        club_data["members"] = [current_user.id]
+        club_data["admins"] = [current_user.id]
+        
+        logger.debug("[Backend] Final club data before creation: %s", club_data)
+        
+        club = Club(**club_data)
+        logger.debug("[Backend] Club object created, about to save to database")
+        
+        await club.create()
+        logger.debug("[Backend] Club successfully created in database with ID: %s", club.id)
+        
+        return club
+    except Exception as e:
+        logger.error("[Backend] Error creating club: %s", str(e), exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to create club: {str(e)}")
 
 @router.get("", response_model=List[ClubResponse])
 async def get_clubs(
@@ -336,24 +383,21 @@ async def update_club_book(
     request: UpdateClubBookRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update a club with book information and generate chapter threads"""
+    """Update a club with book information"""
     try:
-        # Convert string ID to ObjectId
         obj_id = PydanticObjectId(club_id)
-        
-        # Get the club
         club = await Club.get(obj_id)
         if not club:
             raise HTTPException(status_code=404, detail="Club not found")
         
         # Check if user is creator/admin
-        if hasattr(club.creator, 'fetch'):
-            creator = await club.creator.fetch()
-            if str(creator.id) != str(current_user.id):
-                raise HTTPException(status_code=403, detail="Only the club creator can update book information")
-        else:
-            if str(club.creator.id) != str(current_user.id):
-                raise HTTPException(status_code=403, detail="Only the club creator can update book information")
+        creator = await club.creator.fetch() # Fetch creator directly
+        if str(creator.id) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Only the club creator can update book information")
+            
+        # Verify this is a book club
+        if club.media_type != "book":
+            raise HTTPException(status_code=400, detail="This club is not a book club")
             
         # Update book information
         club.book_id = request.book_id
@@ -361,18 +405,135 @@ async def update_club_book(
         club.book_author = request.book_author
         club.book_cover = request.book_cover
         
-        # Save club
+        # Clear other media types
+        club.movie_id = None
+        club.movie_title = None
+        club.movie_director = None
+        club.movie_year = None
+        club.movie_poster = None
+        club.tv_id = None
+        club.tv_title = None
+        club.tv_creator = None
+        club.tv_year = None
+        club.tv_poster = None
+        club.tv_season = None
+        club.tv_episode = None
+        
+        club.updated_at = datetime.utcnow()
         await club.save()
         
-        # Generate thread titles based on book title (simplified for now)
-        # Later we can integrate with Google Books API to get actual chapters
-        club_service = ClubService()
-        await club_service.generate_book_threads(club, current_user)
+        # Removed thread generation call
+        # club_service = ClubService()
+        # await club_service.generate_book_threads(club, current_user)
         
         return await format_club_response(club, current_user)
     except Exception as e:
         print(f"Error updating club book: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update club book: {str(e)}")
+
+@router.put("/{club_id}/movie", response_model=ClubResponse)
+async def update_club_movie(
+    club_id: str,
+    request: UpdateClubMovieRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Update a club with movie information"""
+    try:
+        obj_id = PydanticObjectId(club_id)
+        club = await Club.get(obj_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found")
+        
+        # Check if user is creator/admin
+        creator = await club.creator.fetch()
+        if str(creator.id) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Only the club creator can update movie information")
+        
+        # Verify this is a movie club
+        if club.media_type != "movie":
+            raise HTTPException(status_code=400, detail="This club is not a movie club")
+            
+        # Update movie information
+        club.movie_id = request.movie_id
+        club.movie_title = request.movie_title
+        club.movie_director = request.movie_director
+        club.movie_year = request.movie_year
+        club.movie_poster = request.movie_poster
+        
+        # Clear other media types
+        club.book_id = None
+        club.book_title = None
+        club.book_author = None
+        club.book_cover = None
+        club.tv_id = None
+        club.tv_title = None
+        club.tv_creator = None
+        club.tv_year = None
+        club.tv_poster = None
+        club.tv_season = None
+        club.tv_episode = None
+        
+        club.updated_at = datetime.utcnow()
+        await club.save()
+        
+        # No thread generation for movie/tv clubs based on requirements
+        
+        return await format_club_response(club, current_user)
+    except Exception as e:
+        print(f"Error updating club movie: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update club movie: {str(e)}")
+
+@router.put("/{club_id}/tv", response_model=ClubResponse)
+async def update_club_tv_show(
+    club_id: str,
+    request: UpdateClubTVShowRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Update a club with TV show information"""
+    try:
+        obj_id = PydanticObjectId(club_id)
+        club = await Club.get(obj_id)
+        if not club:
+            raise HTTPException(status_code=404, detail="Club not found")
+        
+        # Check if user is creator/admin
+        creator = await club.creator.fetch()
+        if str(creator.id) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Only the club creator can update TV show information")
+        
+        # Verify this is a TV show club
+        if club.media_type != "tv":
+            raise HTTPException(status_code=400, detail="This club is not a TV show club")
+            
+        # Update TV show information
+        club.tv_id = request.tv_id
+        club.tv_title = request.tv_title
+        club.tv_creator = request.tv_creator
+        club.tv_year = request.tv_year
+        club.tv_poster = request.tv_poster
+        club.tv_season = request.tv_season
+        club.tv_episode = request.tv_episode
+        
+        # Clear other media types
+        club.book_id = None
+        club.book_title = None
+        club.book_author = None
+        club.book_cover = None
+        club.movie_id = None
+        club.movie_title = None
+        club.movie_director = None
+        club.movie_year = None
+        club.movie_poster = None
+        
+        club.updated_at = datetime.utcnow()
+        await club.save()
+        
+        # No thread generation for movie/tv clubs based on requirements
+        
+        return await format_club_response(club, current_user)
+    except Exception as e:
+        print(f"Error updating club TV show: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update club TV show: {str(e)}")
 
 @router.get("/{club_id}/members")
 async def get_club_members(

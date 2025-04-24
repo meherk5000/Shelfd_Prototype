@@ -15,10 +15,28 @@ class Club(Document):
     media_type: str = Field(..., pattern="^(book|movie|tv)$")  # Type of media this club focuses on
     is_private: bool = Field(default=False)  # Whether the club is invite-only
     cover_image: Optional[str] = None  # URL to the cover image
+    
+    # Book-specific fields
     book_title: Optional[str] = None  # Title of the book associated with the club
     book_author: Optional[str] = None  # Author of the book
     book_cover: Optional[str] = None  # URL to the book cover image
     book_id: Optional[str] = None  # ID of the book in the database
+    
+    # Movie-specific fields
+    movie_title: Optional[str] = None  # Title of the movie
+    movie_director: Optional[str] = None  # Director of the movie
+    movie_year: Optional[int] = None  # Release year
+    movie_poster: Optional[str] = None  # URL to the movie poster
+    movie_id: Optional[str] = None  # ID of the movie in the database
+    
+    # TV Show-specific fields
+    tv_title: Optional[str] = None  # Title of the TV show
+    tv_creator: Optional[str] = None  # Creator/showrunner of the TV show
+    tv_year: Optional[int] = None  # First air year
+    tv_poster: Optional[str] = None  # URL to the TV show poster
+    tv_id: Optional[str] = None  # ID of the TV show in the database
+    tv_season: Optional[int] = None  # Current season being watched
+    tv_episode: Optional[int] = None  # Current episode being watched
     
     class Settings:
         name = "clubs"
