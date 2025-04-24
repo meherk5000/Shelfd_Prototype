@@ -20,10 +20,13 @@ export interface ClubData {
   book_id: string | null;
   movie_title: string | null;
   movie_director: string | null;
-  movie_cover: string | null;
+  movie_poster: string | null;
   movie_id: string | null;
-  tv_show_title: string | null;
-  tv_show_creator: string | null;
-  tv_show_cover: string | null;
-  tv_show_id: string | null;
+  tv_title: string | null;
+  tv_creator: string | null;
+  tv_poster: string | null;
+  tv_id: string | null;
+  tv_year: number | null;
+  tv_season: number | null;
+  tv_episode: number | null;
 } 

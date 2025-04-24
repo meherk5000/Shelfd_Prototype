@@ -9,16 +9,23 @@ import React from 'react';
 export type MediaTypeMapping = {
   Books: "book";
   Movies: "movie";
-  "TV Shows": "tv_show";
+  "TV Shows": "tv";
   Articles: "article";
 };
 
 export const mediaTypeMap = {
-  Books: "book",
-  Articles: "article",
-  Movies: "movie",
-  "TV Shows": "tv_show"
-} as const;
+  "Books": "book",
+  "Movies": "movie",
+  "TV Shows": "tv",
+  "Articles": "article",
+};
+
+export const mediaTypeDisplayMap = {
+  "Books": "book",
+  "Movies": "movie",
+  "TV Shows": "tv",
+  "Articles": "article",
+};
 
 export enum ShelfType {
   WANT_TO_READ = "want_to_read",

@@ -9,7 +9,7 @@ export const getMediaType = (type: string): string => {
   const mediaTypes = {
     books: "book",
     movies: "movie",
-    "tv-shows": "tv_show",
+    "tv-shows": "tv",
     articles: "article",
   };
   return mediaTypes[type as keyof typeof mediaTypes] || "book";

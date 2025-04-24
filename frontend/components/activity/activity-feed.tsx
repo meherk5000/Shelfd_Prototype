@@ -31,7 +31,7 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 
 // Types for activity items
-type MediaType = "book" | "movie" | "tv_show" | "article";
+type MediaType = "book" | "movie" | "tv" | "article";
 type ActivityType =
   | "added_to_shelf"
   | "review"
@@ -132,7 +132,7 @@ const getMockActivityData = (type: string): ActivityItem[] => {
       media: {
         id: "tvshow1",
         title: "Succession",
-        type: "tv_show",
+        type: "tv",
         image: "/placeholder-tv.jpg",
         creator: "Jesse Armstrong",
       },
@@ -226,7 +226,7 @@ const getMediaTypeIcon = (type: MediaType) => {
       return <BookOpen className="h-4 w-4" />;
     case "movie":
       return <Film className="h-4 w-4" />;
-    case "tv_show":
+    case "tv":
       return <Tv className="h-4 w-4" />;
     case "article":
       return <FileText className="h-4 w-4" />;

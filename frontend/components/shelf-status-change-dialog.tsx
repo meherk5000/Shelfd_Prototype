@@ -76,7 +76,7 @@ export function ShelfStatusChangeDialog({
       if (mediaType === "Movies") {
         normalizedType = "MOVIE";
       } else if (mediaType === "TV Shows") {
-        normalizedType = "TV_SHOW";
+        normalizedType = "tv";
       } else if (mediaType === "Books") {
         normalizedType = "BOOK";
       } else if (mediaType === "Articles") {

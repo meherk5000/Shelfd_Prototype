@@ -7,7 +7,7 @@ from enum import Enum
 class MediaType(str, Enum):
     BOOK = "book"
     MOVIE = "movie"
-    TV_SHOW = "tv_show"
+    TV = "tv"
     ARTICLE = "article"
 
 

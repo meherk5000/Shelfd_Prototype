@@ -49,10 +49,16 @@ export interface ClubData {
   book_cover?: string;
   movie_title?: string;
   movie_director?: string;
-  movie_cover?: string;
-  tv_show_title?: string;
-  tv_show_creator?: string;
-  tv_show_cover?: string;
+  movie_year?: number;
+  movie_poster?: string;
+  movie_id?: string;
+  tv_title?: string;
+  tv_creator?: string;
+  tv_year?: number;
+  tv_poster?: string;
+  tv_id?: string;
+  tv_season?: number;
+  tv_episode?: number;
 }
 
 export interface ClubPostData {
@@ -844,7 +850,8 @@ export function useClubs() {
     movie_id: string;
     movie_title: string;
     movie_director?: string;
-    movie_cover?: string;
+    movie_poster?: string;
+    movie_year?: number;
   }): Promise<{ success: boolean; message?: string; data?: ClubData }> => {
     setLoading(true);
     setError(null);
@@ -870,15 +877,18 @@ export function useClubs() {
   };
 
   const updateClubTVShow = async (clubId: string, tvShowData: {
-    tv_show_id: string;
-    tv_show_title: string;
-    tv_show_creator?: string;
-    tv_show_cover?: string;
+    tv_id: string;
+    tv_title: string;
+    tv_creator?: string;
+    tv_poster?: string;
+    tv_year?: number;
+    tv_season?: number;
+    tv_episode?: number;
   }): Promise<{ success: boolean; message?: string; data?: ClubData }> => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/clubs/${clubId}/tvshow`, { // Endpoint might be /tv_show or similar
+      const response = await fetch(`/api/clubs/${clubId}/tv`, {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify(tvShowData),

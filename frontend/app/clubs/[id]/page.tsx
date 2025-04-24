@@ -35,6 +35,7 @@ import {
   Trash2,
   Film,
   Tv,
+  Clapperboard,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -57,15 +58,15 @@ interface Book {
 interface Movie {
   id: string;
   title: string;
-  director?: string; // Or potentially 'creator'/'cast' depending on API
+  director?: string;
   image_url?: string;
   release_date?: string;
 }
 
 interface TVShow {
   id: string;
-  name: string; // Often 'name' for TV shows
-  creator?: string; // Or 'networks'/'cast'
+  name: string;
+  creator?: string;
   image_url?: string;
   first_air_date?: string;
 }
@@ -75,20 +76,17 @@ type MediaItem = Book | Movie | TVShow;
 
 // Helper to check if an item is a Book
 function isBook(item: MediaItem): item is Book {
-  return "authors" in item || "published_date" in item;
+  return "title" in item && !("name" in item);
 }
 
 // Helper to check if an item is a Movie
 function isMovie(item: MediaItem): item is Movie {
-  // Use a property more specific to movies if available, e.g., 'director'
-  // Or rely on the structure/other fields if 'director' isn't always present
-  return "director" in item || "release_date" in item;
+  return "title" in item && !("authors" in item) && !("name" in item);
 }
 
 // Helper to check if an item is a TVShow
 function isTVShow(item: MediaItem): item is TVShow {
-  // Use a property more specific to TV shows, e.g., 'first_air_date' or 'name' instead of 'title'
-  return "name" in item || "first_air_date" in item || "creator" in item;
+  return "name" in item;
 }
 
 // Properly handle Next.js params
@@ -302,7 +300,7 @@ export default function ClubDetailPage() {
     }
   };
 
-  // Generic Media search functionality - CORRECTED
+  // Generic Media search functionality - FINAL
   const handleSearch = async () => {
     if (!searchQuery.trim() || !club) return;
 
@@ -315,7 +313,7 @@ export default function ClubDetailPage() {
       const response = await fetch(
         `${API_BASE_URL}/media/search/quick?query=${encodeURIComponent(
           searchQuery
-        )}` // Removed the type parameter for now
+        )}`
       );
 
       if (!response.ok) {
@@ -331,25 +329,27 @@ export default function ClubDetailPage() {
       const data = await response.json();
       let results: MediaItem[] = [];
 
-      // Parse results based on the club's media type
-      // Assumes the API returns specific keys like data.books, data.movies, data.tv
-      if (club.media_type === "books" && data.books) {
+      // Parse results based on the club's media type, using the correct keys from API response
+      if (club.media_type === "book" && data.books) {
         results = data.books;
-      } else if (club.media_type === "movies" && data.movies) {
+      } else if (club.media_type === "movie" && data.movies) {
         results = data.movies;
-      } else if (club.media_type === "tv-shows" && data.tv) {
-        // Assuming API uses 'tv' key for tv-shows
-        results = data.tv.map((show: any) => ({ ...show, title: show.name })); // Adapt 'name' to 'title' if needed by UI
+      } else if (club.media_type === "tv" && data.tv_shows) {
+        // Corrected key to data.tv_shows
+        // Map tv_shows results, adapting 'name' to 'title' if needed by the UI elsewhere
+        results = data.tv_shows.map((show: any) => ({
+          ...show,
+          title: show.name,
+        }));
       } else if (data.results) {
-        // Fallback to generic 'results' key
-        // We might need more robust filtering here if 'results' contains mixed types
+        // Fallback for safety, though specific keys seem reliable
         console.warn(
-          "Search API returned generic 'results'. Filtering might be needed."
+          "[ClubDetail Search] API returned generic 'results'. Specific keys preferred but not found."
         );
         results = data.results;
       } else {
         console.warn(
-          "Search API response did not contain expected keys (books, movies, tv) or results.",
+          "[ClubDetail Search] API response did not contain expected keys (books, movies, tv_shows) or results.",
           data
         );
       }
@@ -374,56 +374,61 @@ export default function ClubDetailPage() {
     setSelectedMedia(media);
   };
 
-  const handleAddMedia = async () => {
-    if (!selectedMedia || !club) return;
+  const handleAddMedia = async (media: MediaItem) => {
+    if (!club) return;
     setIsLoading(true);
 
     try {
       let result;
-      if (club.media_type === "book" && isBook(selectedMedia)) {
+      if (club.media_type === "book") {
         result = await updateClubBook(club.id, {
-          book_id: selectedMedia.id,
-          book_title: selectedMedia.title || "",
-          book_author: selectedMedia.authors?.[0] || "Unknown Author",
-          book_cover: selectedMedia.image_url || "",
+          book_id: media.id,
+          book_title: isBook(media) ? media.title : "",
+          book_author:
+            isBook(media) && media.authors?.length
+              ? media.authors[0]
+              : "Unknown Author",
+          book_cover: media.image_url || "",
         });
-        if (result.success) {
-          toast.success(
-            `"${selectedMedia.title}" was added to your club! Discussion threads may have been created.`
-          );
-        }
-      } else if (club.media_type === "movie" && isMovie(selectedMedia)) {
+      } else if (club.media_type === "movie") {
         result = await updateClubMovie(club.id, {
-          movie_id: selectedMedia.id,
-          movie_title: selectedMedia.title || "",
-          movie_director: selectedMedia.director || "Unknown Director",
-          movie_cover: selectedMedia.image_url || "",
+          movie_id: media.id,
+          movie_title: isMovie(media) ? media.title : "",
+          movie_director:
+            isMovie(media) && media.director
+              ? media.director
+              : "Unknown Director",
+          movie_poster: media.image_url || "",
+          movie_year:
+            isMovie(media) && media.release_date
+              ? parseInt(media.release_date.split("-")[0])
+              : undefined,
         });
-        if (result.success) {
-          toast.success(`"${selectedMedia.title}" was added to your club!`);
-        }
-      } else if (club.media_type === "tv" && isTVShow(selectedMedia)) {
+      } else if (club.media_type === "tv") {
         result = await updateClubTVShow(club.id, {
-          tv_show_id: selectedMedia.id,
-          tv_show_title: selectedMedia.name || "",
-          tv_show_creator: selectedMedia.creator || "Unknown Creator",
-          tv_show_cover: selectedMedia.image_url || "",
+          tv_id: media.id,
+          tv_title: isTVShow(media) ? media.name : "",
+          tv_creator:
+            isTVShow(media) && media.creator
+              ? media.creator
+              : "Unknown Creator",
+          tv_poster: media.image_url || "",
+          tv_year:
+            isTVShow(media) && media.first_air_date
+              ? parseInt(media.first_air_date.split("-")[0])
+              : undefined,
+          tv_season: undefined,
+          tv_episode: undefined,
         });
-        if (result.success) {
-          toast.success(`"${selectedMedia.name}" was added to your club!`);
-        }
       } else {
-        console.error(
-          "Mismatched media type or invalid selection:",
-          club.media_type,
-          selectedMedia
-        );
+        console.error("Invalid club media type:", club.media_type);
         toast.error("Cannot add this item to this type of club.");
         setIsLoading(false);
         return;
       }
 
-      if (result && result.success) {
+      if (result?.success) {
+        toast.success(`Successfully added to your club!`);
         if (club.media_type === "book") setIsBookSearchOpen(false);
         if (club.media_type === "movie") setIsMovieSearchOpen(false);
         if (club.media_type === "tv") setIsTVShowSearchOpen(false);
@@ -523,14 +528,15 @@ export default function ClubDetailPage() {
           movie_id: "",
           movie_title: "",
           movie_director: "",
-          movie_cover: "",
+          movie_poster: "",
+          movie_year: undefined,
         });
       } else if (club.media_type === "tv") {
         result = await updateClubTVShow(club.id, {
-          tv_show_id: "",
-          tv_show_title: "",
-          tv_show_creator: "",
-          tv_show_cover: "",
+          tv_id: "",
+          tv_title: "",
+          tv_creator: "",
+          tv_poster: "",
         });
       } else {
         toast.error("Cannot remove media for this club type.");
@@ -608,7 +614,7 @@ export default function ClubDetailPage() {
             {club.book_cover ? (
               <Image
                 src={club.book_cover}
-                alt={club.book_title}
+                alt={`${club.book_title} book cover`}
                 width={120}
                 height={180}
                 className="rounded-md object-cover"
@@ -664,10 +670,10 @@ export default function ClubDetailPage() {
         <div className="mb-6 bg-card rounded-lg p-4 border">
           <h2 className="text-lg font-semibold mb-4">Currently Watching</h2>
           <div className="flex items-start gap-4">
-            {club.movie_cover ? (
+            {club.movie_poster ? (
               <Image
-                src={club.movie_cover}
-                alt={club.movie_title}
+                src={club.movie_poster}
+                alt={`${club.movie_title} movie poster`}
                 width={120}
                 height={180}
                 className="rounded-md object-cover"
@@ -676,7 +682,7 @@ export default function ClubDetailPage() {
               />
             ) : (
               <div className="w-[120px] h-[180px] bg-muted flex items-center justify-center rounded-md">
-                <Film className="w-8 h-8 text-muted-foreground" />
+                <Clapperboard className="w-8 h-8 text-muted-foreground" />
               </div>
             )}
             <div className="flex-1">
@@ -719,15 +725,15 @@ export default function ClubDetailPage() {
 
   // Render TV show information
   const renderTVShowInfo = () => {
-    if (club?.media_type === "tv" && club?.tv_show_title) {
+    if (club?.media_type === "tv" && club?.tv_title) {
       return (
         <div className="mb-6 bg-card rounded-lg p-4 border">
           <h2 className="text-lg font-semibold mb-4">Currently Watching</h2>
           <div className="flex items-start gap-4">
-            {club.tv_show_cover ? (
+            {club.tv_poster ? (
               <Image
-                src={club.tv_show_cover}
-                alt={club.tv_show_title}
+                src={club.tv_poster}
+                alt={`${club.tv_title} TV show poster`}
                 width={120}
                 height={180}
                 className="rounded-md object-cover"
@@ -740,10 +746,10 @@ export default function ClubDetailPage() {
               </div>
             )}
             <div className="flex-1">
-              <h3 className="text-xl font-semibold">{club.tv_show_title}</h3>
-              {club.tv_show_creator && (
+              <h3 className="text-xl font-semibold">{club.tv_title}</h3>
+              {club.tv_creator && (
                 <p className="text-muted-foreground">
-                  Created by {club.tv_show_creator}
+                  Created by {club.tv_creator}
                 </p>
               )}
               <p className="mt-4 text-sm">Join the discussion below.</p>
@@ -782,7 +788,7 @@ export default function ClubDetailPage() {
     club?.is_creator &&
     ((club.media_type === "book" && !club.book_title) ||
       (club.media_type === "movie" && !club.movie_title) ||
-      (club.media_type === "tv" && !club.tv_show_title));
+      (club.media_type === "tv" && !club.tv_title));
 
   const mediaDetails = {
     book: {
@@ -937,7 +943,11 @@ export default function ClubDetailPage() {
                           {item.image_url ? (
                             <Image
                               src={item.image_url}
-                              alt={isTVShow(item) ? item.name : item.title}
+                              alt={
+                                isTVShow(item)
+                                  ? `${item.name} poster`
+                                  : `${item.title} poster`
+                              }
                               width={80}
                               height={120}
                               className="h-24 w-16 object-cover rounded"
@@ -995,7 +1005,7 @@ export default function ClubDetailPage() {
 
               <DialogFooter>
                 <Button
-                  onClick={handleAddMedia}
+                  onClick={() => handleAddMedia(selectedMedia as MediaItem)}
                   disabled={!selectedMedia || isLoading}
                   className="gap-2"
                 >

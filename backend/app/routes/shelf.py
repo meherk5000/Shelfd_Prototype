@@ -199,7 +199,7 @@ async def remove_from_shelf(
             media_type_map = {
                 "books": "BOOK",
                 "movies": "MOVIE",
-                "tv-shows": "TV_SHOW",
+                "tv-shows": "TV",
                 "articles": "ARTICLE"
             }
             media_type_str = media_type_map.get(media_type.lower())
@@ -241,8 +241,8 @@ async def create_custom_shelf(
         media_type_map = {
             "Books": MediaType.BOOK,
             "Movies": MediaType.MOVIE,
-            "TV Shows": MediaType.TV_SHOW,
-            "Articles": MediaType.ARTICLE
+            "TV Shows": MediaType.TV,
+            "Articles": MediaType.ARTICLE,
         }
         
         media_type = media_type_map.get(data.media_type)
@@ -376,7 +376,7 @@ async def get_rating(
             media_type_map = {
                 "books": "BOOK",
                 "movies": "MOVIE",
-                "tv-shows": "TV_SHOW",
+                "tv-shows": "TV",
                 "articles": "ARTICLE"
             }
             media_type_str = media_type_map.get(media_type.lower(), media_type.upper())

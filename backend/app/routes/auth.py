@@ -63,14 +63,12 @@ async def signup(user_data: UserCreate, request: Request):
         
         # Create default shelves for each media type
         print(f"Debug - Creating default shelves for user ID: {str(user.id)}")
-        media_types = [
+        for media_type in [
             MediaType.BOOK,
             MediaType.MOVIE,
-            MediaType.TV_SHOW,
-            MediaType.ARTICLE
-        ]
-        
-        for media_type in media_types:
+            MediaType.TV,
+            MediaType.ARTICLE,
+        ]:
             await ShelfService.create_default_shelves(
                 user_id=str(user.id),
                 media_type=media_type

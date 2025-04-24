@@ -50,7 +50,7 @@ interface MediaItem {
   published_date?: string;
   release_date?: string;
   overview?: string;
-  media_type?: "book" | "movie" | "tv_show";
+  media_type?: "book" | "movie" | "tv";
   // Specific fields from backend responses
   director?: string; // For movies
   creator?: string; // For TV shows
@@ -261,16 +261,16 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
           result = await updateClubMovie(club.id, {
             movie_id: selectedMedia.id,
             movie_title: selectedMedia.title,
-            movie_director: selectedMedia.director, // Assuming director field exists in MediaItem
-            movie_cover: selectedMedia.image_url,
+            movie_director: selectedMedia.director,
+            movie_poster: selectedMedia.image_url,
           });
           break;
-        case "tv_show":
+        case "tv":
           result = await updateClubTVShow(club.id, {
-            tv_show_id: selectedMedia.id,
-            tv_show_title: selectedMedia.title,
-            tv_show_creator: selectedMedia.creator, // Assuming creator field exists in MediaItem
-            tv_show_cover: selectedMedia.image_url,
+            tv_id: selectedMedia.id,
+            tv_title: selectedMedia.title,
+            tv_creator: selectedMedia.creator,
+            tv_poster: selectedMedia.image_url,
           });
           break;
         default:
@@ -350,16 +350,14 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
         detail = club.movie_director
           ? `Directed by ${club.movie_director}`
           : undefined;
-        cover = club.movie_cover;
+        cover = club.movie_poster;
         IconComponent = Clapperboard;
         break;
-      case "tv_show":
-        title = club.tv_show_title;
-        // Ensure tv_show_creator exists on club object (fetched from API)
-        detail = club.tv_show_creator
-          ? `Created by ${club.tv_show_creator}`
-          : undefined;
-        cover = club.tv_show_cover;
+      case "tv":
+        title = club.tv_title;
+        // Ensure tv_creator exists on club object (fetched from API)
+        detail = club.tv_creator ? `Created by ${club.tv_creator}` : undefined;
+        cover = club.tv_poster;
         IconComponent = Tv;
         break;
     }
@@ -400,7 +398,7 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     club?.is_creator &&
     ((club.media_type === "book" && !club.book_title) ||
       (club.media_type === "movie" && !club.movie_title) ||
-      (club.media_type === "tv_show" && !club.tv_show_title));
+      (club.media_type === "tv" && !club.tv_title));
 
   // Helper to get media type specific text/icon
   const getMediaTypeDetails = (mediaType: string | undefined) => {
@@ -414,7 +412,7 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
           searchPlaceholder: "Search for a movie by title...",
           creatorFieldLabel: "Director",
         };
-      case "tv_show":
+      case "tv":
         return {
           noun: "TV Show",
           nounPlural: "TV Shows",
@@ -544,12 +542,11 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
                                 Directed by {media.director}
                               </div>
                             )}
-                            {media.creator &&
-                              media.media_type === "tv_show" && (
-                                <div className="text-sm text-muted-foreground">
-                                  Created by {media.creator}
-                                </div>
-                              )}
+                            {media.creator && media.media_type === "tv" && (
+                              <div className="text-sm text-muted-foreground">
+                                Created by {media.creator}
+                              </div>
+                            )}
                             {/* Conditionally display published/release date */}
                             {media.published_date &&
                               media.media_type === "book" && (
@@ -559,7 +556,7 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
                               )}
                             {media.release_date &&
                               (media.media_type === "movie" ||
-                                media.media_type === "tv_show") && (
+                                media.media_type === "tv") && (
                                 <div className="text-xs text-muted-foreground mt-1">
                                   Released {media.release_date.split("-")[0]}
                                 </div>

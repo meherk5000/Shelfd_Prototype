@@ -17,7 +17,7 @@ class ShelfService:
             ("Finished", ShelfStatus.FINISHED),
             ("Did Not Finish", ShelfStatus.DNF)
         ],
-        MediaType.TV_SHOW: [
+        MediaType.TV: [
             ("Want to Watch", ShelfStatus.WANT_TO),
             ("Currently Watching", ShelfStatus.CURRENT),
             ("Finished", ShelfStatus.FINISHED),
@@ -238,7 +238,7 @@ class ShelfService:
                 name = "Did Not Finish"
             else:
                 name = "Custom"
-        elif media_type in [MediaType.MOVIE, MediaType.TV_SHOW]:
+        elif media_type in [MediaType.MOVIE, MediaType.TV]:
             if status == "want_to":
                 name = "Want to Watch"
             elif status == "current":

@@ -8,7 +8,7 @@ from .user import User
 class MediaType(str, Enum):
     BOOK = "book"
     MOVIE = "movie"
-    TV_SHOW = "tv_show"
+    TV = "tv"
     ARTICLE = "article"
 
 class Review(Document):

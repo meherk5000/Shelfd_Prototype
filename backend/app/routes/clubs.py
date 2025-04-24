@@ -89,10 +89,25 @@ class ClubResponse(BaseModel):
     is_member: bool
     is_creator: bool
     cover_image: Optional[str] = None
+    # Book fields
     book_title: Optional[str] = None
     book_author: Optional[str] = None
     book_cover: Optional[str] = None
     book_id: Optional[str] = None
+    # Movie fields
+    movie_title: Optional[str] = None
+    movie_director: Optional[str] = None
+    movie_poster: Optional[str] = None
+    movie_id: Optional[str] = None
+    movie_year: Optional[int] = None
+    # TV show fields
+    tv_title: Optional[str] = None
+    tv_creator: Optional[str] = None
+    tv_poster: Optional[str] = None
+    tv_id: Optional[str] = None
+    tv_year: Optional[int] = None
+    tv_season: Optional[int] = None
+    tv_episode: Optional[int] = None
 
     model_config = {
         "from_attributes": True
@@ -445,8 +460,8 @@ async def update_club_movie(
             raise HTTPException(status_code=404, detail="Club not found")
         
         # Check if user is creator/admin
-        creator = await club.creator.fetch()
-        if str(creator.id) != str(current_user.id):
+        creator_id = str(club.creator.id) if hasattr(club.creator, 'id') else str(club.creator)
+        if creator_id != str(current_user.id):
             raise HTTPException(status_code=403, detail="Only the club creator can update movie information")
         
         # Verify this is a movie club
@@ -476,15 +491,13 @@ async def update_club_movie(
         club.updated_at = datetime.utcnow()
         await club.save()
         
-        # No thread generation for movie/tv clubs based on requirements
-        
         return await format_club_response(club, current_user)
     except Exception as e:
         print(f"Error updating club movie: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update club movie: {str(e)}")
 
 @router.put("/{club_id}/tv", response_model=ClubResponse)
-async def update_club_tv_show(
+async def update_club_tv(
     club_id: str,
     request: UpdateClubTVShowRequest,
     current_user: User = Depends(get_current_user),
@@ -614,10 +627,25 @@ async def format_club_response(club: Club, current_user: Optional[User] = None) 
         "is_member": current_user and current_user.id in member_ids,
         "is_creator": current_user and current_user.id == creator.id,
         "cover_image": club.cover_image,
+        # Book fields
         "book_title": club.book_title,
         "book_author": club.book_author,
         "book_cover": club.book_cover,
         "book_id": club.book_id,
+        # Movie fields
+        "movie_title": club.movie_title,
+        "movie_director": club.movie_director,
+        "movie_poster": club.movie_poster,
+        "movie_id": club.movie_id,
+        "movie_year": club.movie_year,
+        # TV show fields
+        "tv_title": club.tv_title,
+        "tv_creator": club.tv_creator,
+        "tv_poster": club.tv_poster,
+        "tv_id": club.tv_id,
+        "tv_year": club.tv_year,
+        "tv_season": club.tv_season,
+        "tv_episode": club.tv_episode
     }
 
 async def format_post_response(post: ClubPost) -> ClubPostResponse:
