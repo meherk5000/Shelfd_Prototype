@@ -66,9 +66,12 @@ interface Movie {
 interface TVShow {
   id: string;
   name: string;
+  title?: string;
+  network?: string;
   creator?: string;
   image_url?: string;
   first_air_date?: string;
+  media_type?: string;
 }
 
 // Union type for generic media handling
@@ -335,11 +338,14 @@ export default function ClubDetailPage() {
       } else if (club.media_type === "movie" && data.movies) {
         results = data.movies;
       } else if (club.media_type === "tv" && data.tv_shows) {
-        // Corrected key to data.tv_shows
-        // Map tv_shows results, adapting 'name' to 'title' if needed by the UI elsewhere
+        // Map TV show results to ensure consistent naming
         results = data.tv_shows.map((show: any) => ({
-          ...show,
-          title: show.name,
+          id: show.id,
+          name: show.title || show.name,
+          network: show.network || show.channel || "Unknown Network",
+          image_url: show.image_url || show.poster,
+          first_air_date: show.first_air_date || show.release_date,
+          media_type: "tv",
         }));
       } else if (data.results) {
         // Fallback for safety, though specific keys seem reliable
@@ -408,10 +414,7 @@ export default function ClubDetailPage() {
         result = await updateClubTVShow(club.id, {
           tv_id: media.id,
           tv_title: isTVShow(media) ? media.name : "",
-          tv_creator:
-            isTVShow(media) && media.creator
-              ? media.creator
-              : "Unknown Creator",
+          tv_creator: isTVShow(media) ? media.network || "Unknown Network" : "",
           tv_poster: media.image_url || "",
           tv_year:
             isTVShow(media) && media.first_air_date
@@ -748,9 +751,7 @@ export default function ClubDetailPage() {
             <div className="flex-1">
               <h3 className="text-xl font-semibold">{club.tv_title}</h3>
               {club.tv_creator && (
-                <p className="text-muted-foreground">
-                  Created by {club.tv_creator}
-                </p>
+                <p className="text-muted-foreground">{club.tv_creator}</p>
               )}
               <p className="mt-4 text-sm">Join the discussion below.</p>
               {club.is_creator && (
@@ -971,9 +972,9 @@ export default function ClubDetailPage() {
                                 Directed by {item.director}
                               </div>
                             )}
-                            {isTVShow(item) && item.creator && (
+                            {isTVShow(item) && (
                               <div className="text-sm text-muted-foreground">
-                                Created by {item.creator}
+                                {item.network}
                               </div>
                             )}
                             {isBook(item) && item.published_date && (

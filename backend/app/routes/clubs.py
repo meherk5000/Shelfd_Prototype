@@ -9,6 +9,7 @@ import uuid
 from fastapi.staticfiles import StaticFiles
 from datetime import datetime
 import logging
+from fastapi import status
 
 from ..database.models.user import User
 from ..database.models.club import Club
@@ -186,11 +187,13 @@ async def create_club(
         club_data = request.model_dump()
         logger.debug("[Backend] Processed request data: %s", club_data)
         
-        club_data["creator"] = current_user.id
-        club_data["members"] = [current_user.id]
-        club_data["admins"] = [current_user.id]
+        # Correctly assign Links instead of raw IDs
+        club_data["creator"] = Link(current_user, document_class=User)
+        club_data["members"] = [Link(current_user, document_class=User)]
+        # Assuming admins field exists and also needs Links
+        # club_data["admins"] = [Link(current_user, document_class=User)] 
         
-        logger.debug("[Backend] Final club data before creation: %s", club_data)
+        logger.debug("[Backend] Final club data before creation (using Links): %s", club_data)
         
         club = Club(**club_data)
         logger.debug("[Backend] Club object created, about to save to database")
@@ -496,7 +499,7 @@ async def update_club_movie(
         print(f"Error updating club movie: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to update club movie: {str(e)}")
 
-@router.put("/{club_id}/tv", response_model=ClubResponse)
+@router.put("/{club_id}/tv-show", response_model=ClubResponse)
 async def update_club_tv(
     club_id: str,
     request: UpdateClubTVShowRequest,
@@ -505,18 +508,19 @@ async def update_club_tv(
     """Update a club with TV show information"""
     try:
         obj_id = PydanticObjectId(club_id)
-        club = await Club.get(obj_id)
+        # Fetch the club with the creator link resolved
+        club = await Club.get(obj_id, fetch_links=True) 
         if not club:
-            raise HTTPException(status_code=404, detail="Club not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found")
         
-        # Check if user is creator/admin
-        creator = await club.creator.fetch()
-        if str(creator.id) != str(current_user.id):
-            raise HTTPException(status_code=403, detail="Only the club creator can update TV show information")
+        # Ensure creator is fetched and perform direct ID check
+        if not club.creator or club.creator.id != current_user.id:
+            logger.error(f"Auth failed: User {current_user.id} != Creator {club.creator.id if club.creator else 'None'} for club {club_id}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the club creator can update TV show information")
         
         # Verify this is a TV show club
         if club.media_type != "tv":
-            raise HTTPException(status_code=400, detail="This club is not a TV show club")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This club is not a TV show club")
             
         # Update TV show information
         club.tv_id = request.tv_id
@@ -541,12 +545,16 @@ async def update_club_tv(
         club.updated_at = datetime.utcnow()
         await club.save()
         
-        # No thread generation for movie/tv clubs based on requirements
+        # Return the updated club details, correctly formatted
+        return await format_club_response(club, current_user) 
         
-        return await format_club_response(club, current_user)
+    except HTTPException as he:
+        # Re-raise specific HTTP exceptions (like 404, 403, 400)
+        raise he
     except Exception as e:
-        print(f"Error updating club TV show: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to update club TV show: {str(e)}")
+        # Catch unexpected errors and return 500
+        logger.error(f"Unexpected error updating club TV show for club {club_id}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update club TV show: An unexpected error occurred.")
 
 @router.get("/{club_id}/members")
 async def get_club_members(

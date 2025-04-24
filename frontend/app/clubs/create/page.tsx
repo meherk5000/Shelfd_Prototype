@@ -313,6 +313,9 @@ export default function CreateClubPage() {
                       {type.label}
                     </SelectItem>
                   ))}
+                  <SelectItem value="articles" disabled>
+                    Article Club (Coming Soon)
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>

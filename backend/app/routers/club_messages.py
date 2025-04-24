@@ -144,8 +144,8 @@ async def get_club_messages(
                 detail=f"Invalid club ID format: {club_id}"
             )
         
-        # Get the club and check membership
-        club = await Club.get(club_object_id)
+        # Get the club and fetch linked creator/members
+        club = await Club.get(club_object_id, fetch_links=True)
         if not club:
             logger.error(f"Club {club_id} not found")
             raise HTTPException(
@@ -155,34 +155,48 @@ async def get_club_messages(
         
         logger.info(f"Found club: {club.name}")
         
-        # Check if user is a member or creator
+        # --- BEGIN DEBUG LOGGING ---
+        logger.info(f"Current User ID: {current_user.id} (Type: {type(current_user.id)})")
+        if club.creator:
+            logger.info(f"Club Creator ID: {club.creator.id} (Type: {type(club.creator.id)})")
+        else:
+            logger.warning("Club creator link is None or not fetched.")
+        if club.members:
+            member_ids = [(m.id, type(m.id)) for m in club.members if m] # Get IDs and types of valid members
+            logger.info(f"Club Member IDs: {member_ids}")
+        else:
+             logger.warning("Club members list is None, empty, or not fetched.")
+        # --- END DEBUG LOGGING ---
+
+        # Check if user is a member or creator (assuming links are fetched)
         is_member = False
+        is_creator = False
         try:
-            # Check if user is a member
-            for member in club.members:
-                member_id = str(member.id) if hasattr(member, 'id') else str(member.ref.id)
-                if member_id == str(current_user.id):
-                    is_member = True
-                    break
-            
-            if is_member:
-                logger.info(f"User {current_user.id} is a member of club {club_id}")
-            
             # Check if user is the creator
-            creator_id = str(club.creator.id) if hasattr(club.creator, 'id') else str(club.creator.ref.id)
-            is_creator = creator_id == str(current_user.id)
-            
-            if is_creator:
+            if club.creator and club.creator.id == current_user.id:
+                is_creator = True
                 logger.info(f"User {current_user.id} is the creator of club {club_id}")
-            
+
+            # Check if user is a member (only if not the creator)
+            if not is_creator and club.members:
+                for member in club.members:
+                   # Check if the member object is valid and compare ID
+                   if member and member.id == current_user.id:
+                       is_member = True
+                       logger.info(f"User {current_user.id} is a member of club {club_id}")
+                       break # Found the member
+
+            # Raise forbidden error if user is neither creator nor member
             if not is_member and not is_creator:
                 logger.error(f"User {current_user.id} not authorized to view messages in club {club_id}")
+                # This specific error means the user isn't allowed to see messages.
+                # We will catch this specific exception below and return an empty list.
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view messages"
                 )
             
-            # Get messages for the club
+            # --- If authorized, proceed to fetch messages ---
             messages = await ClubMessage.find(
                 ClubMessage.club.id == club_object_id
             ).sort(-ClubMessage.created_at).to_list()
@@ -193,7 +207,12 @@ async def get_club_messages(
             formatted_messages = []
             for message in messages:
                 try:
-                    author = await message.author.fetch()
+                    # Fetch author for each message if it's a link
+                    author = await message.author.fetch() if hasattr(message.author, 'fetch') else message.author
+                    if not author:
+                        logger.warning(f"Skipping message {message.id} due to missing author link.")
+                        continue
+                        
                     formatted_messages.append(
                         MessageResponse(
                             id=str(message.id),
@@ -204,18 +223,26 @@ async def get_club_messages(
                             created_at=message.created_at
                         )
                     )
-                except Exception as e:
-                    logger.error(f"Error formatting message {message.id}: {str(e)}")
-                    # Skip messages with broken links
+                except Exception as fmt_e:
+                    logger.error(f"Error formatting message {message.id}: {str(fmt_e)}")
+                    # Skip messages with formatting errors
                     continue
             
             return formatted_messages
             
+        except HTTPException as http_exc:
+            # If it's our specific 403 for authorization, return empty list
+            if http_exc.status_code == status.HTTP_403_FORBIDDEN and http_exc.detail == "Not authorized to view messages":
+                logger.info(f"User {current_user.id} not authorized for club {club_id} messages. Returning empty list.")
+                return []
+            # Otherwise, re-raise the HTTPException (e.g., 404 if club not found earlier)
+            raise http_exc
         except Exception as e:
-            logger.error(f"Error checking membership: {str(e)}")
+            # Catch any other unexpected errors during auth check or message fetching/formatting
+            logger.error(f"Unexpected error during message retrieval or authorization check: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error checking club membership"
+                detail="Internal error fetching messages or checking permissions"
             )
             
     except HTTPException as he:

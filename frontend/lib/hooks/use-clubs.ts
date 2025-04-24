@@ -888,21 +888,23 @@ export function useClubs() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/clubs/${clubId}/tv`, {
+      const response = await fetch(`/api/clubs/${clubId}/tv-show`, {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify(tvShowData),
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.detail || "Failed to update club TV show");
+        const errorMessage = data.detail?.message || data.detail || "Failed to update club TV show"; 
+        console.error("Failed to update club TV show:", response.status, errorMessage);
+        throw new Error(errorMessage);
       }
-      return { success: true, data };
+      return { success: true, data }; 
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update club TV show";
       setError(message);
-      toast.error(message);
-      return { success: false, message };
+      toast.error(`Failed to update club TV show: ${message}`); 
+      return { success: false, message }; 
     } finally {
       setLoading(false);
     }
