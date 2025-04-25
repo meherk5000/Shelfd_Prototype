@@ -2,6 +2,7 @@ from ..database.models.shelf import ShelfModel, ShelfItemModel, MediaType, Shelf
 from ..database.schemas.shelf import MediaType, ShelfType, ShelfStatus
 from datetime import datetime
 from typing import List, Optional
+from beanie.exceptions import DocumentNotFound
 
 class ShelfService:
     DEFAULT_SHELVES = {
@@ -283,35 +284,150 @@ class ShelfService:
         return created_shelf
 
     @staticmethod
+    async def get_shelf_by_status(user_id: str, media_type: MediaType, status: str) -> Optional[ShelfModel]:
+        """Finds a default shelf for a user based on media type and status string."""
+        # This relies on default shelves having a specific naming convention or status mapping
+        # We can use the existing get_or_create_shelf logic, but prevent creation if not found
+        try:
+            # Map status string to ShelfStatus enum if needed (assuming status is already the enum string like 'want_to')
+            status_enum = ShelfStatus(status)
+            shelf = await ShelfModel.find_one({
+                "user_id": user_id,
+                "media_type": media_type,
+                "status": status_enum, # Query by the status enum value
+                "shelf_type": ShelfType.DEFAULT
+            })
+            return shelf
+        except ValueError: # Invalid status string
+            return None
+        except Exception as e:
+            print(f"Error finding shelf by status: {e}")
+            return None
+
+    @staticmethod
+    async def move_item(
+        user_id: str,
+        media_type: MediaType,
+        media_id: str,
+        new_status: str, # e.g., "current", "finished"
+    ):
+        """Moves an item between default shelves based on the new status."""
+        print(f"Debug - Moving item {media_id} ({media_type}) for user {user_id} to status {new_status}")
+
+        # 1. Find the existing shelf item in any default shelf
+        shelf_item = await ShelfItemModel.find_one({
+            "user_id": user_id,
+            "media_id": media_id,
+            "media_type": media_type,
+             # Ensure we only find items associated with a DEFAULT shelf
+            "shelf_id": {"$in": [
+                str(s.id) for s in await ShelfModel.find({
+                    "user_id": user_id,
+                    "media_type": media_type,
+                    "shelf_type": ShelfType.DEFAULT
+                }).to_list()
+            ]}
+        })
+
+        if not shelf_item:
+            raise ValueError(f"Item {media_id} not found in any default shelf for user {user_id}.")
+
+        # 2. Find the old shelf
+        try:
+            old_shelf = await ShelfModel.get(shelf_item.shelf_id)
+            if not old_shelf:
+                 raise DocumentNotFound # Should ideally exist if shelf_item was found
+        except DocumentNotFound:
+             raise ValueError(f"Old shelf {shelf_item.shelf_id} not found for item {media_id}.")
+
+        print(f"Debug - Found old shelf: {old_shelf.name} ({old_shelf.id})")
+
+        # 3. Check if already in the target status
+        if old_shelf.status.value == new_status:
+            print(f"Debug - Item already in target status '{new_status}'. No move needed.")
+            # Technically the route handler already prevents this, but belt-and-suspenders
+            return shelf_item # Return the item as no move occurred
+
+        # 4. Find or create the new target default shelf based on status
+        # Use get_or_create_shelf which handles naming conventions
+        try:
+            new_shelf = await ShelfService.get_or_create_shelf(user_id, media_type, new_status, ShelfType.DEFAULT)
+        except ValueError as e: # Handle if get_or_create_shelf fails for status
+            raise ValueError(f"Could not determine target shelf for status '{new_status}': {e}")
+
+        print(f"Debug - Found/Created new shelf: {new_shelf.name} ({new_shelf.id})")
+
+        # 5. Update Old Shelf (remove item)
+        if media_id in old_shelf.items:
+            old_shelf.items.remove(media_id)
+            await old_shelf.save()
+            print(f"Debug - Removed item from old shelf '{old_shelf.name}'")
+        else:
+             print(f"Warning - Item {media_id} not found in old shelf '{old_shelf.name}' items list, though ShelfItemModel linked it.")
+
+        # 6. Update New Shelf (add item)
+        if media_id not in new_shelf.items:
+            new_shelf.items.append(media_id)
+            await new_shelf.save()
+            print(f"Debug - Added item to new shelf '{new_shelf.name}'")
+
+        # 7. Update Shelf Item (change shelf_id)
+        shelf_item.shelf_id = str(new_shelf.id)
+        await shelf_item.save()
+        print(f"Debug - Updated ShelfItemModel {shelf_item.id} to point to new shelf {new_shelf.id}")
+
+        return shelf_item # Return the updated shelf item
+
+    @staticmethod
     async def add_item_to_shelf(
         user_id: str,
         media_type: MediaType,
         media_id: str,
-        status: str,
+        status: str, # e.g., "want_to", "current"
         title: str,
-        shelf_type: ShelfType,
+        shelf_type: ShelfType, # Should be DEFAULT here
         image_url: Optional[str] = None,
         creator: Optional[str] = None
     ) -> ShelfItemModel:
-        print(f"Debug - Adding item to shelf: media_type={media_type}, status={status}, shelf_type={shelf_type}")
+        """Adds an item to the correct default shelf based on status."""
+        print(f"Debug - Adding item {media_id} ({title}) to default shelf with status '{status}'")
+        # 1. Find or create the target default shelf
+        target_shelf = await ShelfService.get_or_create_shelf(user_id, media_type, status, ShelfType.DEFAULT)
         
-        # Get or create the appropriate shelf
-        shelf = await ShelfService.get_or_create_shelf(
+        # 2. Check if item ALREADY exists in this specific target shelf's items list
+        # (Should ideally be redundant if route handler logic is correct, but good failsafe)
+        if media_id in target_shelf.items:
+            print(f"Warning/Debug - Item {media_id} already in target shelf '{target_shelf.name}' items list. Fetching existing ShelfItemModel.")
+            # If already in list, find the existing ShelfItemModel instead of creating a new one
+            existing_item = await ShelfItemModel.find_one({
+                "user_id": user_id,
+                "shelf_id": str(target_shelf.id),
+                "media_id": media_id
+            })
+            if existing_item:
+                return existing_item
+            else:
+                 # Discrepancy: In items list but no ShelfItemModel? Log and proceed to create.
+                 print(f"Error - Item {media_id} in shelf {target_shelf.id} items list but no ShelfItemModel found! Recreating.")
+
+        # 3. Add item to shelf's list if not already there
+        if media_id not in target_shelf.items:
+            target_shelf.items.append(media_id)
+            await target_shelf.save()
+            print(f"Debug - Added {media_id} to shelf '{target_shelf.name}' items list.")
+
+        # 4. Create the ShelfItemModel linking item to this shelf
+        # Check if a shelf item exists for this user/media_id *at all* first? 
+        # No, the route handler already determined it wasn't in *any* default shelf.
+        shelf_item = ShelfItemModel(
             user_id=user_id,
-            media_type=media_type,
-            status=status,
-            shelf_type=ShelfType.DEFAULT  # Always use DEFAULT for standard shelves
-        )
-        
-        print(f"Debug - Found/Created shelf: {shelf.name} (ID: {shelf.id})")
-        
-        # Add the item to the shelf
-        return await ShelfService.add_to_shelf(
-            user_id=user_id,
-            shelf_id=shelf.id,
+            shelf_id=str(target_shelf.id),
             media_id=media_id,
             media_type=media_type,
             title=title,
             creator=creator,
             cover_image=image_url
         )
+        await shelf_item.create()
+        print(f"Debug - Created new ShelfItemModel: {shelf_item.id}")
+        return shelf_item

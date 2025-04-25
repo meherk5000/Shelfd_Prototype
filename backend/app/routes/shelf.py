@@ -90,79 +90,164 @@ async def get_user_shelves(
 
 @router.post("/add_item")
 async def add_to_shelf(
-    shelf_item: dict,
+    shelf_item_data: dict,
     token: str = Depends(oauth2_scheme)
 ):
     try:
         user = await get_current_user(token)
-        user_id = str(user.id)  # Convert User object ID to string
-        print(f"Debug - Using user_id: {user_id}")
-        
-        # Validate required fields are present
-        if "shelf_id" in shelf_item:
-            # Adding to a custom shelf
-            required_fields = ["media_type", "media_id", "title", "shelf_id"]
-        else:
-            # Adding to a default shelf
-            required_fields = ["media_type", "media_id", "status", "title", "shelf_type"]
-            
+        user_id = str(user.id)
+
+        # --- Basic Validation --- 
+        required_fields = ["media_type", "media_id", "title"]
+        is_custom_add = "shelf_id" in shelf_item_data
+        is_default_add = "status" in shelf_item_data
+
+        if not is_custom_add and not is_default_add:
+             raise HTTPException(
+                status_code=400,
+                detail="Either 'shelf_id' (for custom) or 'status' (for default) must be provided."
+            )
+        if is_custom_add:
+             required_fields.append("shelf_id")
+        if is_default_add:
+             required_fields.append("status")
+             # shelf_type is needed by the service when adding to default by status
+             required_fields.append("shelf_type") 
+
         for field in required_fields:
-            if field not in shelf_item or not shelf_item[field]:  # Check if field is empty
+            if field not in shelf_item_data or not shelf_item_data[field]:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Missing or empty required field: {field}"
                 )
         
+        # --- Map Media Type --- 
         try:
-            media_type_str = shelf_item["media_type"].upper()
-            print("Debug - Media Type String:", media_type_str)  # Add debug logging
+            media_type_str = shelf_item_data["media_type"].upper()
             media_type = MediaType[media_type_str]
-            print("Debug - Converted Media Type:", media_type)  # Add debug logging
+        except KeyError:
+             raise HTTPException(
+                status_code=400,
+                detail=f"Invalid media type provided: {shelf_item_data['media_type']}"
+            )
+
+        media_id = shelf_item_data["media_id"]
+        title = shelf_item_data["title"]
+        creator = shelf_item_data.get("creator")
+        cover_image = shelf_item_data.get("image_url")
+
+        # --- Action Logic --- 
+        if is_custom_add:
+            # --- Add to Specific Custom Shelf --- 
+            shelf_id = shelf_item_data["shelf_id"]
+            target_shelf = await ShelfModel.get(shelf_id) # Verify shelf exists and belongs to user
+            if not target_shelf or target_shelf.user_id != user_id or target_shelf.shelf_type != ShelfType.CUSTOM:
+                raise HTTPException(status_code=404, detail="Custom shelf not found or access denied.")
             
-            if "shelf_id" in shelf_item:
-                # Adding to a custom shelf
-                result = await ShelfService.add_to_shelf(
-                    user_id=user_id,
-                    shelf_id=shelf_item["shelf_id"],
-                    media_id=shelf_item["media_id"],
-                    media_type=media_type,
-                    title=shelf_item["title"],
-                    creator=shelf_item.get("creator"),
-                    cover_image=shelf_item.get("image_url")
+            # Check if item is *already in this specific custom shelf*
+            item_in_this_shelf = await ShelfItemModel.find_one({
+                "user_id": user_id,
+                "shelf_id": shelf_id,
+                "media_id": media_id
+            })
+            if item_in_this_shelf:
+                 raise HTTPException(
+                    status_code=409, 
+                    detail=f"'{title}' is already in your custom shelf '{target_shelf.name}'."
                 )
+            
+            # Proceed to add to this specific custom shelf
+            result = await ShelfService.add_to_shelf(
+                user_id=user_id,
+                shelf_id=shelf_id,
+                media_id=media_id,
+                media_type=media_type,
+                title=title,
+                creator=creator,
+                cover_image=cover_image
+            )
+            message = f"Added '{title}' to custom shelf '{target_shelf.name}'."
+
+        elif is_default_add:
+            # --- Add/Move within Default Shelves --- 
+            new_status = shelf_item_data["status"]
+            
+            # Find if item exists in *any* default shelf for this media type
+            existing_default_shelf_item = await ShelfItemModel.find_one({
+                "user_id": user_id,
+                "media_id": media_id,
+                "media_type": media_type,
+                "shelf_id": {"$in": [ 
+                    str(s.id) for s in await ShelfModel.find({
+                        "user_id": user_id, 
+                        "media_type": media_type, 
+                        "shelf_type": ShelfType.DEFAULT
+                    }).to_list()
+                ]}
+            })
+
+            if existing_default_shelf_item:
+                # --- Item Exists in a Default Shelf: Perform a MOVE --- 
+                existing_shelf = await ShelfModel.get(existing_default_shelf_item.shelf_id)
+                if existing_shelf.status.value == new_status:
+                     # Trying to add to the *same* default shelf it's already in
+                     raise HTTPException(
+                         status_code=409,
+                         detail=f"'{title}' is already in your '{existing_shelf.name}' shelf."
+                     )
+                else:
+                     # Move item to the new status/shelf
+                     await ShelfService.move_item(
+                         user_id=user_id,
+                         media_type=media_type,
+                         media_id=media_id,
+                         new_status=new_status # Service needs to handle finding the correct new shelf
+                     )
+                     # We need the name of the shelf it was moved *to*
+                     new_shelf = await ShelfService.get_shelf_by_status(user_id, media_type, new_status)
+                     shelf_name = new_shelf.name if new_shelf else new_status
+                     message = f"Moved '{title}' to '{shelf_name}'."
+                     result = existing_default_shelf_item # Return existing item data after move
             else:
-                # Adding to a default shelf
-                shelf_type_str = shelf_item["shelf_type"]
-                print("Debug - Shelf Type String:", shelf_type_str)  # Add debug logging
-                shelf_type = ShelfType[shelf_type_str]
-                print("Debug - Converted Shelf Type:", shelf_type)  # Add debug logging
+                # --- Item Does Not Exist in Any Default Shelf: Perform an ADD --- 
+                shelf_type_str = shelf_item_data["shelf_type"]
+                try:
+                    shelf_type = ShelfType(shelf_type_str)
+                except ValueError:
+                    raise HTTPException(status_code=400, detail=f"Invalid shelf_type: {shelf_type_str}")
                 
                 result = await ShelfService.add_item_to_shelf(
                     user_id=user_id,
                     media_type=media_type,
-                    media_id=shelf_item["media_id"],
-                    status=shelf_item["status"],
-                    title=shelf_item["title"],
+                    media_id=media_id,
+                    status=new_status,
+                    title=title,
                     shelf_type=shelf_type,
-                    image_url=shelf_item.get("image_url"),
-                    creator=shelf_item.get("creator")
+                    image_url=cover_image,
+                    creator=creator
                 )
-            return result
-        except KeyError as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid enum value: {str(e)}"
-            )
-        except ValueError as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Value error: {str(e)}"
-            )
+                # We need the name of the shelf it was added *to*
+                added_shelf = await ShelfService.get_shelf_by_status(user_id, media_type, new_status)
+                shelf_name = added_shelf.name if added_shelf else new_status
+                message = f"Added '{title}' to '{shelf_name}'."
+
+        else:
+             # Should not happen due to initial validation, but good practice
+             raise HTTPException(status_code=500, detail="Internal error: Invalid state.")
+
+        # --- Return Success Response --- 
+        return {"message": message, "item_id": str(result.id)} # Return consistent item_id
+
+    except HTTPException as http_exc:
+        raise http_exc # Re-raise specific HTTP errors
     except Exception as e:
-        print("Debug - Exception:", str(e))  # Add debug logging
+        print(f"Error in add_to_shelf endpoint: {str(e)}")
+        # Consider logging the traceback here for better debugging
+        # import traceback
+        # print(traceback.format_exc())
         raise HTTPException(
-            status_code=400,
-            detail=f"Error processing request: {str(e)}"
+            status_code=500,
+            detail=f"Failed to process request due to an internal error."
         )
     
 @router.post("/move_item")
@@ -235,7 +320,8 @@ async def create_custom_shelf(
     token: str = Depends(oauth2_scheme)
 ):
     try:
-        user_id = await get_current_user(token)
+        user = await get_current_user(token)
+        user_id = str(user.id)
         
         # Convert media type string to enum
         media_type_map = {
@@ -252,6 +338,19 @@ async def create_custom_shelf(
                 detail=f"Invalid media type: {data.media_type}"
             )
         
+        # Check if a shelf with the same name and media type already exists for this user
+        existing_shelf = await ShelfModel.find_one({
+            "user_id": user_id,
+            "media_type": media_type,
+            "name": data.name
+        })
+
+        if existing_shelf:
+            raise HTTPException(
+                status_code=409, # Use 409 Conflict for duplicates
+                detail=f"A shelf named '{data.name}' already exists for {data.media_type}."
+            )
+
         shelf = await ShelfService.create_custom_shelf(
             user_id=user_id,
             name=data.name,
@@ -266,15 +365,20 @@ async def create_custom_shelf(
             "shelf": {
                 "id": str(shelf.id),
                 "name": shelf.name,
-                "media_type": shelf.media_type,
+                "media_type": shelf.media_type.value, # Return the enum value string
+                "shelf_type": shelf.shelf_type.value, # Return enum value string
                 "description": shelf.description,
                 "is_private": shelf.is_private,
                 "has_collaborators": shelf.has_collaborators,
-                "items": []
+                "items": [] # New custom shelves start empty
             }
         }
+    except HTTPException as http_exc: # Re-raise HTTPExceptions
+        raise http_exc
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        # Catch other potential errors during creation
+        print(f"Error creating custom shelf: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create custom shelf due to an internal error.") # Use 500 for unexpected errors
 
 @router.post("/rate")
 async def rate_item(
