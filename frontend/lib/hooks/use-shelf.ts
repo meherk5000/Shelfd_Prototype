@@ -282,18 +282,31 @@ export function useShelf() {
     } catch (error: any) {
       setLoading(false);
       console.log("=== END addToShelf (Error) ===");
+      let errorMessage = "An unexpected error occurred."; // Default message
+
       if (axios.isAxiosError(error)) {
-        console.error("Error adding to shelf:", error.response?.data || error.message);
-        // Pass the backend error detail back for display
-        return {
-          success: false,
-          message: error.response?.data?.detail || error.message,
-        };
+        // Keep the logic to extract the message
+        if (error.response && error.response.data && typeof error.response.data.detail === 'string') {
+            errorMessage = error.response.data.detail;
+        } else {
+            errorMessage = error.message || "Failed due to server error."; 
+        }
+
       } else {
-        // Handle non-Axios errors (like programming errors in the try block)
-        console.error("Non-API Error adding to shelf:", error.message);
-        return { success: false, message: error.message };
+        // Keep logging for non-API errors
+        console.error("Non-API Error adding to shelf:", error);
+        if (error instanceof Error && error.message) {
+            errorMessage = error.message;
+        } else if (typeof error === 'string') {
+            errorMessage = error;
+        } 
       }
+
+      if (typeof errorMessage !== 'string') {
+          errorMessage = "Failed due to an unknown error.";
+      }
+
+      return { success: false, message: errorMessage };
     }
   }, [isAuthenticated, getUserShelves, mutate]);
 

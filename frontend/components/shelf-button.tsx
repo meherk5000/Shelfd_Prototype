@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
 import { useAuth } from "@/lib/context/AuthContext";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import type { MediaTypeMapping } from "@/lib/hooks/use-shelf";
 import { Loader2, Check, ChevronDown, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -103,11 +103,7 @@ export function ShelfButton({
       const result = await addToShelf(mediaType, status, item, shelfId);
 
       if (!result.success) {
-        toast({
-          title: "Action Failed",
-          description: result.message || "An unknown error occurred.",
-          variant: "destructive",
-        });
+        toast.error(result.message || "An unknown error occurred.");
         return;
       }
 
@@ -117,21 +113,14 @@ export function ShelfButton({
         setSelectedStatus(status as ShelfStatus);
       }
 
-      toast({
-        title: "Success!",
-        description: result.message,
-      });
+      toast.success(result.message);
 
       if (onShelfUpdated) {
         onShelfUpdated();
       }
     } catch (error: any) {
       console.error("Unexpected error in completeAddToShelf:", error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
-      });
+      toast.error("An unexpected error occurred. Please try again.");
     }
   };
 
