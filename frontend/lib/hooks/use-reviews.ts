@@ -165,6 +165,9 @@ export function useReviews() {
         contains_spoilers: containsSpoilers
       };
       
+      // Log the payload before sending
+      console.log("Submitting review payload:", payload);
+      
       const response = await axios.post(
         `${API_BASE_URL}/api/reviews`,
         payload,

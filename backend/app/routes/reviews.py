@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, Header
 from typing import List, Optional
 from pydantic import BaseModel
 
@@ -24,6 +24,8 @@ async def create_review(
     Create or update a review for a media item.
     If the user has already reviewed this item, the review will be updated.
     """
+    # Add debug log for received data
+    print(f"DEBUG - Received review data: {data.dict()}") 
     try:
         user_id = await get_current_user(token)
         
@@ -54,7 +56,7 @@ async def get_media_reviews(
     limit: int = Query(20, ge=1, le=100),
     skip: int = Query(0, ge=0),
     sort_by: str = Query("newest", regex="^(newest|oldest|highest_rating|lowest_rating|most_liked)$"),
-    token: Optional[str] = Depends(oauth2_scheme)
+    token: Optional[str] = Header(None, alias="Authorization")
 ):
     """
     Get all reviews for a media item with pagination and sorting.
@@ -69,14 +71,24 @@ async def get_media_reviews(
         except KeyError:
             raise HTTPException(status_code=400, detail=f"Invalid media type: {media_type}")
         
-        # Get current user if authenticated
         current_user_id = None
-        if token:
+        # Check if the Authorization header was actually provided
+        if token and token.startswith("Bearer "):
+            actual_token = token.split(" ")[1]
             try:
-                current_user_id = await get_current_user(token)
-            except Exception:
-                # If token validation fails, just proceed without user authentication
-                pass
+                # Attempt to validate the token and get the user ID
+                user = await get_current_user(actual_token) 
+                current_user_id = str(user.id)
+            except HTTPException as e:
+                # If get_current_user raises HTTPException (like 401), re-raise it
+                # This allows the frontend interceptor to catch the 401
+                raise e 
+            except Exception as e:
+                # Log other unexpected errors during token validation but don't necessarily block the request
+                print(f"Unexpected error validating optional token: {e}")
+                # Decide if you want to raise 500 or proceed without auth
+                # For now, let's proceed without auth for unexpected errors
+                pass 
         
         # Get reviews with stats
         reviews, stats = await ReviewService.get_media_reviews(

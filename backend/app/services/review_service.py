@@ -20,32 +20,43 @@ class ReviewService:
         contains_spoilers: bool = False
     ) -> Review:
         """Create a new review or update if it already exists."""
+        # Ensure user_id is a string before querying/saving
+        actual_user_id = str(user_id.id) if hasattr(user_id, 'id') else str(user_id)
+        
+        print(f"DEBUG [create_review]: Args - user={actual_user_id}, media={media_id}, type={media_type}, rating={rating}")
         # Check if review already exists
+        print("DEBUG [create_review]: Finding existing review...")
         existing_review = await Review.find_one({
-            "user_id": user_id,
+            "user_id": actual_user_id,
             "media_id": media_id,
             "media_type": media_type
         })
+        print(f"DEBUG [create_review]: Found existing? {existing_review is not None}")
         
         if existing_review:
             # Update existing review
+            print(f"DEBUG [create_review]: Updating existing review {existing_review.id}...")
             existing_review.rating = rating
             existing_review.review_text = review_text
             existing_review.contains_spoilers = contains_spoilers
             existing_review.updated_at = datetime.utcnow()
             await existing_review.save()
+            print("DEBUG [create_review]: Update complete.")
             return existing_review
         
         # Create new review
+        print("DEBUG [create_review]: Creating new review document...")
         new_review = Review(
-            user_id=user_id,
+            user_id=actual_user_id,
             media_id=media_id,
             media_type=media_type,
             rating=rating,
             review_text=review_text,
             contains_spoilers=contains_spoilers
         )
+        print("DEBUG [create_review]: Saving new review...")
         await new_review.save()
+        print("DEBUG [create_review]: Save complete.")
         return new_review
 
     @staticmethod

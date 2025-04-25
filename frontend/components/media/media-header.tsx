@@ -6,7 +6,8 @@ import { ReactElement } from "react";
 interface MediaHeaderProps {
   title: string;
   subtitle?: string;
-  rating?: number;
+  rating?: number; // Rating from external source (TMDB/Google)
+  platformRating?: number | null; // Average rating from our platform
   tags?: string[];
   primaryAction?: {
     label: string;
@@ -27,11 +28,27 @@ const isReactElement = (value: any): value is ReactElement => {
 export function MediaHeader({
   title,
   subtitle,
-  rating,
+  rating, // Original rating
+  platformRating, // New prop for platform average
   tags,
   primaryAction,
   secondaryActions,
 }: MediaHeaderProps) {
+  // Determine which rating to display
+  // Prioritize platform rating if available and valid (e.g., > 0)
+  const displayRating =
+    platformRating !== null &&
+    platformRating !== undefined &&
+    platformRating > 0
+      ? platformRating
+      : rating; // Fallback to original rating
+  const ratingSourceLabel =
+    platformRating !== null &&
+    platformRating !== undefined &&
+    platformRating > 0
+      ? "(Shelfd Avg)"
+      : "(Source Avg)";
+
   return (
     <div className="space-y-4">
       <div>
@@ -39,10 +56,14 @@ export function MediaHeader({
         {subtitle && <p className="text-muted-foreground mt-1">{subtitle}</p>}
       </div>
 
-      {rating && (
+      {/* Updated rating display logic */}
+      {displayRating !== undefined && displayRating !== null && (
         <div className="flex items-center gap-2">
-          <span className="font-semibold">{rating.toFixed(2)}</span>
+          {/* Display rating rounded to 1 decimal place */}
+          <span className="font-semibold">{displayRating.toFixed(1)}</span>
           <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
+          {/* Optionally show source label */}
+          {/* <span className="text-xs text-muted-foreground">{ratingSourceLabel}</span> */}
         </div>
       )}
 

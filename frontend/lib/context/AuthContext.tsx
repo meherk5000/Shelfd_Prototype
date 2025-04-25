@@ -196,7 +196,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
             }
 
             const response = await axios.post(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/auth/refresh-token`,
+              `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh-token`,
               {},
               {
                 headers: {
@@ -345,7 +345,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setError(null);
 
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`,
         {
           email,
           password,

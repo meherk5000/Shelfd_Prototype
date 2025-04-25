@@ -285,6 +285,7 @@ export function ShelfButton({
         mediaType={mediaType}
         mediaTitle={item.title}
         mediaImage={item.image_url}
+        mediaCreator={item.creator}
         onComplete={handleDialogComplete}
       />
     </>

@@ -85,6 +85,7 @@ api.interceptors.response.use(
           return Promise.reject(error)
         }
         
+        // Use the correct path for the backend refresh endpoint
         const response = await axios.post(`${API_BASE_URL}/api/auth/refresh-token`, {}, {
           headers: {
             'Authorization': `Bearer ${refreshToken}`
@@ -141,6 +142,7 @@ export const searchMedia = async (query: string, mediaType?: string, page: numbe
           page: page.toString(),
       });
 
+      // Correct path for media search
       const url = `${API_BASE_URL}/media/search?${params}`;
       console.log('Request URL:', url); // Debug log
 
@@ -163,6 +165,7 @@ export const searchMedia = async (query: string, mediaType?: string, page: numbe
 export const getMovieDetails = async (movieId: number) => {
   try {
     console.log('Fetching movie details for:', movieId);
+    // Correct path for movie details
     const url = `${API_BASE_URL}/media/movies/${movieId}`;
     console.log('Request URL:', url);
     
@@ -199,6 +202,7 @@ export const getMovieDetails = async (movieId: number) => {
 
 export const getTVDetails = async (tvId: number) => {
   try {
+    // Correct path for TV details
     const url = `${API_BASE_URL}/media/tv/${tvId}`;
     const response = await fetch(url);
     
@@ -214,6 +218,7 @@ export const getTVDetails = async (tvId: number) => {
 };
 
 export const getBookDetails = async (id: string) => {
+  // Correct path for book details
   const response = await axios.get(
     `${API_BASE_URL}/media/books/${id}`,
     {
@@ -234,6 +239,7 @@ export const searchQuick = async (query: string) => {
   };
 
   try {
+    // Correct path for quick search
     const url = `${API_BASE_URL}/media/search/quick?query=${encodeURIComponent(query)}`;
     console.log('[Quick Search] Request URL:', url);
     
@@ -258,7 +264,7 @@ export const getArticleDetails = async (articleId: string) => {
   try {
     console.log("[Frontend] Fetching article with ID:", articleId);
     
-    // Get article from the API
+    // Correct path for article details
     console.log(`[Frontend] Making request to: ${API_BASE_URL}/media/article/${articleId}`);
     const response = await axios.get(
       `${API_BASE_URL}/media/article/${articleId}`,
@@ -283,7 +289,9 @@ export const checkAuth = async () => {
     const token = localStorage.getItem('token')
     if (!token) return false
     
-    const response = await api.get('/api/auth/me')
+    // Correct path for checking auth (/api/auth/me)
+    // Also ensure it uses the 'api' instance to include the token
+    const response = await api.get('/api/auth/me') 
     return response.status === 200
   } catch (error) {
     return false
@@ -313,8 +321,9 @@ export async function getTrendingMedia(
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
     
+    // Correct path for explore trending (uses NEXT_PUBLIC_API_URL directly, which is fine)
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/explore/trending?${params.toString()}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/media/explore/trending?${params.toString()}`,
       {
         next: { revalidate: 3600 }, // Cache for 1 hour
       }
@@ -360,8 +369,9 @@ export async function getNewReleases(
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
     
+    // Correct path for explore new releases (uses NEXT_PUBLIC_API_URL directly, which is fine)
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/explore/new-releases?${params.toString()}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/media/explore/new-releases?${params.toString()}`,
       {
         next: { revalidate: 3600 }, // Cache for 1 hour
       }
@@ -404,8 +414,9 @@ export async function getCategoryMedia(
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
     
+    // Correct path for explore category (uses NEXT_PUBLIC_API_URL directly, which is fine)
     const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/explore/category/${category}?${params.toString()}`,
+      `${process.env.NEXT_PUBLIC_API_URL}/media/explore/category/${category}?${params.toString()}`,
       {
         next: { revalidate: 3600 }, // Cache for 1 hour
       }

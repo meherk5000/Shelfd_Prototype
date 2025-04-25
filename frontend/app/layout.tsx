@@ -6,6 +6,7 @@ import { AuthProvider } from "@/lib/context/AuthContext";
 import { AuthDebug } from "@/components/auth-debug";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
+import { UserProvider } from "@auth0/nextjs-auth0/client";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -35,13 +36,15 @@ export default function RootLayout({
         className={cn("min-h-screen font-sans antialiased", inter.variable)}
         suppressHydrationWarning
       >
-        <AuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-            {children}
-            <Toaster richColors />
-            {process.env.NODE_ENV === "development" && <AuthDebug />}
-          </ThemeProvider>
-        </AuthProvider>
+        <UserProvider>
+          <AuthProvider>
+            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+              {children}
+              <Toaster richColors />
+              {process.env.NODE_ENV === "development" && <AuthDebug />}
+            </ThemeProvider>
+          </AuthProvider>
+        </UserProvider>
       </body>
     </html>
   );

@@ -8,6 +8,14 @@ import { getMovieDetails } from "@/lib/api";
 import { useParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import Image from "next/image";
+import ReviewForm from "@/components/reviews/ReviewForm";
+import AggregateRatingDisplay from "@/components/reviews/AggregateRatingDisplay";
+import ReviewList from "@/components/reviews/ReviewList";
+import { getUserReview, getMediaReviews } from "@/services/reviewService";
+import { useUser } from "@auth0/nextjs-auth0/client";
+import { ReviewItemData } from "@/components/reviews/ReviewItem";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ShelfButton } from "@/components/shelf-button";
 
 const tabs = [
   "About",
@@ -43,6 +51,28 @@ interface MovieData {
   };
 }
 
+// Define type for user's review state
+interface UserReviewState {
+  review?: ReviewItemData | null; // null if no review, undefined if loading
+  isLoading: boolean;
+  error: string | null;
+}
+
+// Define type for all reviews state
+interface AllReviewsState {
+  reviews: ReviewItemData[];
+  stats: ReviewStats | null;
+  isLoading: boolean;
+  error: string | null;
+}
+
+// Define ReviewStats locally based on expected API response
+interface ReviewStats {
+  average_rating: number;
+  total_reviews: number;
+  rating_distribution: { [key: string]: number }; // e.g., { "1.0": 5, "1.5": 2, ... }
+}
+
 export default function MoviePage() {
   const [activeTab, setActiveTab] = useState("About");
   const [movie, setMovie] = useState<MovieData | null>(null);
@@ -50,6 +80,19 @@ export default function MoviePage() {
   const [error, setError] = useState(false);
   const params = useParams();
   const movieId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const { user, isLoading: authLoading } = useUser(); // Auth0 user hook
+
+  const [userReviewState, setUserReviewState] = useState<UserReviewState>({
+    review: undefined,
+    isLoading: true,
+    error: null,
+  });
+  const [allReviewsState, setAllReviewsState] = useState<AllReviewsState>({
+    reviews: [],
+    stats: null,
+    isLoading: true,
+    error: null,
+  });
 
   useEffect(() => {
     const fetchMovie = async () => {
@@ -75,6 +118,93 @@ export default function MoviePage() {
       fetchMovie();
     }
   }, [movieId]);
+
+  // Function to fetch all review data (user's and all)
+  const fetchReviewData = async () => {
+    if (!movieId || !movie) return;
+
+    setUserReviewState((prev) => ({ ...prev, isLoading: true, error: null }));
+    setAllReviewsState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+    try {
+      let userReview = null;
+      // Fetch user's review only if logged in and user.sub exists
+      if (user && user.sub) {
+        try {
+          const userReviewRes = await getUserReview("movie", movieId);
+          if (userReviewRes.exists && user.sub) {
+            // Map backend response to ReviewItemData if needed
+            userReview = {
+              id: userReviewRes.review.id,
+              user_id: user.sub, // Now guaranteed to be string
+              username: user.nickname || user.name || "You",
+              user_avatar: user.picture || null,
+              rating: userReviewRes.review.rating,
+              review_text: userReviewRes.review.review_text,
+              created_at: userReviewRes.review.created_at,
+              updated_at: userReviewRes.review.updated_at,
+              likes_count: 0,
+              has_liked: false,
+            };
+            setUserReviewState({
+              review: userReview,
+              isLoading: false,
+              error: null,
+            });
+          } else {
+            setUserReviewState({ review: null, isLoading: false, error: null });
+          }
+        } catch (err) {
+          console.error("Error fetching user review:", err);
+          // Don't block main reviews if this fails, just show error for user review section
+          setUserReviewState({
+            review: undefined,
+            isLoading: false,
+            error: "Could not load your review.",
+          });
+        }
+      } else {
+        setUserReviewState({ review: null, isLoading: false, error: null }); // Not logged in or no sub, no review
+      }
+
+      // Fetch all reviews and stats
+      const allReviewsRes = await getMediaReviews("movie", movieId);
+      setAllReviewsState({
+        reviews: allReviewsRes.reviews || [],
+        stats: allReviewsRes.stats || null,
+        isLoading: false,
+        error: null,
+      });
+    } catch (err) {
+      console.error("Error fetching all reviews:", err);
+      setAllReviewsState({
+        reviews: [],
+        stats: null,
+        isLoading: false,
+        error: "Could not load reviews.",
+      });
+      // Ensure user review loading is also false if main fetch fails after user fetch succeeded
+      if (userReviewState.isLoading) {
+        setUserReviewState((prev) => ({ ...prev, isLoading: false }));
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Fetch movie details (existing logic)
+    const fetchMovie = async () => {
+      /* ... existing fetchMovie logic ... */
+    };
+    if (movieId) {
+      fetchMovie();
+    }
+
+    // Fetch review data once movie data is loaded
+    if (!loading && movie) {
+      fetchReviewData();
+    }
+    // Dependency array includes user to refetch if login state changes
+  }, [movieId, loading, movie, user]);
 
   if (loading) {
     return (
@@ -114,6 +244,21 @@ export default function MoviePage() {
   // Format genres as tags
   const tags = movie.genres?.map((genre) => genre.name) || [];
 
+  const handleReviewSubmitSuccess = () => {
+    // Refetch all review data to show the updated/new review and stats
+    fetchReviewData();
+  };
+
+  // Create the primary action component (ShelfButton)
+  const shelfButtonItem = {
+    id: String(movie.id), // Ensure ID is string
+    title: movie.title,
+    image_url: movie.poster_path
+      ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+      : undefined,
+    creator: director, // Add the director here
+  };
+
   return (
     <Layout>
       <div className="container mx-auto py-8 px-4 md:px-8 lg:px-12 max-w-6xl">
@@ -137,11 +282,18 @@ export default function MoviePage() {
             <MediaHeader
               title={movie.title}
               subtitle={subtitle}
-              rating={movie.vote_average / 2} // Convert from 10-point to 5-point scale
+              rating={movie.vote_average / 2}
               tags={tags}
               primaryAction={{
-                label: "Want To Watch",
-                onClick: () => {},
+                label: "Want To Watch", // Fallback label, button component overrides
+                onClick: () => {}, // No-op, button handles its own logic
+                component: (
+                  <ShelfButton
+                    mediaType="Movies"
+                    item={shelfButtonItem}
+                    // onShelfUpdated={optionalCallback}
+                  />
+                ),
               }}
               secondaryActions={[
                 {
@@ -188,6 +340,78 @@ export default function MoviePage() {
                     </div>
                   </section>
                 )}
+              </div>
+            )}
+
+            {activeTab === "Reviews & Rating" && (
+              <div className="space-y-8">
+                {/* Aggregate Rating Display */}
+                <section>
+                  <h2 className="text-xl font-semibold mb-4">
+                    Community Rating
+                  </h2>
+                  {allReviewsState.isLoading && !allReviewsState.stats && (
+                    <Skeleton className="h-8 w-48" />
+                  )}
+                  {!allReviewsState.isLoading && allReviewsState.stats && (
+                    <AggregateRatingDisplay
+                      averageRating={allReviewsState.stats.average_rating}
+                      totalReviews={allReviewsState.stats.total_reviews}
+                    />
+                  )}
+                  {allReviewsState.error && !allReviewsState.isLoading && (
+                    <p className="text-sm text-destructive">
+                      {allReviewsState.error}
+                    </p>
+                  )}
+                </section>
+
+                {/* User Review Form (Show if logged in) */}
+                {user && (
+                  <section>
+                    <h2 className="text-xl font-semibold mb-4">Your Review</h2>
+                    {userReviewState.isLoading && (
+                      <Skeleton className="h-40 w-full" /> // Placeholder for form
+                    )}
+                    {!userReviewState.isLoading && (
+                      <ReviewForm
+                        mediaId={movieId!}
+                        mediaType="movie"
+                        // Pass existing review data if it exists
+                        initialRating={userReviewState.review?.rating || 0}
+                        initialReviewText={
+                          userReviewState.review?.review_text || ""
+                        }
+                        reviewId={userReviewState.review?.id}
+                        onSubmitSuccess={handleReviewSubmitSuccess}
+                        // Need to pass movie title/image for legacy endpoint
+                        // movieTitle={movie.title}
+                        // movieImageUrl={movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : undefined}
+                      />
+                    )}
+                    {userReviewState.error && !userReviewState.isLoading && (
+                      <p className="text-sm text-destructive">
+                        {userReviewState.error}
+                      </p>
+                    )}
+                  </section>
+                )}
+                {!user && !authLoading && (
+                  <p className="text-center text-muted-foreground">
+                    Please log in to leave a review.
+                  </p>
+                )}
+
+                {/* Review List */}
+                <section>
+                  <h2 className="text-xl font-semibold mb-4">All Reviews</h2>
+                  <ReviewList
+                    mediaId={movieId!}
+                    mediaType="movie"
+                    currentUserId={user?.sub ?? undefined} // Pass undefined explicitly if user.sub is null/undefined
+                    initialReviews={allReviewsState.reviews}
+                  />
+                </section>
               </div>
             )}
           </div>
