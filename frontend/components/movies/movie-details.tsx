@@ -14,6 +14,8 @@ import { getUserReview, getMediaReviews } from "@/services/reviewService";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
 
 interface MovieDetailsData {
   id: number;
@@ -57,9 +59,10 @@ export function MovieDetails({ id }: { id: number }) {
 
   const [userReview, setUserReview] = useState<UserReview | null>(null);
   const [refreshReviews, setRefreshReviews] = useState(0);
-  const [isInShelf, setIsInShelf] = useState(false);
+  const [shelfStatus, setShelfStatus] = useState<ShelfStatus | null>(null);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(true);
+  const { addToShelf } = useShelf();
 
   const fetchMovieDetails = useCallback(async () => {
     try {
@@ -74,40 +77,114 @@ export function MovieDetails({ id }: { id: number }) {
   }, [id]);
 
   const fetchAllReviewData = useCallback(async () => {
+    console.log("fetchAllReviewData called");
     setReviewsLoading(true);
     setUserReview(null);
+    setShelfStatus(null);
     setReviewStats(null);
     try {
       const allReviewsRes = await getMediaReviews("movie", id.toString());
+      console.log("Fetched all reviews stats:", allReviewsRes.stats);
       setReviewStats(allReviewsRes.stats || null);
 
       if (isAuthenticated && user) {
+        console.log("User is authenticated, fetching user review...");
         const userReviewRes = await getUserReview("movie", id.toString());
+        console.log("getUserReview response:", userReviewRes);
         if (userReviewRes.exists && userReviewRes.review) {
+          console.log(
+            "User review EXISTS. Setting userReview state:",
+            userReviewRes.review
+          );
           setUserReview(userReviewRes.review);
-          setIsInShelf(true);
+          setShelfStatus(userReviewRes.shelf_status || ShelfStatus.FINISHED);
         } else {
+          console.log(
+            "User review DOES NOT exist. Setting userReview to null."
+          );
           setUserReview(null);
-          setIsInShelf(false);
+          setShelfStatus(userReviewRes.shelf_status || null);
+          console.log(
+            "Setting shelfStatus state based on getUserReview response:",
+            userReviewRes.shelf_status || null
+          );
         }
+      } else {
+        console.log("User not authenticated, skipping user review fetch.");
       }
     } catch (error) {
       console.error("Error fetching review data:", error);
       setReviewStats(null);
       setUserReview(null);
+      setShelfStatus(null);
     } finally {
+      console.log("Finished fetchAllReviewData, setting reviewsLoading false.");
       setReviewsLoading(false);
     }
   }, [id, isAuthenticated, user]);
 
-  const handleReviewSuccess = useCallback(() => {
-    fetchAllReviewData();
-    setRefreshReviews((prev) => prev + 1);
-  }, [fetchAllReviewData]);
+  const handleReviewSuccess = useCallback(
+    async (reviewData?: UserReview) => {
+      console.log("[MovieDetails] Review success, handling updates...");
+      const wasAddingReview = !userReview; // Capture before potential update
 
-  const handleShelfUpdate = useCallback(() => {
-    setIsInShelf(true);
-    fetchAllReviewData();
+      // Immediate UI Update
+      if (reviewData) {
+        console.log(
+          "[MovieDetails] Received review data, updating state immediately:",
+          reviewData
+        );
+        setUserReview(reviewData);
+      } else {
+        console.log(
+          "[MovieDetails] No direct review data received, will refetch."
+        );
+      }
+
+      // Background Updates / Refetching
+      await fetchAllReviewData();
+      setRefreshReviews((prev) => prev + 1);
+
+      // Add to Shelf (if needed)
+      if (wasAddingReview && movie) {
+        console.log(
+          "[MovieDetails] Added a new review. Ensuring item is marked as FINISHED."
+        );
+        try {
+          await addToShelf("Movies", ShelfStatus.FINISHED, {
+            id: movie.id.toString(),
+            title: movie.title,
+            image_url: movie.poster_path
+              ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
+              : undefined,
+          });
+          // Optionally refetch again
+          // await fetchAllReviewData();
+        } catch (error) {
+          console.error(
+            "[MovieDetails] Failed to update shelf status after review add:",
+            error
+          );
+        }
+      } else {
+        console.log(
+          "[MovieDetails] Review was updated (not added) or movie data missing."
+        );
+      }
+
+      console.log("[MovieDetails] Review success handling finished.");
+    },
+    [
+      fetchAllReviewData,
+      userReview, // Still needed to determine wasAddingReview
+      addToShelf,
+      movie,
+    ]
+  );
+
+  const handleShelfUpdate = useCallback(async () => {
+    console.log("Shelf updated, triggering fetchAllReviewData");
+    await fetchAllReviewData();
   }, [fetchAllReviewData]);
 
   useEffect(() => {
@@ -116,7 +193,7 @@ export function MovieDetails({ id }: { id: number }) {
 
   useEffect(() => {
     fetchAllReviewData();
-  }, [isAuthenticated, user, fetchAllReviewData]);
+  }, [id, isAuthenticated, user]);
 
   if (loading) {
     return (
@@ -247,8 +324,8 @@ export function MovieDetails({ id }: { id: number }) {
           )}
 
           {activeTab === "Reviews & Rating" && (
-            <div className="space-y-8">
-              <section>
+            <div>
+              <section className="mb-8">
                 <h2 className="text-xl font-semibold mb-4">Community Rating</h2>
                 {reviewsLoading && !reviewStats && (
                   <Skeleton className="h-8 w-48" />
@@ -266,39 +343,55 @@ export function MovieDetails({ id }: { id: number }) {
                 )}
               </section>
 
-              {isAuthenticated && !authLoading ? (
-                <ReviewForm
-                  mediaId={id.toString()}
-                  mediaType="movie"
-                  initialRating={userReview?.rating || 0}
-                  initialReview={userReview?.review_text || ""}
-                  initialContainsSpoilers={
-                    userReview?.contains_spoilers || false
-                  }
-                  reviewId={userReview?.id}
-                  onSuccess={handleReviewSuccess}
-                  isInShelf={isInShelf}
-                />
-              ) : !authLoading ? (
-                <div className="bg-muted p-6 rounded-lg text-center">
-                  <p className="font-medium mb-2">
-                    Sign in to rate and review this movie
-                  </p>
-                  <Button
-                    onClick={() =>
-                      router.push(
-                        `/auth/sign-in?returnUrl=${encodeURIComponent(
-                          `/movies/${id}`
-                        )}`
-                      )
-                    }
-                  >
-                    Sign In
-                  </Button>
-                </div>
-              ) : (
-                <Skeleton className="h-40 w-full" />
-              )}
+              <section className="mb-8">
+                {(authLoading || reviewsLoading) && (
+                  <Skeleton className="h-40 w-full" />
+                )}
+
+                {!authLoading && !reviewsLoading && (
+                  <>
+                    {!isAuthenticated ? (
+                      <div className="bg-muted p-6 rounded-lg text-center">
+                        <p className="font-medium mb-2">
+                          Sign in to rate and review this movie
+                        </p>
+                        <Button
+                          onClick={() =>
+                            router.push(
+                              `/auth/sign-in?returnUrl=${encodeURIComponent(
+                                `/movies/${id}`
+                              )}`
+                            )
+                          }
+                        >
+                          Sign In
+                        </Button>
+                      </div>
+                    ) : userReview ? (
+                      <div className="space-y-4">
+                        <h2 className="text-xl font-semibold">Your Review</h2>
+                        <ReviewForm
+                          mediaId={id.toString()}
+                          mediaType="movie"
+                          initialRating={userReview.rating}
+                          initialReview={userReview.review_text}
+                          initialContainsSpoilers={
+                            userReview.contains_spoilers || false
+                          }
+                          reviewId={userReview.id}
+                          onSuccess={handleReviewSuccess}
+                        />
+                      </div>
+                    ) : (
+                      <ReviewForm
+                        mediaId={id.toString()}
+                        mediaType="movie"
+                        onSuccess={handleReviewSuccess}
+                      />
+                    )}
+                  </>
+                )}
+              </section>
 
               <Separator className="my-6" />
 

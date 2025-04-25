@@ -21,18 +21,16 @@ import {
 interface ReviewFormProps {
   mediaId: string;
   mediaType: string;
-  isInShelf?: boolean;
   initialRating?: number;
   initialReview?: string;
   initialContainsSpoilers?: boolean;
   reviewId?: string;
-  onSuccess?: () => void;
+  onSuccess?: (reviewData?: any) => void;
 }
 
 export function ReviewForm({
   mediaId,
   mediaType,
-  isInShelf = false,
   initialRating = 0,
   initialReview = "",
   initialContainsSpoilers = false,
@@ -59,15 +57,6 @@ export function ReviewForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!isInShelf) {
-      toast({
-        variant: "destructive",
-        title: "Add to shelf first",
-        description: "Please add this item to your shelf before reviewing it.",
-      });
-      return;
-    }
-
     setSubmitting(true);
 
     try {
@@ -80,7 +69,11 @@ export function ReviewForm({
         });
 
         if (result.success) {
+          console.log(
+            "[ReviewForm] Update success, calling onSuccess callback..."
+          );
           onSuccess?.();
+          console.log("[ReviewForm] onSuccess callback finished.");
         }
       } else {
         // Otherwise create a new review
@@ -93,7 +86,11 @@ export function ReviewForm({
         );
 
         if (result.success) {
-          onSuccess?.();
+          console.log(
+            "[ReviewForm] Submit success, calling onSuccess callback..."
+          );
+          onSuccess?.(result.review);
+          console.log("[ReviewForm] onSuccess callback finished.");
         }
       }
     } catch (error) {
@@ -137,19 +134,6 @@ export function ReviewForm({
       setSubmitting(false);
     }
   };
-
-  if (!isInShelf) {
-    return (
-      <Card className="border border-dashed border-gray-300 bg-gray-50">
-        <CardHeader>
-          <CardTitle className="text-lg">Add a Review</CardTitle>
-          <CardDescription>
-            Add this {mediaType.toLowerCase()} to your shelf to rate and review
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
 
   return (
     <Card>

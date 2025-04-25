@@ -48,17 +48,24 @@ export function ShelfStatusChangeDialog({
 
   const handleClose = () => {
     onOpenChange(false);
-    // Still call onComplete even if skipped, to update shelf status
+    // Revert: Call onComplete directly if skipping
     if (onComplete) {
+      console.log(
+        "[ShelfStatusChangeDialog] Calling onComplete (from skip)..."
+      );
       onComplete();
+      console.log("[ShelfStatusChangeDialog] onComplete (from skip) finished.");
     }
   };
 
   const handleReviewSubmitSuccess = () => {
-    // Form submission was successful, now close dialog and complete shelf update
-    onOpenChange(false);
+    console.log("[ShelfStatusChangeDialog] handleReviewSubmitSuccess called");
+    onOpenChange(false); // Close dialog first
+    // Revert: Call onComplete directly after closing
     if (onComplete) {
+      console.log("[ShelfStatusChangeDialog] Calling onComplete...");
       onComplete();
+      console.log("[ShelfStatusChangeDialog] onComplete finished.");
     }
   };
 
@@ -95,10 +102,9 @@ export function ShelfStatusChangeDialog({
           <ReviewForm
             mediaId={mediaId}
             mediaType={normalizedMediaType}
-            onSubmitSuccess={handleReviewSubmitSuccess}
+            onSuccess={handleReviewSubmitSuccess}
             // We assume it's a new review here, so no initial values or reviewId needed
             // We also assume the item *is* now on a shelf (Finished) for the form to be active
-            isInShelf={true}
           />
         </div>
 

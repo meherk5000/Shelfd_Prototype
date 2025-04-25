@@ -68,15 +68,25 @@ export function ReviewList({
         skip
       );
 
-      if (result.success && result.data?.reviews && result.data?.stats) {
+      if (result.success && result.data) {
+        const reviews = result.data.reviews || [];
+        const stats = result.data.stats;
+
         if (append) {
-          setReviews((prev) => [...prev, ...result.data.reviews]);
+          setReviews((prev) => [...prev, ...reviews]);
         } else {
-          setReviews(result.data.reviews);
+          setReviews(reviews);
         }
 
-        setStats(result.data.stats);
-        setHasMore(result.data.reviews.length === limit);
+        setStats(stats);
+        setHasMore(reviews.length === limit);
+      } else if (!result.success) {
+        console.error("API request failed:", result.error);
+        setHasMore(false);
+        if (!append) {
+          setReviews([]);
+          setStats(null);
+        }
       }
     } catch (error) {
       console.error("Error loading reviews:", error);
@@ -117,26 +127,11 @@ export function ReviewList({
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      const now = new Date();
-      const diffInMinutes = Math.floor(
-        (now.getTime() - date.getTime()) / (1000 * 60)
-      );
-
-      if (diffInMinutes < 1) {
-        return "just now";
-      } else if (diffInMinutes < 60) {
-        return `${diffInMinutes} ${
-          diffInMinutes === 1 ? "minute" : "minutes"
-        } ago`;
-      } else if (diffInMinutes < 1440) {
-        // less than 24 hours
-        const hours = Math.floor(diffInMinutes / 60);
-        return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
-      } else {
-        return formatDistanceToNow(date, { addSuffix: true });
-      }
+      // Use formatDistanceToNow directly for consistency and accuracy
+      return formatDistanceToNow(date, { addSuffix: true });
     } catch (e) {
-      return dateString;
+      console.error("Error formatting date:", e, "Input:", dateString);
+      return dateString; // Fallback to original string on error
     }
   };
 

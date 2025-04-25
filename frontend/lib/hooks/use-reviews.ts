@@ -129,7 +129,7 @@ export function useReviews() {
     rating: number,
     reviewText?: string,
     containsSpoilers: boolean = false
-  ): Promise<{ success: boolean; message: string; reviewId?: string }> => {
+  ): Promise<{ success: boolean; message: string; review?: ReviewData }> => {
     setLoading(true);
     setError(null);
     
@@ -184,10 +184,10 @@ export function useReviews() {
         description: "Your review has been saved successfully",
       });
       
-      return { 
-        success: true, 
-        message: 'Review submitted successfully',
-        reviewId: response.data.review_id
+      return {
+        success: true,
+        message: "Review submitted successfully",
+        review: response.data,
       };
     } catch (err: any) {
       const errorMessage = err.response?.data?.detail || 'Failed to submit review';

@@ -95,16 +95,52 @@ export function ShelfButton({
     await completeAddToShelf(status, shelfId);
   };
 
+  const handleDialogComplete = async () => {
+    console.log("[ShelfButton] handleDialogComplete called");
+    if (pendingFinishStatus) {
+      console.log(
+        "[ShelfButton] Pending status found, calling completeAddToShelf..."
+      );
+      // Await the completion of the shelf update
+      await completeAddToShelf(pendingFinishStatus, pendingShelfId);
+      console.log(
+        "[ShelfButton] completeAddToShelf finished. Resetting state."
+      );
+      // Remove the explicit call to onShelfUpdated. Rely on state changes from
+      // completeAddToShelf/useShelf to trigger updates on the details page.
+      // if (onShelfUpdated) {
+      //   console.log("[ShelfButton] Calling onShelfUpdated...");
+      //   onShelfUpdated();
+      //   console.log("[ShelfButton] onShelfUpdated finished.");
+      // }
+
+      // Reset pending state AFTER potentially triggering updates
+      setPendingFinishStatus(null);
+      setPendingShelfId(undefined);
+    } else {
+      console.log(
+        "[ShelfButton] No pending status found in handleDialogComplete"
+      );
+    }
+  };
+
   const completeAddToShelf = async (
     status: ShelfStatus | string,
     shelfId?: string
   ) => {
+    console.log(
+      `[ShelfButton] completeAddToShelf called with status: ${status}, shelfId: ${shelfId}`
+    );
     try {
       const result = await addToShelf(mediaType, status, item, shelfId);
 
-      if (!result.success) {
+      if (result.success) {
+        toast.success(result.message);
+        console.log("[ShelfButton] completeAddToShelf SUCCESS");
+      } else {
         toast.error(result.message || "An unknown error occurred.");
-        return;
+        console.log("[ShelfButton] completeAddToShelf FAILED:", result.message);
+        return; // Stop if shelf update failed
       }
 
       setIsAdded(true);
@@ -112,24 +148,12 @@ export function ShelfButton({
       if (!shelfId) {
         setSelectedStatus(status as ShelfStatus);
       }
-
-      toast.success(result.message);
-
-      if (onShelfUpdated) {
-        onShelfUpdated();
-      }
     } catch (error: any) {
-      console.error("Unexpected error in completeAddToShelf:", error);
+      console.error(
+        "[ShelfButton] Unexpected error in completeAddToShelf:",
+        error
+      );
       toast.error("An unexpected error occurred. Please try again.");
-    }
-  };
-
-  const handleDialogComplete = () => {
-    // After rating dialog is closed, complete the shelf addition
-    if (pendingFinishStatus) {
-      completeAddToShelf(pendingFinishStatus, pendingShelfId);
-      setPendingFinishStatus(null);
-      setPendingShelfId(undefined);
     }
   };
 

@@ -17,6 +17,7 @@ import { ReviewForm } from "@/components/media/review-form";
 import { ReviewList } from "@/components/media/review-list";
 
 import { getUserReview, getMediaReviews } from "@/services/reviewService";
+import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
 
 interface TVShowDetailsData {
   id: number;
@@ -63,57 +64,145 @@ export function TVShowDetails({ id }: { id: number }) {
 
   const [userReview, setUserReview] = useState<UserReview | null>(null);
   const [refreshReviews, setRefreshReviews] = useState(0);
-  const [isInShelf, setIsInShelf] = useState(false);
+  const [shelfStatus, setShelfStatus] = useState<ShelfStatus | null>(null);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(true);
-
-  const fetchTVDetails = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getTVDetails(id);
-      setShow(data);
-    } catch (err) {
-      console.error("Error fetching TV show:", err);
-      setError("Failed to load TV show details");
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
+  const { addToShelf } = useShelf();
 
   const fetchAllReviewData = useCallback(async () => {
+    if (!id || !isAuthenticated || !user) {
+      console.log(
+        "fetchAllReviewData: Skipping fetch because id, isAuthenticated, or user is missing."
+      );
+      setReviewsLoading(false);
+      return;
+    }
+    console.log("[TVShowDetails] fetchAllReviewData called");
     setReviewsLoading(true);
     setUserReview(null);
+    setShelfStatus(null);
     setReviewStats(null);
+
     try {
       const allReviewsRes = await getMediaReviews("tv", id.toString());
+      console.log("Fetched all reviews stats:", allReviewsRes.stats);
       setReviewStats(allReviewsRes.stats || null);
 
       if (isAuthenticated && user) {
+        console.log("User is authenticated, fetching user review...");
         const userReviewRes = await getUserReview("tv", id.toString());
+        console.log("getUserReview response:", userReviewRes);
         if (userReviewRes.exists && userReviewRes.review) {
+          console.log(
+            "User review EXISTS. Setting userReview state:",
+            userReviewRes.review
+          );
           setUserReview(userReviewRes.review);
-          setIsInShelf(true);
+          setShelfStatus(userReviewRes.shelf_status || ShelfStatus.FINISHED);
         } else {
+          console.log(
+            "User review DOES NOT exist. Setting userReview to null."
+          );
           setUserReview(null);
-          setIsInShelf(false);
+          setShelfStatus(userReviewRes.shelf_status || null);
+          console.log(
+            "[TVShowDetails] Setting shelfStatus state based on getUserReview response:",
+            userReviewRes.shelf_status || null
+          );
         }
+      } else {
+        console.log("User not authenticated, skipping user review fetch.");
       }
     } catch (error) {
       console.error("Error fetching review data:", error);
       setReviewStats(null);
       setUserReview(null);
+      setShelfStatus(null);
+      setError("Failed to load review data.");
     } finally {
+      console.log("Finished fetchAllReviewData, setting reviewsLoading false.");
       setReviewsLoading(false);
     }
   }, [id, isAuthenticated, user]);
 
-  const handleReviewSuccess = useCallback(() => {
-    fetchAllReviewData();
-    setRefreshReviews((prev) => prev + 1);
-  }, [fetchAllReviewData]);
+  const fetchTVDetails = useCallback(async () => {
+    setLoading(true);
+    setShow(null);
+    setError(null);
+    setUserReview(null);
+    setShelfStatus(null);
+    setReviewStats(null);
+    setReviewsLoading(true);
+
+    try {
+      const data = await getTVDetails(id);
+      setShow(data);
+      setLoading(false);
+      if (user && isAuthenticated) {
+        await fetchAllReviewData();
+      }
+    } catch (error) {
+      console.error("Error fetching TV details:", error);
+      setLoading(false);
+      setError("Failed to load TV show details.");
+      setUserReview(null);
+      setShelfStatus(null);
+      setReviewStats(null);
+      setReviewsLoading(false);
+    }
+  }, [id, user, isAuthenticated, fetchAllReviewData]);
+
+  const handleReviewSuccess = useCallback(
+    async (reviewData?: UserReview) => {
+      console.log("[TVShowDetails] Review success, handling updates...");
+      const wasAddingReview = !userReview;
+
+      if (reviewData) {
+        console.log(
+          "[TVShowDetails] Received review data, updating state immediately:",
+          reviewData
+        );
+        setUserReview(reviewData);
+      } else {
+        console.log(
+          "[TVShowDetails] No direct review data received, will refetch."
+        );
+      }
+
+      await fetchAllReviewData();
+      setRefreshReviews((prev) => prev + 1);
+
+      if (wasAddingReview && show) {
+        console.log(
+          "[TVShowDetails] Added a new review. Ensuring item is marked as FINISHED."
+        );
+        try {
+          await addToShelf("TV Shows", ShelfStatus.FINISHED, {
+            id: show.id.toString(),
+            title: show.name,
+            image_url: show.poster_path
+              ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
+              : undefined,
+            creator: show.networks?.map((n) => n.name).join(", ") || undefined,
+          });
+        } catch (error) {
+          console.error(
+            "[TVShowDetails] Failed to update shelf status after review add:",
+            error
+          );
+        }
+      } else {
+        console.log(
+          "[TVShowDetails] Review was updated (not added) or show data missing."
+        );
+      }
+
+      console.log("[TVShowDetails] Review success handling finished.");
+    },
+    [fetchAllReviewData, userReview, addToShelf, show]
+  );
 
   const handleShelfUpdate = useCallback(() => {
-    setIsInShelf(true);
     fetchAllReviewData();
   }, [fetchAllReviewData]);
 
@@ -123,7 +212,7 @@ export function TVShowDetails({ id }: { id: number }) {
 
   useEffect(() => {
     fetchAllReviewData();
-  }, [isAuthenticated, user, fetchAllReviewData]);
+  }, [id, isAuthenticated, user]);
 
   const handleWantToWatch = () => {
     if (!isAuthenticated) {
@@ -278,8 +367,8 @@ export function TVShowDetails({ id }: { id: number }) {
           )}
 
           {activeTab === "Reviews" && (
-            <div className="space-y-8">
-              <section>
+            <div>
+              <section className="mb-8">
                 <h2 className="text-xl font-semibold mb-4">Community Rating</h2>
                 {reviewsLoading && !reviewStats && (
                   <Skeleton className="h-8 w-48" />
@@ -297,39 +386,55 @@ export function TVShowDetails({ id }: { id: number }) {
                 )}
               </section>
 
-              {isAuthenticated && !authLoading ? (
-                <ReviewForm
-                  mediaId={id.toString()}
-                  mediaType="tv"
-                  initialRating={userReview?.rating || 0}
-                  initialReview={userReview?.review_text || ""}
-                  initialContainsSpoilers={
-                    userReview?.contains_spoilers || false
-                  }
-                  reviewId={userReview?.id}
-                  onSuccess={handleReviewSuccess}
-                  isInShelf={isInShelf}
-                />
-              ) : !authLoading ? (
-                <div className="bg-muted p-6 rounded-lg text-center">
-                  <p className="font-medium mb-2">
-                    Sign in to rate and review this show
-                  </p>
-                  <Button
-                    onClick={() =>
-                      router.push(
-                        `/auth/sign-in?returnUrl=${encodeURIComponent(
-                          `/tv/${id}`
-                        )}`
-                      )
-                    }
-                  >
-                    Sign In
-                  </Button>
-                </div>
-              ) : (
-                <Skeleton className="h-40 w-full" />
-              )}
+              <section className="mb-8">
+                {(authLoading || reviewsLoading) && (
+                  <Skeleton className="h-40 w-full" />
+                )}
+
+                {!authLoading && !reviewsLoading && (
+                  <>
+                    {!isAuthenticated ? (
+                      <div className="bg-muted p-6 rounded-lg text-center">
+                        <p className="font-medium mb-2">
+                          Sign in to rate and review this show
+                        </p>
+                        <Button
+                          onClick={() =>
+                            router.push(
+                              `/auth/sign-in?returnUrl=${encodeURIComponent(
+                                `/tv/${id}`
+                              )}`
+                            )
+                          }
+                        >
+                          Sign In
+                        </Button>
+                      </div>
+                    ) : userReview ? (
+                      <div className="space-y-4">
+                        <h2 className="text-xl font-semibold">Your Review</h2>
+                        <ReviewForm
+                          mediaId={id.toString()}
+                          mediaType="tv"
+                          initialRating={userReview.rating}
+                          initialReview={userReview.review_text}
+                          initialContainsSpoilers={
+                            userReview.contains_spoilers || false
+                          }
+                          reviewId={userReview.id}
+                          onSuccess={handleReviewSuccess}
+                        />
+                      </div>
+                    ) : (
+                      <ReviewForm
+                        mediaId={id.toString()}
+                        mediaType="tv"
+                        onSuccess={handleReviewSuccess}
+                      />
+                    )}
+                  </>
+                )}
+              </section>
 
               <Separator className="my-6" />
 

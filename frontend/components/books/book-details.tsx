@@ -18,6 +18,8 @@ import { ReviewList } from "@/components/media/review-list";
 // Import hooks and services
 import { useAuth } from "@/lib/context/AuthContext"; // Use custom auth context
 import { getUserReview, getMediaReviews } from "@/services/reviewService"; // Keep service import
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Import Alert
+import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf"; // Import useShelf hook AND ShelfStatus enum
 
 // Interface for the book data itself (keep as is)
 interface BookDetailsData {
@@ -59,11 +61,12 @@ export function BookDetails({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState("About");
   const { user, isAuthenticated, loading: authLoading } = useAuth(); // Use custom hook
   const router = useRouter();
+  const { addToShelf } = useShelf(); // Get addToShelf function from the hook
 
   // Simplified state for reviews (matching MovieDetails)
   const [userReview, setUserReview] = useState<UserReview | null>(null);
   const [refreshReviews, setRefreshReviews] = useState(0); // Trigger for ReviewList
-  const [isInShelf, setIsInShelf] = useState(false); // Add isInShelf state if ReviewForm needs it
+  const [shelfStatus, setShelfStatus] = useState<ShelfStatus | null>(null); // Track shelf status
 
   // Add state for review stats
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
@@ -84,46 +87,131 @@ export function BookDetails({ id }: { id: string }) {
 
   // Renamed to fetchAllReviewData as it gets user review AND all reviews/stats
   const fetchAllReviewData = useCallback(async () => {
-    setReviewsLoading(true); // Start loading reviews
+    console.log("fetchAllReviewData called"); // Log start
+    setReviewsLoading(true);
     setUserReview(null); // Reset user review initially
+    setShelfStatus(null); // Reset shelf status initially
     setReviewStats(null);
 
     try {
       // Fetch all reviews and stats first
       const allReviewsRes = await getMediaReviews("book", id);
+      console.log("Fetched all reviews stats:", allReviewsRes.stats);
       setReviewStats(allReviewsRes.stats || null);
-      // We don't need to store allReviews in state here if ReviewList fetches its own
 
       // If authenticated, fetch the specific user's review
       if (isAuthenticated && user) {
+        console.log("User is authenticated, fetching user review...");
         const userReviewRes = await getUserReview("book", id);
+        console.log("getUserReview response:", userReviewRes);
         if (userReviewRes.exists && userReviewRes.review) {
+          console.log(
+            "User review EXISTS. Setting userReview state:",
+            userReviewRes.review
+          );
           setUserReview(userReviewRes.review);
-          setIsInShelf(true); // Assume in shelf if review exists
+          setShelfStatus(userReviewRes.shelf_status || ShelfStatus.FINISHED); // Set shelf status
         } else {
-          setUserReview(null);
-          setIsInShelf(false);
+          console.log(
+            "User review DOES NOT exist. Setting userReview to null."
+          );
+          setUserReview(null); // Explicitly set to null
+          // Check if item is on *any* shelf even if not reviewed (this might need a separate API call/logic if ShelfButton doesn't manage it)
+          // For now, we rely on the ReviewForm's internal check or assume it might be on a shelf.
+          // A dedicated `checkIfInShelf(mediaType, mediaId)` API call might be better.
+          // We need to know if it's on *any* shelf to allow adding a review.
+          // Let's tentatively check the review stats response if it includes shelf status, otherwise set false.
+          // This is a placeholder - ideally we'd have a direct shelf status check.
+          setShelfStatus(userReviewRes.shelf_status || null); // Set shelf status to null or actual value
+          console.log(
+            "Setting shelfStatus state based on getUserReview response:",
+            userReviewRes.shelf_status || null
+          );
         }
+      } else {
+        console.log("User not authenticated, skipping user review fetch.");
       }
     } catch (error) {
       console.error("Error fetching review data:", error);
-      // Handle error state appropriately if needed
-      setReviewStats(null); // Clear stats on error
+      setReviewStats(null);
       setUserReview(null);
+      setShelfStatus(null);
     } finally {
-      setReviewsLoading(false); // Finish loading reviews
+      console.log("Finished fetchAllReviewData, setting reviewsLoading false.");
+      setReviewsLoading(false);
     }
-  }, [id, isAuthenticated, user]);
+  }, [id, isAuthenticated, user]); // Keep only primitive/stable dependencies
 
-  const handleReviewSuccess = useCallback(() => {
-    fetchAllReviewData(); // Refetch all data after submission
-    setRefreshReviews((prev) => prev + 1); // Trigger review list refresh if needed
-    console.log("Review success, triggering refresh...");
-  }, [fetchAllReviewData]);
+  // Update handleReviewSuccess to accept optional reviewData
+  const handleReviewSuccess = useCallback(
+    async (reviewData?: UserReview) => {
+      console.log("[BookDetails] Review success, handling updates...");
+      // Capture the state *before* any updates, to know if it was an add action
+      const wasAddingReview = !userReview;
 
-  const handleShelfUpdate = useCallback(() => {
-    setIsInShelf(true); // Assume adding to shelf
-    fetchAllReviewData(); // Refetch review data when shelf status changes
+      // --- Immediate UI Update ---
+      if (reviewData) {
+        console.log(
+          "[BookDetails] Received review data, updating state immediately:",
+          reviewData
+        );
+        setUserReview(reviewData);
+      } else {
+        // If no reviewData passed (e.g., from an update), rely on refetch
+        console.log(
+          "[BookDetails] No direct review data received, will refetch."
+        );
+      }
+
+      // --- Background Updates / Refetching ---
+      // Refetch all data to ensure stats and list are up-to-date
+      await fetchAllReviewData();
+      setRefreshReviews((prev) => prev + 1); // Trigger review list refresh
+
+      // --- Add to Shelf (if needed) ---
+      // Use the captured wasAddingReview state
+      if (wasAddingReview && book) {
+        console.log(
+          "[BookDetails] Added a new review. Ensuring item is marked as FINISHED."
+        );
+        try {
+          // Always set to FINISHED when a new review is added via the form.
+          // addToShelf should handle updates correctly if it was already on another shelf.
+          await addToShelf("Books", ShelfStatus.FINISHED, {
+            id: book.id,
+            title: book.title,
+            image_url: book.image_url,
+            creator: book.author,
+          });
+          // Optionally, refetch *again* if addToShelf doesn't trigger the necessary state update
+          // await fetchAllReviewData(); // Might be redundant depending on useShelf behavior
+        } catch (error) {
+          console.error(
+            "[BookDetails] Failed to update shelf status after review add:",
+            error
+          );
+          // Optionally show an error toast
+        }
+      } else {
+        console.log(
+          "[BookDetails] Review was updated (not added) or book data missing."
+        );
+      }
+
+      console.log("[BookDetails] Review success handling finished.");
+    },
+    [
+      fetchAllReviewData,
+      userReview, // Still needed to determine wasAddingReview
+      addToShelf,
+      book,
+    ]
+  );
+
+  const handleShelfUpdate = useCallback(async () => {
+    //setIsInShelf(true); // No longer assume, fetchAllReviewData will set it
+    console.log("Shelf updated, triggering fetchAllReviewData");
+    await fetchAllReviewData(); // Refetch review data when shelf status changes
   }, [fetchAllReviewData]);
 
   useEffect(() => {
@@ -132,8 +220,9 @@ export function BookDetails({ id }: { id: string }) {
 
   useEffect(() => {
     // Fetch review data when component mounts or auth state changes
+    // REMOVE fetchAllReviewData from deps - let the hook manage its own deps
     fetchAllReviewData();
-  }, [isAuthenticated, user, fetchAllReviewData]); // Depend on fetchAllReviewData
+  }, [isAuthenticated, user, id]); // Depend on id, isAuthenticated, user directly
 
   if (loading) {
     return (
@@ -248,9 +337,9 @@ export function BookDetails({ id }: { id: string }) {
           )}
 
           {activeTab === "Reviews & Rating" && (
-            <div className="space-y-8">
+            <div>
               {/* Add Aggregate Rating Display Here */}
-              <section>
+              <section className="mb-8">
                 <h2 className="text-xl font-semibold mb-4">Community Rating</h2>
                 {reviewsLoading && !reviewStats && (
                   <Skeleton className="h-8 w-48" /> // Show skeleton while loading
@@ -269,43 +358,63 @@ export function BookDetails({ id }: { id: string }) {
                 )}
               </section>
 
-              {/* User Review Form */}
-              {isAuthenticated && !authLoading ? (
-                <ReviewForm
-                  mediaId={id}
-                  mediaType="book"
-                  // Pass initial values from userReview state
-                  initialRating={userReview?.rating || 0}
-                  initialReview={userReview?.review_text || ""}
-                  initialContainsSpoilers={
-                    userReview?.contains_spoilers || false
-                  }
-                  reviewId={userReview?.id}
-                  onSuccess={handleReviewSuccess}
-                  isInShelf={isInShelf}
-                />
-              ) : !authLoading ? (
-                // Show sign-in prompt if not authenticated and auth is not loading
-                <div className="bg-muted p-6 rounded-lg text-center">
-                  <p className="font-medium mb-2">
-                    Sign in to rate and review this book
-                  </p>
-                  <Button
-                    onClick={() =>
-                      router.push(
-                        `/auth/sign-in?returnUrl=${encodeURIComponent(
-                          `/books/${id}`
-                        )}`
-                      )
-                    }
-                  >
-                    Sign In
-                  </Button>
-                </div>
-              ) : (
-                // Show loading skeleton while auth state is resolving
-                <Skeleton className="h-40 w-full" />
-              )}
+              {/* --- User Review Section --- */}
+              <section className="mb-8">
+                {/* Show skeleton while auth or reviews are loading initially */}
+                {(authLoading || reviewsLoading) && (
+                  <Skeleton className="h-40 w-full" />
+                )}
+
+                {/* If NOT loading auth AND reviews have finished loading */}
+                {!authLoading && !reviewsLoading && (
+                  <>
+                    {!isAuthenticated ? (
+                      // Show sign-in prompt if not authenticated
+                      <div className="bg-muted p-6 rounded-lg text-center">
+                        <p className="font-medium mb-2">
+                          Sign in to rate and review this book
+                        </p>
+                        <Button
+                          onClick={() =>
+                            router.push(
+                              `/auth/sign-in?returnUrl=${encodeURIComponent(
+                                `/books/${id}`
+                              )}`
+                            )
+                          }
+                        >
+                          Sign In
+                        </Button>
+                      </div>
+                    ) : userReview ? (
+                      // --- User HAS reviewed: Show EDIT form ---
+                      <div className="space-y-4">
+                        <h2 className="text-xl font-semibold">Your Review</h2>
+                        <ReviewForm
+                          mediaId={id}
+                          mediaType="book"
+                          initialRating={userReview.rating}
+                          initialReview={userReview.review_text}
+                          initialContainsSpoilers={
+                            userReview.contains_spoilers || false
+                          }
+                          reviewId={userReview.id}
+                          onSuccess={handleReviewSuccess}
+                          // Add onDelete prop if needed
+                        />
+                      </div>
+                    ) : (
+                      // --- User has NOT reviewed: Show ADD form ---
+                      <ReviewForm
+                        mediaId={id.toString()} // Ensure string
+                        mediaType="book"
+                        onSuccess={handleReviewSuccess}
+                        // No longer need isInShelf here
+                      />
+                    )}
+                  </>
+                )}
+              </section>
 
               <Separator className="my-6" />
 
