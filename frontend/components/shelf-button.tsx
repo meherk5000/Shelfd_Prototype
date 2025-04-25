@@ -101,13 +101,12 @@ export function ShelfButton({
   ) => {
     try {
       const result = await addToShelf(mediaType, status, item, shelfId);
+
       if (!result.success) {
         toast({
-          title: "Already in Shelf",
-          description: `${
-            item.title
-          } is already in your ${mediaType.toLowerCase()} shelf.`,
-          variant: "default",
+          title: "Action Failed",
+          description: result.message || "An unknown error occurred.",
+          variant: "destructive",
         });
         return;
       }
@@ -120,22 +119,17 @@ export function ShelfButton({
 
       toast({
         title: "Success!",
-        description: `${
-          item.title
-        } has been added to your ${mediaType.toLowerCase()} shelf.`,
+        description: result.message,
       });
 
-      // Call the onShelfUpdated callback if provided
       if (onShelfUpdated) {
         onShelfUpdated();
       }
     } catch (error: any) {
-      console.error("Failed to add to shelf:", error);
+      console.error("Unexpected error in completeAddToShelf:", error);
       toast({
         title: "Error",
-        description:
-          error.response?.data?.detail ||
-          "Failed to add to shelf. Please try again.",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
     }

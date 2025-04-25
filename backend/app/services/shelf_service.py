@@ -227,60 +227,57 @@ class ShelfService:
 
     @staticmethod
     async def get_or_create_shelf(user_id: str, media_type: MediaType, status: str, shelf_type: ShelfType) -> ShelfModel:
-        # Get the appropriate shelf name based on media type and status
-        if media_type == MediaType.BOOK:
-            if status == "want_to":
-                name = "Want to Read"
-            elif status == "current":
-                name = "Currently Reading"
-            elif status == "finished":
-                name = "Finished"
-            elif status == "did_not_finish":
-                name = "Did Not Finish"
-            else:
-                name = "Custom"
-        elif media_type in [MediaType.MOVIE, MediaType.TV]:
-            if status == "want_to":
-                name = "Want to Watch"
-            elif status == "current":
-                name = "Currently Watching"
-            elif status == "finished":
-                name = "Finished"
-            elif status == "did_not_finish":
-                name = "Did Not Finish"
-            else:
-                name = "Custom"
-        else:  # Articles
-            if status == "saved":
-                name = "Saved"
-            elif status == "finished":
-                name = "Finished"
-            else:
-                name = "Custom"
+        # 1. Validate and convert status string to ShelfStatus enum
+        try:
+            status_enum = ShelfStatus(status)
+        except ValueError:
+            raise ValueError(f"Invalid status value provided: {status}")
 
-        # Try to find existing shelf by name and media type
+        # 2. Derive the expected shelf name (primarily for display/creation)
+        name = "Unknown Default Shelf" # Default value
+        if media_type == MediaType.BOOK:
+            if status_enum == ShelfStatus.WANT_TO: name = "Want to Read"
+            elif status_enum == ShelfStatus.CURRENT: name = "Currently Reading"
+            elif status_enum == ShelfStatus.FINISHED: name = "Finished"
+            elif status_enum == ShelfStatus.DNF: name = "Did Not Finish"
+            else: raise ValueError(f"Unsupported status '{status}' for Books")
+        elif media_type in [MediaType.MOVIE, MediaType.TV]:
+            if status_enum == ShelfStatus.WANT_TO: name = "Want to Watch"
+            elif status_enum == ShelfStatus.CURRENT: name = "Currently Watching"
+            elif status_enum == ShelfStatus.FINISHED: name = "Finished"
+            elif status_enum == ShelfStatus.DNF: name = "Did Not Finish"
+            else: raise ValueError(f"Unsupported status '{status}' for Movies/TV")
+        elif media_type == MediaType.ARTICLE:
+            if status_enum == ShelfStatus.SAVED: name = "Saved"
+            elif status_enum == ShelfStatus.FINISHED: name = "Finished"
+            else: raise ValueError(f"Unsupported status '{status}' for Articles")
+        else:
+            raise ValueError(f"Unsupported media type: {media_type}")
+
+        # 3. Try to find existing shelf (Query by user, type, AND status enum)
         shelf = await ShelfModel.find_one({
             "user_id": user_id,
             "media_type": media_type,
-            "name": name
+            "status": status_enum,
+            "shelf_type": ShelfType.DEFAULT # Ensure we only match default shelves
         })
-        
+
         if shelf:
-            # Ensure the ID is converted to string
-            shelf.id = str(shelf.id)
-            return shelf
-        
-        # Create new shelf if not found
-        shelf = ShelfModel(
+            # Found existing shelf
+            print(f"Debug - Found existing default shelf '{shelf.name}' for status '{status}'")
+            return shelf # Return the found shelf
+
+        # 4. Create new shelf if not found
+        print(f"Debug - Creating new default shelf '{name}' for status '{status}'")
+        new_shelf_doc = ShelfModel(
             user_id=user_id,
-            name=name,
+            name=name, # Use the derived name
             media_type=media_type,
-            status=status,
-            shelf_type=shelf_type,
+            status=status_enum, # Use the ENUM value
+            shelf_type=shelf_type, # Should be ShelfType.DEFAULT
             items=[]
         )
-        created_shelf = await shelf.create()
-        created_shelf.id = str(created_shelf.id)
+        created_shelf = await new_shelf_doc.create()
         return created_shelf
 
     @staticmethod

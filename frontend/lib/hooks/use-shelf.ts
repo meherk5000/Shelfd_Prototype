@@ -278,7 +278,7 @@ export function useShelf() {
 
       setLoading(false);
       console.log("=== END addToShelf (Success) ===");
-      return { success: true }; // Indicate success
+      return { success: true, message: response.data.message };
     } catch (error: any) {
       setLoading(false);
       console.log("=== END addToShelf (Error) ===");
@@ -290,8 +290,8 @@ export function useShelf() {
           message: error.response?.data?.detail || error.message,
         };
       } else {
-        // Handle non-Axios errors (like the one we removed)
-        console.error("Error adding to shelf:", error.message);
+        // Handle non-Axios errors (like programming errors in the try block)
+        console.error("Non-API Error adding to shelf:", error.message);
         return { success: false, message: error.message };
       }
     }
