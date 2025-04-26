@@ -84,16 +84,35 @@ class ReviewService:
     @staticmethod
     async def delete_review(review_id: str, user_id: str) -> bool:
         """Delete a review if it exists and belongs to the user."""
-        review = await Review.find_one({"_id": review_id, "user_id": user_id})
+        review_oid = None # Initialize for logging
+        try:
+            review_oid = ObjectId(review_id)
+        except Exception as e:
+            print(f"ERROR: Invalid review_id format for deletion: {review_id}, Error: {e}")
+            # Re-raise or raise specific validation error for route handler
+            raise ValueError(f"Invalid review ID format: {review_id}")
+
+        # Find the review using ObjectId and string user_id
+        review = await Review.find_one({"_id": review_oid, "user_id": user_id})
         if not review:
-            return False
-        
-        # Delete review likes first
-        await ReviewLike.find({"review_id": review_id}).delete()
-        
-        # Then delete the review
-        await review.delete()
-        return True
+             print(f"WARN: Review not found or user mismatch for deletion: review_id={review_id}, user_id={user_id}")
+             return False # Return False for not found/permission issue
+
+        # Proceed with deletion attempts
+        try:
+            print(f"INFO: Attempting to delete likes for review {review_id}...")
+            delete_likes_result = await ReviewLike.find({"review_id": review_id}).delete()
+            print(f"INFO: Likes deletion result for review {review_id}: {delete_likes_result}") # Log result
+
+            print(f"INFO: Attempting to delete review document {review_id} ({review_oid})...")
+            await review.delete()
+            print(f"INFO: Successfully deleted review {review_id}")
+            return True
+        except Exception as e:
+            # Log the specific error during deletion
+            print(f"ERROR: Database error during deletion process for review {review_id}: {e}")
+            # Re-raise the exception so the route handler catches it as a 500
+            raise e
 
     @staticmethod
     async def get_user_review(
@@ -102,8 +121,10 @@ class ReviewService:
         media_type: MediaType
     ) -> Optional[Review]:
         """Get a user's review for a specific media item."""
+        # Ensure user_id is consistently queried as a string
+        str_user_id = str(user_id.id) if hasattr(user_id, 'id') else str(user_id)
         return await Review.find_one({
-            "user_id": user_id,
+            "user_id": str_user_id, # Use the string version
             "media_id": media_id,
             "media_type": media_type
         })

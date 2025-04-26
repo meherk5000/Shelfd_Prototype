@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useReviews } from "@/lib/hooks/use-reviews";
+import { useReviews, ReviewData } from "@/lib/hooks/use-reviews";
 import { HalfStarRating } from "@/components/ui/half-star-rating";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,7 +25,7 @@ interface ReviewFormProps {
   initialReview?: string;
   initialContainsSpoilers?: boolean;
   reviewId?: string;
-  onSuccess?: (reviewData?: any) => void;
+  onSuccess?: (reviewData?: ReviewData) => void;
 }
 
 export function ReviewForm({
@@ -50,7 +50,7 @@ export function ReviewForm({
   // Reset form when initial values change
   useEffect(() => {
     setRating(initialRating);
-    setReview(initialReview);
+    setReview(initialReview ?? "");
     setContainsSpoilers(initialContainsSpoilers);
   }, [initialRating, initialReview, initialContainsSpoilers]);
 
@@ -85,9 +85,12 @@ export function ReviewForm({
           containsSpoilers
         );
 
+        console.log("[ReviewForm] submitReview result:", result);
+
         if (result.success) {
           console.log(
-            "[ReviewForm] Submit success, calling onSuccess callback..."
+            "[ReviewForm] Submit success, calling onSuccess callback with:",
+            result.review
           );
           onSuccess?.(result.review);
           console.log("[ReviewForm] onSuccess callback finished.");

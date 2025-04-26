@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
+import { ReviewData } from "@/lib/hooks/use-reviews";
 
 interface MovieDetailsData {
   id: number;
@@ -40,13 +41,6 @@ interface ReviewStats {
   rating_distribution: Record<string, number>;
 }
 
-interface UserReview {
-  id: string;
-  rating: number;
-  review_text: string;
-  contains_spoilers?: boolean;
-}
-
 const tabs = ["About", "Reviews & Rating", "Cast & Crew", "Similar Movies"];
 
 export function MovieDetails({ id }: { id: number }) {
@@ -57,7 +51,7 @@ export function MovieDetails({ id }: { id: number }) {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [userReview, setUserReview] = useState<UserReview | null>(null);
+  const [userReview, setUserReview] = useState<ReviewData | null>(null);
   const [refreshReviews, setRefreshReviews] = useState(0);
   const [shelfStatus, setShelfStatus] = useState<ShelfStatus | null>(null);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
@@ -79,7 +73,7 @@ export function MovieDetails({ id }: { id: number }) {
   const fetchAllReviewData = useCallback(async () => {
     console.log("fetchAllReviewData called");
     setReviewsLoading(true);
-    setUserReview(null);
+    // setUserReview(null);
     setShelfStatus(null);
     setReviewStats(null);
     try {
@@ -124,7 +118,7 @@ export function MovieDetails({ id }: { id: number }) {
   }, [id, isAuthenticated, user]);
 
   const handleReviewSuccess = useCallback(
-    async (reviewData?: UserReview) => {
+    async (reviewData?: ReviewData) => {
       console.log("[MovieDetails] Review success, handling updates...");
       const wasAddingReview = !userReview; // Capture before potential update
 
@@ -142,7 +136,8 @@ export function MovieDetails({ id }: { id: number }) {
       }
 
       // Background Updates / Refetching
-      await fetchAllReviewData();
+      // REMOVE this immediate refetch
+      // await fetchAllReviewData();
       setRefreshReviews((prev) => prev + 1);
 
       // Add to Shelf (if needed)

@@ -18,6 +18,7 @@ import { ReviewList } from "@/components/media/review-list";
 
 import { getUserReview, getMediaReviews } from "@/services/reviewService";
 import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
+import { ReviewData } from "@/lib/hooks/use-reviews";
 
 interface TVShowDetailsData {
   id: number;
@@ -39,13 +40,6 @@ interface TVShowDetailsData {
   type: string;
 }
 
-interface UserReview {
-  id: string;
-  rating: number;
-  review_text: string;
-  contains_spoilers?: boolean;
-}
-
 interface ReviewStats {
   average_rating: number;
   total_reviews: number;
@@ -62,7 +56,7 @@ export function TVShowDetails({ id }: { id: number }) {
   const { user, isAuthenticated, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  const [userReview, setUserReview] = useState<UserReview | null>(null);
+  const [userReview, setUserReview] = useState<ReviewData | null>(null);
   const [refreshReviews, setRefreshReviews] = useState(0);
   const [shelfStatus, setShelfStatus] = useState<ShelfStatus | null>(null);
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
@@ -79,7 +73,6 @@ export function TVShowDetails({ id }: { id: number }) {
     }
     console.log("[TVShowDetails] fetchAllReviewData called");
     setReviewsLoading(true);
-    setUserReview(null);
     setShelfStatus(null);
     setReviewStats(null);
 
@@ -101,7 +94,7 @@ export function TVShowDetails({ id }: { id: number }) {
           setShelfStatus(userReviewRes.shelf_status || ShelfStatus.FINISHED);
         } else {
           console.log(
-            "User review DOES NOT exist. Setting userReview to null."
+            "[TVShowDetails] User review DOES NOT exist. Setting userReview to null."
           );
           setUserReview(null);
           setShelfStatus(userReviewRes.shelf_status || null);
@@ -114,7 +107,7 @@ export function TVShowDetails({ id }: { id: number }) {
         console.log("User not authenticated, skipping user review fetch.");
       }
     } catch (error) {
-      console.error("Error fetching review data:", error);
+      console.error("[TVShowDetails] Error fetching review data:", error);
       setReviewStats(null);
       setUserReview(null);
       setShelfStatus(null);
@@ -153,7 +146,7 @@ export function TVShowDetails({ id }: { id: number }) {
   }, [id, user, isAuthenticated, fetchAllReviewData]);
 
   const handleReviewSuccess = useCallback(
-    async (reviewData?: UserReview) => {
+    async (reviewData?: ReviewData) => {
       console.log("[TVShowDetails] Review success, handling updates...");
       const wasAddingReview = !userReview;
 
@@ -169,7 +162,9 @@ export function TVShowDetails({ id }: { id: number }) {
         );
       }
 
-      await fetchAllReviewData();
+      // Background Updates / Refetching
+      // REMOVE this immediate refetch
+      // await fetchAllReviewData();
       setRefreshReviews((prev) => prev + 1);
 
       if (wasAddingReview && show) {

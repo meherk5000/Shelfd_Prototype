@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Path, Header
 from typing import List, Optional
 from pydantic import BaseModel
+from bson import ObjectId
 
 from ..services.auth import get_current_user, oauth2_scheme
 from ..services.review_service import ReviewService
 from ..database.models.review import MediaType, Review
+from ..database.models.user import User
 from ..database.schemas.review import (
     CreateReviewRequest,
     UpdateReviewRequest,
@@ -111,41 +113,65 @@ async def get_user_review(
     media_id: str,
     token: str = Depends(oauth2_scheme)
 ):
-    """Get the current user's review for a specific media item."""
+    """Get the current user's review for a specific media item, including user details."""
     try:
-        user_id = await get_current_user(token)
-        
+        user_id_obj = await get_current_user(token) # Keep this as it might return the User object
+        user_id_str = str(user_id_obj.id) # Ensure we have the string ID
+
         # Normalize media type to enum
         try:
             media_type_normalized = media_type.upper().replace('-', '_')
             media_type_enum = MediaType[media_type_normalized]
         except KeyError:
             raise HTTPException(status_code=400, detail=f"Invalid media type: {media_type}")
-        
+
         review = await ReviewService.get_user_review(
-            user_id=user_id,
+            user_id=user_id_obj, # Pass the original object or string ID as needed by service
             media_id=media_id,
             media_type=media_type_enum
         )
-        
+
         if not review:
             return {
                 "exists": False,
                 "message": "No review found"
+                # Consider adding shelf_status here too if needed
             }
-        
+
+        # Enrich the review with username and avatar
+        user_info = None
+        try:
+            # Convert the string user_id from the review back to ObjectId for querying User collection
+            user_oid = ObjectId(review.user_id)
+            user_info = await User.find_one({"_id": user_oid})
+        except Exception as e:
+             print(f"WARN: Could not convert review.user_id '{review.user_id}' to ObjectId or find user: {e}")
+             # Continue without user info
+
+        username = "Unknown User"
+        user_avatar = None
+        if user_info:
+            username = user_info.username
+            user_avatar = getattr(user_info, 'avatar_url', None)
+
+        # Convert review to dict and add user details
+        # Use model_dump() for newer Pydantic versions, or dict()
+        review_dict = review.model_dump() if hasattr(review, 'model_dump') else review.dict()
+        review_dict["id"] = str(review.id) # Ensure ID is string
+        review_dict["user_id"] = str(review.user_id) # Ensure user_id is string
+        review_dict["username"] = username
+        review_dict["user_avatar"] = user_avatar
+        # Ensure dates are ISO strings
+        review_dict["created_at"] = review.created_at.isoformat() if review.created_at else None
+        review_dict["updated_at"] = review.updated_at.isoformat() if review.updated_at else None
+
         return {
             "exists": True,
-            "review": {
-                "id": str(review.id),
-                "rating": review.rating,
-                "review_text": review.review_text,
-                "contains_spoilers": review.contains_spoilers,
-                "created_at": review.created_at,
-                "updated_at": review.updated_at
-            }
+            "review": review_dict # Return the enriched dictionary
+            # Add shelf_status here if needed
         }
     except Exception as e:
+        print(f"ERROR in get_user_review: {str(e)}") # Add logging
         raise HTTPException(status_code=500, detail=f"Failed to fetch user review: {str(e)}")
 
 
@@ -195,21 +221,32 @@ async def delete_review(
 ):
     """Delete a review."""
     try:
-        user_id = await get_current_user(token)
-        
+        user_obj = await get_current_user(token) # Get the User object
+        # Ensure we pass the STRING ID to the service
+        user_id_str = str(user_obj.id)
+
         deleted = await ReviewService.delete_review(
             review_id=review_id,
-            user_id=user_id
+            user_id=user_id_str # Pass the string ID
         )
-        
+
         if not deleted:
+            # Service now returns False for not found/permission issues
             raise HTTPException(status_code=404, detail="Review not found or you don't have permission to delete it")
-        
+
         return {
             "success": True,
             "message": "Review deleted successfully"
         }
+    except ValueError as e:
+        # Catch potential ValueError from ObjectId conversion in service
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException as e:
+         # Re-raise specific HTTP exceptions (like 401 from get_current_user)
+         raise e
     except Exception as e:
+        # Catch errors raised from the service (like DB errors during delete)
+        print(f"ERROR in DELETE /reviews/{review_id} route handler: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete review: {str(e)}")
 
 

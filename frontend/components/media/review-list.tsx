@@ -30,17 +30,19 @@ import {
 interface ReviewListProps {
   mediaId: string;
   mediaType: string;
-  refreshTrigger?: number; // to force refresh when a new review is added
+  refreshTrigger?: number;
+  initialStats?: ReviewStats | null;
 }
 
 export function ReviewList({
   mediaId,
   mediaType,
   refreshTrigger = 0,
+  initialStats = null,
 }: ReviewListProps) {
   const [reviews, setReviews] = useState<ReviewData[]>([]);
-  const [stats, setStats] = useState<ReviewStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<ReviewStats | null>(initialStats);
+  const [loading, setLoading] = useState(!initialStats);
   const [sortBy, setSortBy] = useState<string>("newest");
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -49,9 +51,10 @@ export function ReviewList({
   const limit = 10;
 
   useEffect(() => {
-    // Reset page and reviews when refreshTrigger changes
     setPage(1);
     setReviews([]);
+    setStats(refreshTrigger > 0 ? null : initialStats);
+    setLoading(true);
     loadReviews();
   }, [mediaId, mediaType, sortBy, refreshTrigger]);
 
@@ -69,23 +72,25 @@ export function ReviewList({
       );
 
       if (result.success && result.data) {
-        const reviews = result.data.reviews || [];
-        const stats = result.data.stats;
+        const newReviews = result.data.reviews || [];
+        const newStats = result.data.stats;
 
         if (append) {
-          setReviews((prev) => [...prev, ...reviews]);
+          setReviews((prev) => [...prev, ...newReviews]);
         } else {
-          setReviews(reviews);
+          setReviews(newReviews);
         }
 
-        setStats(stats);
-        setHasMore(reviews.length === limit);
+        if (!append) {
+          setStats(newStats);
+        }
+
+        setHasMore(newReviews.length === limit);
       } else if (!result.success) {
         console.error("API request failed:", result.error);
         setHasMore(false);
         if (!append) {
           setReviews([]);
-          setStats(null);
         }
       }
     } catch (error) {
@@ -104,7 +109,6 @@ export function ReviewList({
     const result = await likeReview(reviewId);
 
     if (result.success) {
-      // Update the likes count and has_liked state in the UI
       setReviews((prevReviews) =>
         prevReviews.map((review) => {
           if (review.id === reviewId) {
@@ -123,7 +127,6 @@ export function ReviewList({
     }
   };
 
-  // Format date to relative time (e.g., "2 days ago")
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);

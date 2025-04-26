@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
 import { useToast } from '@/components/ui/use-toast';
+import { ShelfStatus } from './use-shelf';
 
 export interface ReviewData {
   id: string;
@@ -38,15 +39,10 @@ export interface ReviewResponse {
 
 export interface UserReviewResponse {
   exists: boolean;
-  review?: {
-    id: string;
-    rating: number;
-    review_text?: string;
-    contains_spoilers: boolean;
-    created_at: string;
-    updated_at?: string;
-  };
+  review?: ReviewData;
   message?: string;
+  shelf_status?: ShelfStatus | null;
+  in_shelf?: boolean;
 }
 
 export function useReviews() {
