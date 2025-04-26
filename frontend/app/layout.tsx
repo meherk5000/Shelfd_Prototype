@@ -41,7 +41,8 @@ export default function RootLayout({
             <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
               {children}
               <Toaster richColors />
-              {process.env.NODE_ENV === "development" && <AuthDebug />}
+              {/* Remove AuthDebug component */}
+              {/* {process.env.NODE_ENV === "development" && <AuthDebug />} */}
             </ThemeProvider>
           </AuthProvider>
         </UserProvider>
