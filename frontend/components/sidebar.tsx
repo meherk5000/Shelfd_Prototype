@@ -14,10 +14,22 @@ import {
   User,
   LogOut,
   Archive,
+  Pencil,
+  Users,
+  ListPlus,
+  FileText,
 } from "lucide-react";
 import { SignOutButton } from "./SignOutButton";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 // Public routes that everyone can see
 const publicItems = [
@@ -85,6 +97,50 @@ export function Sidebar() {
         <nav className="space-y-2">
           {sidebarItems.map((item) => {
             const isActive = pathname === item.href;
+
+            // Special handling for "Create" item
+            if (item.label === "Create") {
+              return (
+                <Dialog key={item.label}>
+                  <DialogTrigger asChild>
+                    <button
+                      className={cn(
+                        "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left",
+                        "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      )}
+                    >
+                      <item.icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                      <DialogTitle>Create</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <button className="flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors w-full text-left">
+                        <Pencil className="w-5 h-5 text-muted-foreground" />
+                        <span>Create Review</span>
+                      </button>
+                      <button className="flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors w-full text-left">
+                        <Users className="w-5 h-5 text-muted-foreground" />
+                        <span>Create Club</span>
+                      </button>
+                      <button className="flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors w-full text-left">
+                        <ListPlus className="w-5 h-5 text-muted-foreground" />
+                        <span>Create Shelf List</span>
+                      </button>
+                      <button className="flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors w-full text-left">
+                        <FileText className="w-5 h-5 text-muted-foreground" />
+                        <span>Create Post</span>
+                      </button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              );
+            }
+
+            // Render other items as Links
             return (
               <Link
                 key={item.href}
