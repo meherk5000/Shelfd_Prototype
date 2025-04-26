@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -52,42 +53,33 @@ export default function SignIn() {
     }
   }, [isAuthenticated, returnTo, user, hasRedirected]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Don't submit if already loading or redirecting
     if (isLoading || hasRedirected) return;
 
     setError("");
     setIsLoading(true);
 
-    try {
-      console.log(`Attempting login for ${email} with redirect to ${returnTo}`);
+    console.log(`Attempting login for ${email} with redirect to ${returnTo}`);
 
-      // Make sure we use the returnTo value
-      if (returnTo !== "/" && window.location.search === "") {
-        // If we don't have returnUrl in URL, add it so login can use it
-        const newUrl = `${
-          window.location.pathname
-        }?returnUrl=${encodeURIComponent(returnTo)}`;
-        window.history.replaceState({}, "", newUrl);
-      }
-
-      const success = await login(email, password);
-
-      if (!success) {
-        console.log("Login was not successful");
+    login(email, password)
+      .then((success) => {
+        if (success) {
+          console.log("Login successful, redirecting...");
+          setHasRedirected(true);
+          window.location.href = returnTo;
+        } else {
+          console.log("Login failed (handled by context)");
+          setIsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Unexpected error during login process:", err);
+        toast.error("Login Error", {
+          description: "An unexpected error occurred. Please try again.",
+        });
         setIsLoading(false);
-      } else {
-        console.log("Login successful, will be redirected by login function");
-        setHasRedirected(true);
-        // Login function will handle the redirect
-      }
-    } catch (err: any) {
-      console.error("Error during sign-in form submission:", err);
-      setError(err.message || "Failed to sign in. Please try again.");
-      setIsLoading(false);
-    }
+      });
   };
 
   // If already being redirected, show a simple loading screen

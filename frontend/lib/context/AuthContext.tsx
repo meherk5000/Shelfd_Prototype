@@ -9,7 +9,7 @@ import React, {
 } from "react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 
 interface User {
   id: string;
@@ -28,7 +28,7 @@ interface AuthContextType {
     email: string,
     password: string,
     username: string
-  ) => Promise<void>;
+  ) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -54,7 +54,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [lastAuthCheck, setLastAuthCheck] = useState(0);
   const router = useRouter();
-  const { toast } = useToast();
 
   // Initial auth check when the component mounts
   useEffect(() => {
@@ -236,99 +235,55 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, [isAuthenticated]);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    console.log("Starting login process...");
+
     try {
-      setLoading(true);
-      setError(null);
-
-      console.log("Starting login process...");
-
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
         {
           email,
           password,
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
         }
       );
 
-      const { access_token, refresh_token, token_type, user } = response.data;
+      console.log("Login response:", response.data);
 
-      console.log("Login successful, storing tokens and user data");
-
-      // Store tokens in localStorage
-      localStorage.setItem("token", access_token);
-      if (refresh_token) {
+      if (response.data.access_token) {
+        const { access_token, refresh_token, user } = response.data;
+        localStorage.setItem("token", access_token);
         localStorage.setItem("refresh_token", refresh_token);
+        axios.defaults.headers.common[
+          "Authorization"
+        ] = `Bearer ${access_token}`;
+        setUser(user);
+        setIsAuthenticated(true);
+        console.log("Login successful");
+        toast.success("Login Successful!");
+        return true;
+      } else {
+        setError("Login failed: Unexpected response from server.");
+        toast.error("Login Failed", {
+          description: "An unexpected error occurred.",
+        });
+        return false;
       }
+    } catch (error) {
+      console.error("Login error:", error);
+      let errorMessage = "Login failed. Please try again.";
 
-      // Set default authorization header
-      axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
-
-      // Update state
-      setUser(user);
-      setIsAuthenticated(true);
-      setLastAuthCheck(Date.now());
-
-      // Show success toast
-      toast({
-        title: "Success!",
-        description: "You have successfully logged in.",
-      });
-
-      // Get return URL from query parameters if it exists
-      let returnUrl = "/";
-      if (typeof window !== "undefined") {
-        const urlParams = new URLSearchParams(window.location.search);
-        const returnParam = urlParams.get("returnUrl");
-        if (returnParam) {
-          returnUrl = decodeURIComponent(returnParam);
-          console.log(`Redirecting to return URL: ${returnUrl}`);
+      if (axios.isAxiosError(error) && error.response) {
+        if (error.response.status === 400 || error.response.status === 401) {
+          errorMessage = "Please check your username and password.";
+        } else {
+          errorMessage = error.response.data?.detail || errorMessage;
         }
-      }
-
-      // Short delay to ensure state updates before redirect
-      setTimeout(() => {
-        // Use direct window location for more reliable redirect after login
-        window.location.href = returnUrl;
-      }, 100);
-
-      return true;
-    } catch (error: any) {
-      console.error("Login failed:", error);
-
-      // Handle different error types
-      let errorMessage = "An error occurred during login";
-
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        if (error.response.status === 429) {
-          errorMessage = "Too many login attempts. Please try again later.";
-        } else if (error.response.status === 400) {
-          errorMessage = "Invalid email or password";
-        } else if (error.response.status === 401) {
-          errorMessage = "Unauthorized access";
-        } else if (error.response.data?.detail) {
-          errorMessage = error.response.data.detail;
-        }
-      } else if (error.request) {
-        // The request was made but no response was received
-        errorMessage =
-          "No response from server. Please check your internet connection.";
       }
 
       setError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
-      });
-
+      toast.error("Login Failed", { description: errorMessage });
       return false;
     } finally {
       setLoading(false);
@@ -339,13 +294,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     email: string,
     password: string,
     username: string
-  ) => {
-    try {
-      setLoading(true);
-      setError(null);
+  ): Promise<{ success: boolean; message?: string }> => {
+    setLoading(true);
+    setError(null);
+    console.log("Starting registration process...");
 
+    try {
       const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`,
         {
           email,
           password,
@@ -353,39 +309,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       );
 
-      const { access_token, refresh_token, token_type, user } = response.data;
+      console.log("Register response:", response.data);
 
-      // Store tokens
-      localStorage.setItem("token", access_token);
-      if (refresh_token) {
-        localStorage.setItem("refresh_token", refresh_token);
+      if (response.status === 201 || response.status === 200) {
+        toast.success("Sign Up Successful", {
+          description: "You can now log in.",
+        });
+        return { success: true };
+      } else {
+        throw new Error("Unexpected response during registration.");
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      let title = "Sign Up Failed";
+      let description = "An unknown error occurred. Please try again.";
+
+      if (axios.isAxiosError(error) && error.response) {
+        const status = error.response.status;
+        const detail = error.response.data?.detail;
+
+        if (status === 409) {
+          description = detail || "Username or email already exists.";
+        } else if (status === 400) {
+          description =
+            detail || "Invalid details provided. Please check your input.";
+        } else {
+          description = detail || description;
+        }
+      } else if (error instanceof Error) {
+        description = error.message;
       }
 
-      // Set default authorization header
-      axios.defaults.headers.common["Authorization"] = `Bearer ${access_token}`;
-
-      // Update state
-      setUser(user);
-      setIsAuthenticated(true);
-
-      // Show success toast
-      toast({
-        title: "Success!",
-        description: "You have successfully registered.",
-      });
-
-      // Redirect to home page
-      router.push("/");
-    } catch (error: any) {
-      console.error("Registration failed:", error);
-      const errorMessage =
-        error.response?.data?.detail || "An error occurred during registration";
-      setError(errorMessage);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
-      });
+      setError(description);
+      toast.error(title, { description: description });
+      return { success: false, message: description };
     } finally {
       setLoading(false);
     }
@@ -404,8 +361,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     delete axios.defaults.headers.common["Authorization"];
 
     // Show toast notification
-    toast({
-      title: "Logged out",
+    toast.success("Logged out", {
       description: "You have been successfully logged out.",
     });
 
@@ -417,20 +373,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setError(null);
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        error,
-        isAuthenticated,
-        login,
-        register,
-        logout,
-        clearError,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  const value = {
+    user,
+    loading,
+    error,
+    isAuthenticated,
+    login,
+    register,
+    logout,
+    clearError,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

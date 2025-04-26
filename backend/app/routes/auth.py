@@ -37,19 +37,20 @@ async def signup(user_data: UserCreate, request: Request):
         # Validate password strength
         is_valid, error_message = validate_password_strength(user_data.password)
         if not is_valid:
+            print(f"Debug - Password validation failed: {error_message}")
             raise HTTPException(status_code=400, detail=error_message)
         
         # Check if user exists
         existing_user = await User.find_one({"email": user_data.email})
         if existing_user:
             print(f"Debug - Email already registered: {user_data.email}")
-            raise HTTPException(status_code=400, detail="Email already registered")
+            raise HTTPException(status_code=409, detail="Email already registered")
         
         # Also check for username uniqueness
         existing_username = await User.find_one({"username": user_data.username})
         if existing_username:
             print(f"Debug - Username already taken: {user_data.username}")
-            raise HTTPException(status_code=400, detail="Username already taken")
+            raise HTTPException(status_code=409, detail="Username already taken")
         
         # Create user
         print("Debug - Creating new user")

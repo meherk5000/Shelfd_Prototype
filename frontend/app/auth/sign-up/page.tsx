@@ -6,17 +6,37 @@ import { useAuth } from "@/lib/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
-  const { register, error } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
+  const { register } = useAuth();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    await register(email, password, username);
+    if (isLoading) return;
+    setIsLoading(true);
+
+    register(email, password, username)
+      .then((result) => {
+        if (result.success) {
+          setTimeout(() => router.push("/auth/sign-in"), 1000);
+        } else {
+          console.log("Signup failed (handled by context):", result.message);
+          setIsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Unexpected error during sign-up process:", err);
+        toast.error("Sign Up Error", {
+          description: "An unexpected error occurred. Please try again.",
+        });
+        setIsLoading(false);
+      });
   };
 
   return (
@@ -58,12 +78,8 @@ export default function SignUpPage() {
             />
           </div>
 
-          {error && (
-            <div className="text-sm text-red-500 text-center">{error}</div>
-          )}
-
-          <Button type="submit" className="w-full">
-            Sign Up
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Signing Up..." : "Sign Up"}
           </Button>
         </form>
 
