@@ -75,7 +75,8 @@ async def get_user_shelves(
                     "title": item.title,
                     "cover_image": item.cover_image,
                     "creator": item.creator,
-                    "added_at": item.added_at.isoformat() if item.added_at else None
+                    "added_at": item.added_at.isoformat() if item.added_at else None,
+                    "rating": item.rating
                 }
                 for item in shelf_items
             ]

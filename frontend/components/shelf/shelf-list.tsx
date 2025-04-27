@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Grid, List, Filter, Search, MoreVertical } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,47 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MediaTypeMapping, mediaTypeMap } from "@/lib/hooks/use-shelf";
+
+// Define interface for shelf items used in this component
+interface DisplayShelfItem {
+  id: string;
+  title: string;
+  image: string;
+  creator?: string;
+  dateAdded?: string;
+  rating?: number | null; // Allow null for rating
+  progress?: number;
+}
+
+// Helper function to render stars
+const StarRating = ({ rating }: { rating: number }) => {
+  const fullStars = Math.floor(rating);
+  const halfStar = rating % 1 >= 0.5;
+  const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+  return (
+    <div className="flex items-center">
+      {[...Array(fullStars)].map((_, i) => (
+        <svg
+          key={`full-${i}`}
+          className="w-4 h-4 text-yellow-400 fill-current"
+          viewBox="0 0 20 20"
+        >
+          <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
+        </svg>
+      ))}
+      {/* Add half star logic if needed, for simplicity only full stars for now */}
+      {[...Array(emptyStars)].map((_, i) => (
+        <svg
+          key={`empty-${i}`}
+          className="w-4 h-4 text-gray-300 fill-current"
+          viewBox="0 0 20 20"
+        >
+          <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
+        </svg>
+      ))}
+    </div>
+  );
+};
 
 interface ShelfListProps {
   type: MediaType;
@@ -79,8 +121,10 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
     }
   }, [shelves, targetShelf, initialList]);
 
-  const items =
-    targetShelf?.items.map((item: any) => {
+  // Use the DisplayShelfItem interface for typing
+  const items: DisplayShelfItem[] =
+    targetShelf?.items.map((item: any): DisplayShelfItem => {
+      // Add return type
       const mediaId = item.media_id || item.id;
       if (!mediaId) {
         console.warn("Item without any ID:", item);
@@ -91,14 +135,31 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
         image: item.cover_image || item.image || "/placeholder.svg",
         creator: item.creator,
         dateAdded: item.added_at,
-        rating: item.rating,
+        rating: item.rating, // Rating is now included
         progress: item.progress,
       };
     }) || [];
 
-  const filteredItems = items.filter((item) =>
+  // Type the item in the filter function
+  const filteredItems = items.filter((item: DisplayShelfItem) =>
     item.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Helper function to get the correct detail page path based on media type
+  const getDetailPath = (mediaType: MediaType, id: string): string => {
+    switch (mediaType) {
+      case "books":
+        return `/books/${id}`;
+      case "movies":
+        return `/movies/${id}`;
+      case "tv-shows":
+        return `/tv/${id}`; // Use /tv/ for tv-shows
+      case "articles":
+        return `/articles/${id}`; // Assuming /articles/ for articles
+      default:
+        return "/"; // Fallback path
+    }
+  };
 
   if (isLoading) {
     return <div>Loading...</div>;
@@ -173,73 +234,98 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
 
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {filteredItems.map((item, index) => (
-            <div
-              key={item.id}
-              className="group relative bg-card rounded-lg border overflow-hidden hover:shadow-md transition-shadow"
-            >
-              <div className="aspect-[2/3] relative">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              </div>
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium line-clamp-1">{item.title}</h3>
-                    {item.creator && (
-                      <p className="text-sm text-muted-foreground line-clamp-1">
-                        by {item.creator}
-                      </p>
+          {/* Type item and index here */}
+          {filteredItems.map((item: DisplayShelfItem, index: number) => (
+            <Link key={item.id} href={getDetailPath(type, item.id)} passHref>
+              <div className="group relative bg-card rounded-lg border overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col">
+                <div className="aspect-[2/3] relative">
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    className="absolute inset-0 h-full w-full object-cover"
+                  />
+                </div>
+                <div className="p-4 flex-grow flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium line-clamp-1">
+                          {item.title}
+                        </h3>
+                        {item.creator && (
+                          <p className="text-sm text-muted-foreground line-clamp-1">
+                            by {item.creator}
+                          </p>
+                        )}
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <ItemMenu itemId={item.id} />
+                      </div>
+                    </div>
+                    {item.rating && (
+                      <div className="flex items-center text-sm mt-1">
+                        <span className="text-muted-foreground mr-1.5">
+                          Your Rating:
+                        </span>
+                        <StarRating rating={item.rating} />
+                        <span className="ml-1 font-medium">
+                          {item.rating.toFixed(1)}
+                        </span>
+                      </div>
                     )}
                   </div>
-                  <ItemMenu itemId={item.id} />
                 </div>
-                {item.rating && (
-                  <div className="flex items-center text-sm text-yellow-500 mt-1">
-                    {item.rating.toFixed(1)}
-                  </div>
-                )}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       ) : (
         <div className="space-y-4">
-          {filteredItems.map((item) => (
-            <div
-              key={item.id}
-              className="group flex items-center gap-4 p-4 bg-card rounded-lg border"
-            >
-              <div className="h-24 w-16 flex-shrink-0 overflow-hidden rounded-md">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-lg mb-1">{item.title}</h3>
-                {item.creator && (
-                  <p className="text-sm text-muted-foreground">
-                    by {item.creator}
-                  </p>
-                )}
-              </div>
-              {item.progress !== undefined && (
-                <div className="w-32 flex-shrink-0">
-                  <div className="h-2 bg-muted rounded-full">
-                    <div
-                      className="h-full bg-primary rounded-full"
-                      style={{ width: `${item.progress}%` }}
-                    />
-                  </div>
+          {/* Type item here */}
+          {filteredItems.map((item: DisplayShelfItem) => (
+            <Link key={item.id} href={getDetailPath(type, item.id)} passHref>
+              <div className="group flex items-center gap-4 p-4 bg-card rounded-lg border hover:bg-accent transition-colors cursor-pointer">
+                <div className="h-24 w-16 flex-shrink-0 overflow-hidden rounded-md">
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    className="h-full w-full object-cover"
+                  />
                 </div>
-              )}
-              <ItemMenu itemId={item.id} />
-            </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-medium text-lg mb-1">{item.title}</h3>
+                  {item.creator && (
+                    <p className="text-sm text-muted-foreground">
+                      by {item.creator}
+                    </p>
+                  )}
+                  {item.rating && (
+                    <div className="flex items-center text-sm mt-1">
+                      <span className="text-muted-foreground mr-1.5">
+                        Your Rating:
+                      </span>
+                      <StarRating rating={item.rating} />
+                      <span className="ml-1 font-medium">
+                        {item.rating.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {item.progress !== undefined && (
+                  <div className="w-32 flex-shrink-0">
+                    <div className="h-2 bg-muted rounded-full">
+                      <div
+                        className="h-full bg-primary rounded-full"
+                        style={{ width: `${item.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                <div onClick={(e) => e.stopPropagation()}>
+                  <ItemMenu itemId={item.id} />
+                </div>
+              </div>
+            </Link>
           ))}
         </div>
       )}

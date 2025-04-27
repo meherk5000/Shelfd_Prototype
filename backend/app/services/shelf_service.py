@@ -166,7 +166,8 @@ class ShelfService:
                         "title": item.title,
                         "creator": item.creator,
                         "cover_image": item.cover_image,
-                        "added_at": item.added_at
+                        "added_at": item.added_at,
+                        "rating": item.rating
                     }
                     items_dict.append(item_dict)
                 
