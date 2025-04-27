@@ -3,6 +3,7 @@ from ..database.schemas.shelf import MediaType, ShelfType, ShelfStatus
 from datetime import datetime
 from typing import List, Optional
 from beanie.exceptions import DocumentNotFound
+from fastapi import HTTPException
 
 class ShelfService:
     DEFAULT_SHELVES = {
@@ -128,59 +129,67 @@ class ShelfService:
         try:
             # Debug the query parameters
             print(f"Debug - Querying shelves for user {user_id} and media type {media_type}")
-            
+
             # Convert user_id to string if it's a User object
             if hasattr(user_id, 'id'):
                 user_id = str(user_id.id)
-            
+
             # Get all shelves for this user and media type
             shelves = await ShelfModel.find({
                 "user_id": user_id,
                 "media_type": media_type
             }).to_list()
-            
+
             # If no shelves exist, create default ones
             if not shelves:
                 print("Debug - No shelves found, creating defaults")
                 shelves = await ShelfService.create_default_shelves(user_id, media_type)
-            
-            # Convert the raw dictionaries to ShelfModel instances and fetch items
-            shelf_models = []
-            for shelf_dict in shelves:
-                if isinstance(shelf_dict, dict):
-                    shelf_model = ShelfModel(**shelf_dict)
-                else:
-                    shelf_model = shelf_dict
-                
-                # Fetch shelf items
-                shelf_items = await ShelfItemModel.find({
+
+            # Process shelves and fetch their specific items
+            processed_shelves = []
+            for shelf in shelves:
+                # Prepare shelf data structure to return (without modifying original shelf object in loop)
+                shelf_data_to_return = {
+                    "_id": str(shelf.id),
+                    "name": shelf.name,
+                    "media_type": shelf.media_type,
+                    "shelf_type": shelf.shelf_type,
+                    "status": shelf.status,
+                    "items": [] # Initialize items list
+                }
+
+                # Fetch shelf items BELONGING TO THIS SPECIFIC SHELF
+                shelf_items_for_this_shelf = await ShelfItemModel.find({
                     "user_id": user_id,
-                    "media_id": {"$in": shelf_model.items}
+                    "shelf_id": str(shelf.id) # Filter by the ID of the current shelf
                 }).to_list()
-                
-                # Convert shelf items to dictionaries
+
+                # Convert these specific shelf items to dictionaries
                 items_dict = []
-                for item in shelf_items:
+                for item in shelf_items_for_this_shelf:
                     item_dict = {
                         "media_id": item.media_id,
                         "title": item.title,
                         "creator": item.creator,
                         "cover_image": item.cover_image,
-                        "added_at": item.added_at,
-                        "rating": item.rating
+                        "added_at": item.added_at.isoformat() if item.added_at else None, # Add back isoformat
+                        "rating": item.rating # Use rating from item belonging to this shelf
                     }
                     items_dict.append(item_dict)
-                
-                # Replace the items list with the full item details
-                shelf_model.items = items_dict
-                shelf_models.append(shelf_model)
-            
-            print(f"Debug - Returning {len(shelf_models)} shelves")
-            return shelf_models
-            
+
+                # Attach the correctly fetched items to the shelf representation
+                shelf_data_to_return["items"] = items_dict
+                processed_shelves.append(shelf_data_to_return)
+
+            print(f"Debug - Returning {len(processed_shelves)} shelves with detailed items")
+            return processed_shelves # Return list of dicts matching frontend expectation
+
         except Exception as e:
             print(f"Debug - Error in get_user_shelves: {str(e)}")
-            raise e
+            # It might be better to re-raise or handle specific exceptions
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail="Failed to retrieve shelves.")
 
     @staticmethod
     async def remove_from_shelf(user_id: str, media_id: str, shelf_type: MediaType) -> bool:

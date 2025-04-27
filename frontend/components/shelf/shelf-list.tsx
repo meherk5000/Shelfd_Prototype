@@ -129,7 +129,9 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
       if (!mediaId) {
         console.warn("Item without any ID:", item);
       }
-      return {
+      // Log the raw item received from the backend and the mapped item
+      console.log("ShelfList Raw Item:", item);
+      const mappedItem: DisplayShelfItem = {
         id: mediaId,
         title: item.title,
         image: item.cover_image || item.image || "/placeholder.svg",
@@ -138,6 +140,8 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
         rating: item.rating, // Rating is now included
         progress: item.progress,
       };
+      console.log("ShelfList Mapped Item:", mappedItem);
+      return mappedItem;
     }) || [];
 
   // Type the item in the filter function
@@ -155,7 +159,7 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
       case "tv-shows":
         return `/tv/${id}`; // Use /tv/ for tv-shows
       case "articles":
-        return `/articles/${id}`; // Assuming /articles/ for articles
+        return `/article/${id}`; // Fix: Use /article/ (singular)
       default:
         return "/"; // Fallback path
     }

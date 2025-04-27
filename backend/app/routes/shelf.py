@@ -30,64 +30,39 @@ async def get_user_shelves(
     token: str = Depends(oauth2_scheme)
 ):
     try:
-        # Debug logging
-        print(f"Debug - Received media_type: {media_type}")
+        print(f"Route Handler - Received media_type: {media_type}")
         
         # Convert media type string to enum
         try:
             media_type_enum = MediaType(media_type)
-            print(f"Debug - Converted to MediaType enum: {media_type_enum}")
+            print(f"Route Handler - Converted to MediaType enum: {media_type_enum}")
         except ValueError:
-            print(f"Debug - Invalid media type: {media_type}")
+            print(f"Route Handler - Invalid media type: {media_type}")
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid media type: {media_type}"
             )
         
         user = await get_current_user(token)
-        user_id = str(user.id)  # Convert User object ID to string
-        print(f"Debug - Using user_id: {user_id}")
+        user_id = str(user.id)
+        print(f"Route Handler - Using user_id: {user_id}")
         
-        shelves = await ShelfService.get_user_shelves(user_id, media_type_enum)
+        # Call the service function which now returns the fully processed list of dicts
+        processed_shelves = await ShelfService.get_user_shelves(user_id, media_type_enum)
         
-        if not shelves:
-            return []
-            
-        # Transform the data to match frontend expectations
-        transformed_shelves = []
-        for shelf in shelves:
-            shelf_dict = {
-                "_id": str(shelf.id),
-                "name": shelf.name,
-                "shelf_type": shelf.shelf_type,
-                "items": []
-            }
-            
-            # Get items for this shelf
-            shelf_items = await ShelfItemModel.find({
-                "user_id": user_id,
-                "shelf_id": str(shelf.id)
-            }).to_list()
-            
-            shelf_dict["items"] = [
-                {
-                    "media_id": item.media_id,
-                    "title": item.title,
-                    "cover_image": item.cover_image,
-                    "creator": item.creator,
-                    "added_at": item.added_at.isoformat() if item.added_at else None,
-                    "rating": item.rating
-                }
-                for item in shelf_items
-            ]
-            
-            transformed_shelves.append(shelf_dict)
-            
-        return transformed_shelves
+        # Return the result directly
+        print(f"Route Handler - Returning {len(processed_shelves)} processed shelves from service")
+        return processed_shelves
         
+    except HTTPException as http_exc:
+        # Re-raise specific HTTP errors
+        raise http_exc
     except Exception as e:
-        print("Debug - Exception:", str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"Route Handler - Unhandled Exception: {str(e)}")
+        # Log the full traceback for unexpected errors
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail="An internal error occurred while retrieving shelves.")
 
 @router.post("/add_item")
 async def add_to_shelf(

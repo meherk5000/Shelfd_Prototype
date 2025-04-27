@@ -347,33 +347,40 @@ class ReviewService:
         review_text: Optional[str] = None,
         contains_spoilers: bool = False
     ) -> Review:
-        """Create/update review and also update the shelf item if it exists."""
+        """Create/update review and also update the shelf item(s) if they exist."""
+        # Ensure user_id is a string
+        actual_user_id = str(user_id.id) if hasattr(user_id, 'id') else str(user_id)
+        
         # Create/update review in the new system
         review = await ReviewService.create_review(
-            user_id, media_id, media_type, rating, review_text, contains_spoilers
+            actual_user_id, media_id, media_type, rating, review_text, contains_spoilers
         )
         
-        # Try to update the shelf item rating too (for backward compatibility)
+        # Try to update the shelf item rating too for all instances of this item
         try:
             from ..database.models.shelf import ShelfItemModel
             from datetime import datetime
             
-            # Find shelf item
-            shelf_item = await ShelfItemModel.find_one({
-                "user_id": user_id,
+            # Update all matching shelf items for this user and media
+            update_result = await ShelfItemModel.find({
+                "user_id": actual_user_id,
                 "media_id": media_id,
                 "media_type": media_type
+            }).update({
+                "$set": {
+                    "rating": rating,
+                    "review": review_text,
+                    "review_date": datetime.utcnow()
+                }
             })
             
-            if shelf_item:
-                # Update the old rating field
-                shelf_item.rating = rating
-                shelf_item.review = review_text
-                shelf_item.review_date = datetime.utcnow()
-                await shelf_item.save()
-                print(f"DEBUG: Updated shelf item rating for {media_id}")
+            if update_result.modified_count > 0:
+                print(f"DEBUG: Updated {update_result.modified_count} shelf item(s) rating for {media_id}")
+            else:
+                 print(f"DEBUG: No shelf items found to update rating for {media_id}")
+                 
         except Exception as e:
-            print(f"WARNING: Failed to update shelf item rating: {str(e)}")
+            print(f"WARNING: Failed to update shelf item(s) rating: {str(e)}")
             # Continue anyway as the main review was saved
         
         return review 
