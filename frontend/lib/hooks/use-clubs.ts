@@ -136,10 +136,13 @@ export function useClubs() {
   // Get auth headers for regular JSON requests
   const getAuthHeaders = () => {
     const token = localStorage.getItem("token");
-    return {
+    const headers: HeadersInit = { // Use HeadersInit type for better type safety
       "Content-Type": "application/json",
-      Authorization: token ? `Bearer ${token}` : "",
     };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`; // Only add Authorization if token exists
+    }
+    return headers;
   };
   
   // For FormData requests (don't include Content-Type)
@@ -172,9 +175,15 @@ export function useClubs() {
         ? `/api/clubs/${clubId}`
         : `/api/clubs?${params}`;
 
+      // Always get headers using getAuthHeaders - it conditionally adds Authorization based on token presence
+      const headers = getAuthHeaders();
+
+      console.log(`[getClubs] Fetching URL: ${url} with headers:`, headers); 
+
       const response = await fetch(url, {
-        headers: getAuthHeaders(),
+        headers: headers, // Use the headers from getAuthHeaders
       });
+      console.log(`[getClubs] Response Status for ${url}:`, response.status); 
       const data = await response.json();
 
       if (!response.ok) {

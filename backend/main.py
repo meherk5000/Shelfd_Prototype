@@ -2,8 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.database.client import connect_to_mongo, close_mongo_connection
-from app.routes import media, auth, shelf, reviews, clubs
-from app.routers import club_messages
+from app.routes import media, auth, shelf, reviews, clubs, club_messages
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.database.models.user import User

@@ -3,8 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.database.models.club_message import ClubMessage
 from app.database.models.user import User
 from app.database.models.club import Club
-from app.schemas.club_message import MessageCreate, MessageResponse
-from app.services.auth import get_current_user
+from app.database.schemas.club_message import MessageCreate, MessageResponse
+from app.services.auth import get_current_user, oauth2_scheme
+from app.services.club_service import ClubService
 import logging
 from beanie import PydanticObjectId
 from bson.errors import InvalidId

@@ -17,11 +17,13 @@ import {
 } from "@/services/club-messages";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/context/AuthContext";
 
 // Configure dayjs plugins
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(relativeTime);
+dayjs.tz.setDefault("America/New_York"); // Optional: Set a default timezone if needed
 
 interface DiscussionChatProps {
   clubId: string;
@@ -30,6 +32,7 @@ interface DiscussionChatProps {
 
 export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
   const router = useRouter();
+  const { isAuthenticated, user } = useAuth();
   const [messages, setMessages] = useState<MessageResponse[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -93,22 +96,43 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
   }, [clubId, retryCount, router]);
 
   useEffect(() => {
-    loadMessages();
+    let isMounted = true;
 
-    // Set up polling for new messages
-    pollIntervalRef.current = setInterval(() => {
-      // Only poll if there's no error
-      if (!error) {
-        loadMessages();
+    if (isAuthenticated) {
+      console.log(
+        "[DiscussionChat] User is authenticated, loading messages..."
+      );
+      loadMessages();
+
+      // Set up polling only if authenticated
+      pollIntervalRef.current = setInterval(() => {
+        if (!error && isMounted) {
+          // Check if still mounted
+          console.log("[DiscussionChat] Polling for new messages...");
+          loadMessages();
+        }
+      }, 15000); // Poll every 15 seconds (adjust as needed)
+    } else {
+      console.log(
+        "[DiscussionChat] User is not authenticated, clearing messages and stopping poll."
+      );
+      // Clear messages if user logs out
+      setMessages([]);
+      setIsLoading(false); // Ensure loading is stopped
+      // Clear any existing interval if user logs out
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = undefined;
       }
-    }, 5000); // Poll every 5 seconds
+    }
 
     return () => {
+      isMounted = false;
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
     };
-  }, [clubId, error, loadMessages]);
+  }, [clubId, error, loadMessages, isAuthenticated]);
 
   useEffect(() => {
     // Scroll to bottom when messages change
@@ -187,6 +211,14 @@ export function DiscussionChat({ clubId, isMember }: DiscussionChatProps) {
       setIsSending(false);
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        Please log in to view the club discussion.
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

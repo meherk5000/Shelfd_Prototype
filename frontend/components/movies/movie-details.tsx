@@ -10,13 +10,18 @@ import { useRouter } from "next/navigation";
 import { ShelfButton } from "@/components/shelf-button";
 import { ReviewForm } from "@/components/media/review-form";
 import { ReviewList } from "@/components/media/review-list";
-import { getUserReview, getMediaReviews } from "@/services/reviewService";
+import {
+  getUserReview,
+  getMediaReviews,
+  deleteReview,
+} from "@/services/reviewService";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
 import { ReviewData } from "@/lib/hooks/use-reviews";
+import { UserReviewDisplay } from "@/components/media/UserReviewDisplay";
 
 interface MovieDetailsData {
   id: number;
@@ -136,8 +141,8 @@ export function MovieDetails({ id }: { id: number }) {
       }
 
       // Background Updates / Refetching
-      // REMOVE this immediate refetch
-      // await fetchAllReviewData();
+      // Ensure we refetch the review data after success
+      await fetchAllReviewData();
       setRefreshReviews((prev) => prev + 1);
 
       // Add to Shelf (if needed)
@@ -176,6 +181,25 @@ export function MovieDetails({ id }: { id: number }) {
       movie,
     ]
   );
+
+  const handleDeleteReview = async () => {
+    if (!userReview) return;
+    console.log("[MovieDetails] Attempting to delete review:", userReview.id);
+    try {
+      const result = await deleteReview(userReview.id);
+      if (result.success) {
+        console.log("[MovieDetails] Review deleted successfully.");
+        setUserReview(null);
+        setRefreshReviews((prev) => prev + 1);
+      } else {
+        console.error("[MovieDetails] Failed to delete review:", result.error);
+        // Optionally show a toast notification for the error
+      }
+    } catch (error) {
+      console.error("[MovieDetails] Error calling deleteReview:", error);
+      // Optionally show a toast notification for the error
+    }
+  };
 
   const handleShelfUpdate = useCallback(async () => {
     console.log("Shelf updated, triggering fetchAllReviewData");
@@ -365,16 +389,13 @@ export function MovieDetails({ id }: { id: number }) {
                     ) : userReview ? (
                       <div className="space-y-4">
                         <h2 className="text-xl font-semibold">Your Review</h2>
-                        <ReviewForm
-                          mediaId={id.toString()}
-                          mediaType="movie"
-                          initialRating={userReview.rating}
-                          initialReview={userReview.review_text}
-                          initialContainsSpoilers={
-                            userReview.contains_spoilers || false
-                          }
-                          reviewId={userReview.id}
-                          onSuccess={handleReviewSuccess}
+                        <UserReviewDisplay
+                          review={userReview}
+                          onEdit={() => {
+                            // Edit functionality not implemented
+                            console.warn("Edit functionality not implemented.");
+                          }}
+                          onDelete={handleDeleteReview}
                         />
                       </div>
                     ) : (

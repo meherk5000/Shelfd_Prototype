@@ -14,9 +14,14 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ReviewForm } from "@/components/media/review-form";
+import { UserReviewDisplay } from "@/components/media/UserReviewDisplay";
 import { ReviewList } from "@/components/media/review-list";
 
-import { getUserReview, getMediaReviews } from "@/services/reviewService";
+import {
+  getUserReview,
+  getMediaReviews,
+  deleteReview,
+} from "@/services/reviewService";
 import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
 import { ReviewData } from "@/lib/hooks/use-reviews";
 
@@ -163,8 +168,8 @@ export function TVShowDetails({ id }: { id: number }) {
       }
 
       // Background Updates / Refetching
-      // REMOVE this immediate refetch
-      // await fetchAllReviewData();
+      // Ensure we refetch the review data after success
+      await fetchAllReviewData();
       setRefreshReviews((prev) => prev + 1);
 
       if (wasAddingReview && show) {
@@ -200,6 +205,25 @@ export function TVShowDetails({ id }: { id: number }) {
   const handleShelfUpdate = useCallback(() => {
     fetchAllReviewData();
   }, [fetchAllReviewData]);
+
+  const handleDeleteReview = async () => {
+    if (!userReview) return;
+    console.log("[TVShowDetails] Attempting to delete review:", userReview.id);
+    try {
+      const result = await deleteReview(userReview.id);
+      if (result.success) {
+        console.log("[TVShowDetails] Review deleted successfully.");
+        setUserReview(null);
+        setRefreshReviews((prev) => prev + 1);
+      } else {
+        console.error("[TVShowDetails] Failed to delete review:", result.error);
+        // Optionally show a toast notification for the error
+      }
+    } catch (error) {
+      console.error("[TVShowDetails] Error calling deleteReview:", error);
+      // Optionally show a toast notification for the error
+    }
+  };
 
   useEffect(() => {
     fetchTVDetails();
@@ -408,16 +432,13 @@ export function TVShowDetails({ id }: { id: number }) {
                     ) : userReview ? (
                       <div className="space-y-4">
                         <h2 className="text-xl font-semibold">Your Review</h2>
-                        <ReviewForm
-                          mediaId={id.toString()}
-                          mediaType="tv"
-                          initialRating={userReview.rating}
-                          initialReview={userReview.review_text}
-                          initialContainsSpoilers={
-                            userReview.contains_spoilers || false
-                          }
-                          reviewId={userReview.id}
-                          onSuccess={handleReviewSuccess}
+                        <UserReviewDisplay
+                          review={userReview}
+                          onEdit={() => {
+                            // For now, we don't have an edit state, could be added later
+                            console.warn("Edit functionality not implemented.");
+                          }}
+                          onDelete={handleDeleteReview}
                         />
                       </div>
                     ) : (

@@ -66,19 +66,57 @@ class ReviewService:
         updates: dict
     ) -> Optional[Review]:
         """Update an existing review."""
-        review = await Review.find_one({"_id": review_id, "user_id": user_id})
+        # Ensure user_id is string
+        actual_user_id = str(user_id.id) if hasattr(user_id, 'id') else str(user_id)
+
+        review = await Review.find_one({"_id": review_id, "user_id": actual_user_id})
         if not review:
             return None
-        
+
+        # Store original rating before update for potential shelf item update
+        original_rating = review.rating
+        new_rating = updates.get("rating", original_rating) # Get new rating if provided
+
+        # Apply updates to the Review object
         if "rating" in updates:
             review.rating = updates["rating"]
         if "review_text" in updates:
             review.review_text = updates["review_text"]
         if "contains_spoilers" in updates:
             review.contains_spoilers = updates["contains_spoilers"]
-        
+
         review.updated_at = datetime.utcnow()
-        await review.save()
+        await review.save() # Save the updated Review first
+
+        # --- Add logic to update ShelfItemModel rating --- 
+        if "rating" in updates: # Only update shelf item if rating actually changed
+            try:
+                from ..database.models.shelf import ShelfItemModel
+                print(f"DEBUG [update_review]: Updating ShelfItemModel for review {review_id}, media {review.media_id}, type {review.media_type}")
+                # Update all matching shelf items for this user and media
+                update_result = await ShelfItemModel.find({
+                    "user_id": actual_user_id,
+                    "media_id": review.media_id,
+                    "media_type": review.media_type
+                }).update({
+                    "$set": {
+                        "rating": new_rating,
+                        # Optionally update review text/date on shelf item too?
+                        # "review": updates.get("review_text", review.review_text), # If review_text is updated
+                        # "review_date": datetime.utcnow() # Always update date if review/rating changes?
+                    }
+                })
+
+                if update_result.modified_count > 0:
+                    print(f"DEBUG [update_review]: Updated {update_result.modified_count} shelf item(s) rating for {review.media_id}")
+                else:
+                    print(f"DEBUG [update_review]: No shelf items found to update rating for {review.media_id}")
+
+            except Exception as e:
+                print(f"WARNING [update_review]: Failed to update shelf item(s) rating: {str(e)}")
+                # Continue anyway as the main review was updated
+        # --- End added logic ---
+
         return review
 
     @staticmethod

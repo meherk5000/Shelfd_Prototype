@@ -20,7 +20,6 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import Link from "next/link";
 import {
   Popover,
   PopoverContent,
@@ -275,9 +274,7 @@ export function ReviewList({
                     </Avatar>
                     <div className="ml-3">
                       <div className="font-medium">
-                        <Link href={`/profile/${review.user_id}`}>
-                          {review.username}
-                        </Link>
+                        <span>{review.username}</span>
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {formatDate(review.created_at)}

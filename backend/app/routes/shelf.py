@@ -3,7 +3,7 @@ from typing import List, Optional
 from ..database.models.shelf import ShelfModel, ShelfItemModel, MediaType, ShelfType
 from ..services.shelf_service import ShelfService
 from ..services.auth import get_current_user, oauth2_scheme
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 router = APIRouter()
@@ -14,6 +14,15 @@ class CreateCustomShelfRequest(BaseModel):
     description: Optional[str] = None
     is_private: bool = False
     has_collaborators: bool = False
+
+class RateItemRequest(BaseModel):
+    media_id: str
+    media_type: str
+    rating: float
+    review: Optional[str] = None
+    title: Optional[str] = None
+    image_url: Optional[str] = None
+    creator: Optional[str] = None
 
 @router.post("/create_default")
 async def create_default_shelves(token: str = Depends(oauth2_scheme)):
@@ -356,90 +365,80 @@ async def create_custom_shelf(
         print(f"Error creating custom shelf: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to create custom shelf due to an internal error.") # Use 500 for unexpected errors
 
-@router.post("/rate")
+@router.post("/rate", status_code=200)
 async def rate_item(
-    data: dict,
+    data: RateItemRequest,
     token: str = Depends(oauth2_scheme)
 ):
     try:
-        user_id = await get_current_user(token)
-        
-        print(f"Debug - Rate endpoint called with data: {data}")
-        
-        # Validate required fields
-        for field in ["media_id", "media_type", "rating"]:
-            if field not in data:
-                print(f"Debug - Missing required field: {field}")
-                raise HTTPException(status_code=400, detail=f"Missing field: {field}")
-        
-        # Validate rating value - must be between 1 and 5 with quarter-star precision
-        rating = float(data["rating"])
-        if not 1 <= rating <= 5 or (rating * 100) % 25 != 0:
-            print(f"Debug - Invalid rating value: {rating}")
+        user = await get_current_user(token)
+        user_id = str(user.id)
+
+        print(f"RATE ENDPOINT - User: {user_id}")
+        print(f"RATE ENDPOINT - Received data: {data.dict()}")
+
+        if not 1 <= data.rating <= 5:
             raise HTTPException(
-                status_code=400, 
-                detail="Rating must be between 1 and 5 with quarter-star precision (e.g., 1, 1.25, 1.5, 1.75, etc.)"
+                status_code=400,
+                detail="Rating must be between 1 and 5."
             )
-            
-        # Convert media_type string to enum
+
         try:
-            # Handle both formats: 'book', 'movie', etc. or 'BOOK', 'MOVIE', etc.
-            media_type_str = data["media_type"].upper()
-            print(f"Debug - Attempting to convert media type: {media_type_str}")
-            media_type = MediaType[media_type_str]
-            print(f"Debug - Converted to enum: {media_type}")
+            media_type_enum = MediaType[data.media_type.upper()]
+            print(f"RATE ENDPOINT - Converted media type: {media_type_enum}")
         except KeyError:
-            error_msg = f"Invalid media type: {data['media_type']}"
-            print(f"Debug - {error_msg}")
-            raise HTTPException(status_code=400, detail=error_msg)
-            
-        # Find the shelf item
-        print(f"Debug - Looking for shelf item with media_id: {data['media_id']} and media_type: {media_type}")
+            raise HTTPException(status_code=400, detail=f"Invalid media type: {data.media_type}")
+
+        print(f"RATE ENDPOINT - Finding ShelfItemModel for user {user_id}, media_id {data.media_id}, type {media_type_enum}")
         shelf_items = await ShelfItemModel.find({
             "user_id": user_id,
-            "media_id": data["media_id"],
-            "media_type": media_type
+            "media_id": data.media_id,
+            "media_type": media_type_enum
         }).to_list()
-        
-        print(f"Debug - Found {len(shelf_items)} matching shelf items")
-        
+
         if not shelf_items:
-            error_msg = "Item not found in your shelves"
-            print(f"Debug - {error_msg}")
-            raise HTTPException(status_code=404, detail=error_msg)
-            
-        # Update the first shelf item's rating and review
+            print(f"RATE ENDPOINT - ShelfItem not found for {data.media_id}. Item must be shelved first.")
+            raise HTTPException(status_code=404, detail="Item not found in your shelves. Add it first before rating.")
+
+        print(f"RATE ENDPOINT - Found {len(shelf_items)} matching ShelfItems. Updating the first one.")
         shelf_item = shelf_items[0]
-        print(f"Debug - Updating shelf item: {shelf_item.id} with rating: {rating}")
-        shelf_item.rating = rating
-        
-        if "review" in data:
-            shelf_item.review = data["review"]
+        print(f"RATE ENDPOINT - ShelfItem ID: {shelf_item.id}, Current rating: {shelf_item.rating}, Current review: '{shelf_item.review}'")
+
+        shelf_item.rating = data.rating
+        print(f"RATE ENDPOINT - Set shelf_item.rating to: {shelf_item.rating}")
+
+        if data.review is not None:
+            shelf_item.review = data.review
             shelf_item.review_date = datetime.utcnow()
-            print(f"Debug - Also updating review: {data['review'][:50]}...")
-            
-        print(f"Debug - Saving updated shelf item")
+            print(f"RATE ENDPOINT - Set shelf_item.review to '{data.review}' and updated review_date.")
+
+        print(f"RATE ENDPOINT - Attempting to save ShelfItem {shelf_item.id}")
         await shelf_item.save()
-        print(f"Debug - Save completed successfully")
-        
-        # Calculate average rating for this media item across all users
+        print(f"RATE ENDPOINT - ShelfItem {shelf_item.id} saved successfully.")
+
         all_ratings = await ShelfItemModel.find({
-            "media_id": data["media_id"],
-            "media_type": media_type,
+            "media_id": data.media_id,
+            "media_type": media_type_enum,
             "rating": {"$ne": None}
         }).to_list()
-        
-        avg_rating = sum(item.rating for item in all_ratings) / len(all_ratings) if all_ratings else 0
-        
+
+        avg_rating = sum(item.rating for item in all_ratings if item.rating is not None) / len(all_ratings) if all_ratings else 0
+
         return {
             "message": "Rating saved successfully",
-            "rating": rating,
-            "avg_rating": avg_rating,
+            "rating": data.rating,
+            "avg_rating": round(avg_rating, 2) if avg_rating else None,
             "total_ratings": len(all_ratings)
         }
+
+    except HTTPException as http_exc:
+        print(f"RATE ENDPOINT - HTTPException: {http_exc.status_code} - {http_exc.detail}")
+        raise http_exc
     except Exception as e:
-        print(f"Debug - Error saving rating: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"RATE ENDPOINT - Unexpected Error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"An internal server error occurred: {str(e)}")
 
 @router.get("/rating/{media_type}/{media_id}")
 async def get_rating(

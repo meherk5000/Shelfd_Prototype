@@ -17,7 +17,7 @@ from ..database.models.club_post import ClubPost
 from ..database.models.club_milestone import ClubMilestone
 from ..database.models.club_thread import ClubThread
 from ..services.club_service import ClubService
-from ..services.auth import get_current_user
+from ..services.auth import get_current_user, get_optional_current_user
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -212,9 +212,15 @@ async def get_clubs(
     limit: int = Query(20, ge=1, le=100),
     media_type: Optional[str] = None,
     search: Optional[str] = None,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     """Get all clubs with optional filtering."""
+    # Log whether a user was found or not
+    if current_user:
+        logger.debug(f"[get_clubs] User ID {current_user.id} authenticated (optional)")
+    else:
+        logger.debug("[get_clubs] No authenticated user provided (optional)")
+        
     clubs, _ = await ClubService.get_clubs(
         skip=skip,
         limit=limit,
@@ -611,50 +617,81 @@ async def format_club_response(club: Club, current_user: Optional[User] = None) 
     member_ids = []
     members = []
     
-    for member in club.members:
-        if hasattr(member, 'fetch'):
-            # It's a Link object
-            fetched_member = await member.fetch()
-            members.append(fetched_member)
-            member_ids.append(fetched_member.id)
-        else:
-            # It's already a User object
-            members.append(member)
-            member_ids.append(member.id)
+    # Ensure club.members is not None before iterating
+    if club.members:
+        for member_ref in club.members:
+            # Check if member_ref is valid before fetching/accessing
+            if member_ref:
+                if hasattr(member_ref, 'fetch'):
+                    # It's a Link object
+                    fetched_member = await member_ref.fetch()
+                    if fetched_member: # Ensure fetch was successful
+                        members.append(fetched_member)
+                        # Store string representation of ID
+                        member_ids.append(str(fetched_member.id)) 
+                elif isinstance(member_ref, User): 
+                    # It's already a User object
+                    members.append(member_ref)
+                    # Store string representation of ID
+                    member_ids.append(str(member_ref.id)) 
+                else:
+                    # Log unexpected member reference type if needed
+                    print(f"Warning: Unexpected member reference type in club {club.id}: {type(member_ref)}")
+            else:
+                 print(f"Warning: Found None member reference in club {club.id}")
+    else:
+        print(f"Warning: club.members is None for club {club.id}")
+
+    # Debugging logs
+    creator_id_str = str(creator.id) if creator else "None"
+    current_user_id_str = str(current_user.id) if current_user else "None"
+    print(f"DEBUG [format_club_response] Club: {club.name} ({club.id})")
+    print(f"DEBUG [format_club_response] Creator ID: {creator_id_str}")
+    print(f"DEBUG [format_club_response] Current User ID: {current_user_id_str}")
+    print(f"DEBUG [format_club_response] Member IDs: {member_ids}")
+
+    # Calculate flags
+    is_member_flag = bool(current_user and current_user_id_str in member_ids)
+    is_creator_flag = bool(current_user and creator and current_user_id_str == creator_id_str)
     
-    return {
-        "id": str(club.id),
-        "name": club.name,
-        "description": club.description,
-        "creator_id": str(creator.id),
-        "creator_username": creator.username,
-        "member_count": len(members),
-        "media_type": club.media_type,
-        "is_private": club.is_private,
-        "created_at": club.created_at.isoformat(),
-        "is_member": current_user and current_user.id in member_ids,
-        "is_creator": current_user and current_user.id == creator.id,
-        "cover_image": club.cover_image,
+    print(f"DEBUG [format_club_response] Calculated is_member: {is_member_flag}")
+    print(f"DEBUG [format_club_response] Calculated is_creator: {is_creator_flag}")
+
+    # Construct and return a ClubResponse instance
+    return ClubResponse(
+        id=str(club.id),
+        name=club.name,
+        description=club.description,
+        creator_id=str(creator.id) if creator else None, # Handle case where creator might be None
+        creator_username=creator.username if creator else "Unknown", # Handle case where creator might be None
+        member_count=len(members),
+        media_type=club.media_type,
+        is_private=club.is_private,
+        created_at=club.created_at.isoformat(),
+        # Use calculated flags
+        is_member=is_member_flag,
+        is_creator=is_creator_flag,
+        cover_image=club.cover_image,
         # Book fields
-        "book_title": club.book_title,
-        "book_author": club.book_author,
-        "book_cover": club.book_cover,
-        "book_id": club.book_id,
+        book_title=club.book_title,
+        book_author=club.book_author,
+        book_cover=club.book_cover,
+        book_id=club.book_id,
         # Movie fields
-        "movie_title": club.movie_title,
-        "movie_director": club.movie_director,
-        "movie_poster": club.movie_poster,
-        "movie_id": club.movie_id,
-        "movie_year": club.movie_year,
+        movie_title=club.movie_title,
+        movie_director=club.movie_director,
+        movie_poster=club.movie_poster,
+        movie_id=club.movie_id,
+        movie_year=club.movie_year,
         # TV show fields
-        "tv_title": club.tv_title,
-        "tv_creator": club.tv_creator,
-        "tv_poster": club.tv_poster,
-        "tv_id": club.tv_id,
-        "tv_year": club.tv_year,
-        "tv_season": club.tv_season,
-        "tv_episode": club.tv_episode
-    }
+        tv_title=club.tv_title,
+        tv_creator=club.tv_creator,
+        tv_poster=club.tv_poster,
+        tv_id=club.tv_id,
+        tv_year=club.tv_year,
+        tv_season=club.tv_season,
+        tv_episode=club.tv_episode
+    )
 
 async def format_post_response(post: ClubPost) -> ClubPostResponse:
     """Format a post object for response."""

@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import api from '@/lib/api';
-import axios from 'axios';
+import { api } from '@/lib/api';
 import { API_BASE_URL } from '../config';
 import useSWR, { useSWRConfig } from "swr";
 import { useAuth } from "../context/AuthContext";
@@ -122,9 +121,10 @@ const shelfTypeMap = {
 
 const fetcher = async (url: string) => {
   try {
-    const response = await axios.get(url);
+    const response = await api.get(url);
     return response.data;
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Fetcher error:", error.response?.data || error.message);
     throw error;
   }
 };
@@ -134,37 +134,26 @@ export function useShelf() {
   const [loading, setLoading] = useState(false);
   const { mutate } = useSWRConfig();
 
-  // Remove the global shelves SWR hook since we're not using it
   const getUserShelves = useCallback(async (mediaType: keyof MediaTypeMapping) => {
     if (!isAuthenticated) return [];
     try {
-      // Use the mediaTypeMap to get the correct API format
       const mappedType = mediaTypeMap[mediaType];
-      
       console.log('Fetching shelves for media type:', mappedType);
-      console.log('API URL:', `${API_BASE_URL}/api/shelves/user/${mappedType}`);
+      const url = `/api/shelves/user/${mappedType}`;
+      console.log('API URL:', url);
       
-      const response = await axios.get(
-        `${API_BASE_URL}/api/shelves/user/${mappedType}`
-      );
-      
-      // Log the response for debugging
+      const response = await api.get(url);
       console.log('Shelves response:', response.data);
-      
       return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        console.error("Error fetching shelves:", error);
-        console.error("Error details:", {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          mediaType,
-          mappedType: mediaTypeMap[mediaType]
-        });
-      } else {
-        console.error("Unknown error:", error);
-      }
+    } catch (error: any) {
+      console.error("Error fetching shelves:", error);
+      console.error("Error details:", {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        mediaType,
+        mappedType: mediaTypeMap[mediaType]
+      });
       throw error;
     }
   }, [isAuthenticated]);
@@ -234,12 +223,10 @@ export function useShelf() {
         shelfId,
       });
 
-      // Get the correct media type format (book, movie, etc.)
       const mappedMediaType = mediaTypeMap[mediaType].toLowerCase();
+      const url = '/api/shelves/add_item';
 
-      // Construct payload
       if (shelfId) {
-        // Adding to a specific custom shelf
         payload = {
           shelf_id: shelfId,
           media_id: item.id,
@@ -247,73 +234,72 @@ export function useShelf() {
           title: item.title,
           image_url: item.image_url,
           creator: item.creator,
-          shelf_type: "custom", // Indicate custom shelf type
         };
       } else {
-        // Adding to a default shelf based on status
         const shelfType = getShelfType(mediaType, status as ShelfStatus);
         payload = {
           media_id: item.id,
           media_type: mappedMediaType,
-          status: status as ShelfStatus, // Ensure status is ShelfStatus enum value
           title: item.title,
+          status: status,
+          shelf_type: shelfType,
           image_url: item.image_url,
           creator: item.creator,
-          shelf_type: shelfType, // Pass the determined default shelf type
         };
       }
 
-      console.log("2. API Payload:", payload);
+      console.log("3. Sending Payload:", payload);
+      console.log("4. Target URL:", url);
 
-      // Make the API call
-      const response = await api.post("/api/shelves/add_item", payload);
+      const response = await api.post(url, payload);
 
-      console.log("3. API Response:", response.data);
+      console.log("5. Response Status:", response.status);
+      console.log("6. Response Data:", response.data);
+      console.log("=== END addToShelf ===");
 
-      // Mutate relevant SWR cache keys to reflect the change
       mutate(`${API_BASE_URL}/api/shelves/user/${mappedMediaType}`);
-      if (shelfId) {
-        // If added to custom shelf, might need to mutate specific shelf data if cached separately
-      }
 
-      setLoading(false);
-      console.log("=== END addToShelf (Success) ===");
-      return { success: true, message: response.data.message };
+      return response.data;
     } catch (error: any) {
-      setLoading(false);
-      console.log("=== END addToShelf (Error) ===");
-      let errorMessage = "An unexpected error occurred."; // Default message
-
-      if (axios.isAxiosError(error)) {
-        // Keep the logic to extract the message
-        if (error.response && error.response.data && typeof error.response.data.detail === 'string') {
-            errorMessage = error.response.data.detail;
-        } else {
-            errorMessage = error.message || "Failed due to server error."; 
-        }
-
+      console.error("=== ERROR addToShelf ===");
+      console.error("Payload causing error:", payload);
+      console.error("Error object:", error);
+      if (error.response) {
+        console.error("Error Response Data:", error.response.data);
+        console.error("Error Response Status:", error.response.status);
+        console.error("Error Response Headers:", error.response.headers);
+      } else if (error.request) {
+        console.error("Error Request Data:", error.request);
       } else {
-        // Keep logging for non-API errors
-        console.error("Non-API Error adding to shelf:", error);
-        if (error instanceof Error && error.message) {
-            errorMessage = error.message;
-        } else if (typeof error === 'string') {
-            errorMessage = error;
-        } 
+        console.error('Error Message:', error.message);
       }
-
-      if (typeof errorMessage !== 'string') {
-          errorMessage = "Failed due to an unknown error.";
-      }
-
-      return { success: false, message: errorMessage };
+      throw error;
+    } finally {
+      setLoading(false);
     }
-  }, [isAuthenticated, getUserShelves, mutate]);
+  }, [mutate]);
+
+  const removeFromShelf = useCallback(async (shelfId: string, itemId: string) => {
+    setLoading(true);
+    try {
+      await api.delete(`/api/shelves/custom/${shelfId}/items/${itemId}`);
+      Object.values(mediaTypeMap).forEach(type => {
+        mutate(`${API_BASE_URL}/api/shelves/user/${type}`);
+      });
+    } catch (error) {
+      console.error("Error removing item:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  }, [mutate]);
 
   return {
+    addToShelf,
+    removeFromShelf,
     getUserShelves,
     getCustomShelves,
-    addToShelf,
-    loading
+    getShelfDisplayName,
+    loading,
   };
 }

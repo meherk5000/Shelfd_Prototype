@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MediaTypeMapping, mediaTypeMap } from "@/lib/hooks/use-shelf";
+import { useAuth } from "@/lib/context/AuthContext";
 
 // Define interface for shelf items used in this component
 interface DisplayShelfItem {
@@ -71,6 +72,10 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const { getUserShelves } = useShelf();
+  const { isAuthenticated } = useAuth();
+
+  // Log the current authentication status on each render
+  console.log(`[ShelfList Render] isAuthenticated: ${isAuthenticated}`);
 
   const mediaType =
     type === "tv-shows"
@@ -83,9 +88,11 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
     isLoading,
     mutate,
   } = useSWR(
-    `${API_BASE_URL}/api/shelves/user/${
-      mediaTypeMap[mediaType as keyof MediaTypeMapping]
-    }`,
+    isAuthenticated
+      ? `${API_BASE_URL}/api/shelves/user/${
+          mediaTypeMap[mediaType as keyof MediaTypeMapping]
+        }`
+      : null,
     () => getUserShelves(mediaType as keyof MediaTypeMapping),
     {
       refreshInterval: 0,
@@ -103,21 +110,30 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
   useEffect(() => {
     console.log("ShelfList - Revalidating shelves for type:", mediaType);
     console.log("ShelfList - Current shelves:", shelves);
-    mutate();
-  }, [mutate, mediaType]);
+    // mutate(); // Temporarily comment out automatic mutate
+  }, [mediaType]); // Remove mutate from dependencies for now
 
   const targetShelf = shelves?.find(
     (shelf: any) => shelf.name.toLowerCase() === initialList.toLowerCase()
   );
 
   useEffect(() => {
+    // Explicitly log if shelves data exists or not
     if (shelves) {
-      console.log("ShelfList - All shelves:", shelves);
-      console.log("ShelfList - Target shelf:", targetShelf);
-      console.log("ShelfList - Looking for shelf with name:", initialList);
+      console.log("[ShelfList Effect] Shelves data IS present:", shelves);
+      console.log("[ShelfList Effect] Target shelf:", targetShelf);
+      console.log(
+        "[ShelfList Effect] Looking for shelf with name:",
+        initialList
+      );
       if (targetShelf) {
-        console.log("ShelfList - Target shelf items:", targetShelf.items);
+        console.log(
+          "[ShelfList Effect] Target shelf items:",
+          targetShelf.items
+        );
       }
+    } else {
+      console.log("[ShelfList Effect] Shelves data is now UNDEFINED or NULL.");
     }
   }, [shelves, targetShelf, initialList]);
 
@@ -129,8 +145,12 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
       if (!mediaId) {
         console.warn("Item without any ID:", item);
       }
-      // Log the raw item received from the backend and the mapped item
-      console.log("ShelfList Raw Item:", item);
+      // Log the raw item received from the backend
+      // Add a specific check for 'iZombie' to make it easier to find in logs
+      if (item.title === "iZombie") {
+        console.log("ShelfList Raw Item for iZombie:", JSON.stringify(item));
+      }
+      // console.log("ShelfList Raw Item:", item); // Can keep this general one too if needed
       const mappedItem: DisplayShelfItem = {
         id: mediaId,
         title: item.title,
@@ -165,12 +185,16 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
     }
   };
 
-  if (isLoading) {
-    return <div>Loading...</div>;
+  // Explicitly check if loading OR if shelves data is undefined (which it should be when logged out)
+  if (isLoading || shelves === undefined) {
+    // You might want a different loading/empty state specifically for the logged-out case
+    return <div>Loading shelf items...</div>;
   }
 
+  // Check for errors *after* loading/undefined check
   if (error) {
-    return <div>Error loading shelf items</div>;
+    console.error("[ShelfList] SWR Error:", error);
+    return <div>Error loading shelf items. Please try refreshing.</div>;
   }
 
   const handleRemove = async (itemId: string) => {
@@ -266,7 +290,7 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
                         <ItemMenu itemId={item.id} />
                       </div>
                     </div>
-                    {item.rating && (
+                    {typeof item.rating === "number" && !isNaN(item.rating) ? (
                       <div className="flex items-center text-sm mt-1">
                         <span className="text-muted-foreground mr-1.5">
                           Your Rating:
@@ -276,7 +300,7 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
                           {item.rating.toFixed(1)}
                         </span>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -303,7 +327,7 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
                       by {item.creator}
                     </p>
                   )}
-                  {item.rating && (
+                  {typeof item.rating === "number" && !isNaN(item.rating) ? (
                     <div className="flex items-center text-sm mt-1">
                       <span className="text-muted-foreground mr-1.5">
                         Your Rating:
@@ -313,7 +337,7 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
                         {item.rating.toFixed(1)}
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
                 {item.progress !== undefined && (
                   <div className="w-32 flex-shrink-0">

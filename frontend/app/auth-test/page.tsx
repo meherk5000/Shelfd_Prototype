@@ -3,12 +3,15 @@
 import { useAuth } from "@/lib/context/AuthContext";
 import { useState, useEffect } from "react";
 import axios from "axios";
-import { API_BASE_URL } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/config";
+import { Button } from "@/components/ui/button";
+import { withPageAuthRequired } from "@auth0/nextjs-auth0/client";
 
-export default function AuthTestPage() {
+export default withPageAuthRequired(function AuthTestPage() {
   const { user, isAuthenticated } = useAuth();
   const [testResults, setTestResults] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const runAuthTest = async () => {
     try {
@@ -59,4 +62,4 @@ export default function AuthTestPage() {
       </div>
     </div>
   );
-}
+});

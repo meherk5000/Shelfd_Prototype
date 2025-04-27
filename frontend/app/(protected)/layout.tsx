@@ -28,41 +28,26 @@ export default function ProtectedLayout({
     }
   }, []);
 
-  // Second check - handle redirects and authentication validation
+  // Handle redirects after initial auth check
   useEffect(() => {
-    // Skip if still loading
-    if (loading) return;
-
-    // Skip redirect if we have a token - this prevents a redirect loop
-    // We trust the token initially, the AuthContext will validate it with API
-    if (hasToken) {
-      setShowChildren(true);
+    // Don't redirect while loading
+    if (loading) {
       return;
     }
 
-    // If authentication check is complete, and user is not authenticated
-    // and we don't have a token, redirect to login
-    if (!loading && !isAuthenticated && !hasToken) {
-      console.log("Protected route: Not authenticated, redirecting to login");
-
-      // Current path for the returnUrl
+    // If loading is done and user is confirmed not authenticated, redirect
+    if (!isAuthenticated) {
+      console.log(
+        "ProtectedLayout: Not authenticated after load, redirecting..."
+      );
       const currentPath = window.location.pathname;
-
-      // Use direct window.location for a hard navigation
-      // This fixes client-side routing issues
       window.location.href = `/auth/sign-in?returnUrl=${encodeURIComponent(
         currentPath
       )}`;
     }
-  }, [isAuthenticated, loading, hasToken]);
+  }, [isAuthenticated, loading]); // Only depend on auth status and loading state
 
-  // If we have a token, show the children even if still loading the user
-  // This prevents flashing and redirects while validation happens
-  if (hasToken || isAuthenticated) {
-    return <>{children}</>;
-  }
-
-  // Show loading during auth check
+  // If still loading the initial auth status, show loader
   if (loading) {
     return (
       <div className="h-screen w-full flex items-center justify-center">
@@ -71,7 +56,13 @@ export default function ProtectedLayout({
     );
   }
 
-  // Show loading during redirect (should just be a brief moment)
+  // After loading, if the user IS authenticated, show children
+  if (isAuthenticated) {
+    return <>{children}</>;
+  }
+
+  // If loading is done and user is NOT authenticated, show redirecting message
+  // (The useEffect above handles the actual redirection logic)
   return (
     <div className="h-screen w-full flex flex-col items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />

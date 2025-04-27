@@ -134,14 +134,8 @@ export function ShelfButton({
     try {
       const result = await addToShelf(mediaType, status, item, shelfId);
 
-      if (result.success) {
-        toast.success(result.message);
-        console.log("[ShelfButton] completeAddToShelf SUCCESS");
-      } else {
-        toast.error(result.message || "An unknown error occurred.");
-        console.log("[ShelfButton] completeAddToShelf FAILED:", result.message);
-        return; // Stop if shelf update failed
-      }
+      toast.success(result.message || "Item added successfully!");
+      console.log("[ShelfButton] completeAddToShelf SUCCESS");
 
       setIsAdded(true);
       setTimeout(() => setIsAdded(false), 2000);
@@ -153,7 +147,12 @@ export function ShelfButton({
         "[ShelfButton] Unexpected error in completeAddToShelf:",
         error
       );
-      toast.error("An unexpected error occurred. Please try again.");
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.message ||
+        "Failed to update shelf. Please try again.";
+      toast.error(errorMessage);
+      console.log("[ShelfButton] completeAddToShelf FAILED:", errorMessage);
     }
   };
 

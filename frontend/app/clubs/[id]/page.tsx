@@ -45,6 +45,7 @@ import { useDebounce } from "@/lib/hooks/use-debounce";
 import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import { DiscussionChat } from "@/components/clubs/discussion-chat";
+import { useAuth } from "@/lib/context/AuthContext";
 
 // Define media types
 interface Book {
@@ -100,6 +101,8 @@ function isTVShow(item: MediaItem): item is TVShow {
 export default function ClubDetailPage() {
   const params = useParams();
   const clubId = params.id as string;
+  const { isAuthenticated, loading: authLoading } = useAuth();
+  const router = useRouter();
 
   const [isLoading, setIsLoading] = useState(true);
   const [club, setClub] = useState<ClubData | null>(null);
@@ -142,17 +145,39 @@ export default function ClubDetailPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
-  const router = useRouter();
-
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Redirect Effect
   useEffect(() => {
-    if (clubId) {
+    if (!authLoading) {
+      if (!isAuthenticated) {
+        console.log("[ClubDetailPage] Not authenticated, redirecting...");
+        const currentPath = window.location.pathname;
+        window.location.href = `/auth/sign-in?returnUrl=${encodeURIComponent(
+          currentPath
+        )}`;
+      }
+    }
+  }, [isAuthenticated, authLoading]);
+
+  // Data Fetching Effect - Only run if authenticated
+  useEffect(() => {
+    if (clubId && isAuthenticated) {
+      console.log("[ClubDetailPage] Authenticated, loading club data...");
       loadClub();
       loadMembers(clubId);
+    } else if (!isAuthenticated && !authLoading) {
+      console.log(
+        "[ClubDetailPage] Not authenticated, clearing potential stale data."
+      );
+      setIsLoading(false);
+      setClub(null);
+      setMembers([]);
+      setPosts([]);
+      setThreads([]);
+      setMilestones([]);
     }
-  }, [clubId]);
+  }, [clubId, isAuthenticated, authLoading]);
 
   // Update search when debounced query changes
   useEffect(() => {
@@ -585,6 +610,27 @@ export default function ClubDetailPage() {
     }
   };
 
+  // Show loader while authentication is being checked
+  if (authLoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // If not authenticated after check, show redirecting message (or null while redirect happens)
+  if (!isAuthenticated) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground">Redirecting to login...</p>
+      </div>
+    );
+    // Alternatively: return null; // Render nothing while redirecting
+  }
+
+  // Show loader while club data is loading (only shown if authenticated)
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">

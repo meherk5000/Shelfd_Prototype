@@ -86,10 +86,17 @@ export function UserReviewDisplay({
       </CardHeader>
       <CardContent>
         <div className="flex items-center space-x-2 mb-3">
-          <HalfStarRating value={review.rating} readOnly={true} size="sm" />
-          <span className="text-sm font-semibold">
-            {review.rating.toFixed(1)}
-          </span>
+          {/* Ensure rating is a valid number before rendering */}
+          {typeof review.rating === "number" && !isNaN(review.rating) ? (
+            <>
+              <HalfStarRating value={review.rating} readOnly={true} size="sm" />
+              <span className="text-sm font-semibold">
+                {review.rating.toFixed(1)}
+              </span>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground">(No rating)</span>
+          )}
         </div>
         {review.review_text && (
           <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">

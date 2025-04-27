@@ -2,7 +2,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from typing import Optional, Dict
 import os
 from dotenv import load_dotenv
@@ -169,3 +169,36 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         return user
     except Exception:
         raise credentials_exception
+
+# New function for optional authentication
+async def get_optional_current_user(authorization: Optional[str] = Header(None)) -> Optional['User']:
+    """
+    Attempts to authenticate the user based on the Authorization header.
+    Returns the User object if successful, otherwise returns None.
+    Does not raise HTTPException for auth errors.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        return None  # No token provided
+
+    token = authorization.split(" ")[1]
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None # Invalid token payload
+            
+        from ..database.models.user import User
+        from beanie import PydanticObjectId
+
+        user = await User.get(PydanticObjectId(user_id))
+        if user is None:
+            return None # User not found
+            
+        return user
+        
+    except JWTError:
+        return None # Token is invalid or expired
+    except Exception:
+        # Catch any other potential errors during user fetching etc.
+        return None

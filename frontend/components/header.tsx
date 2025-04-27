@@ -30,6 +30,7 @@ export function Header() {
     const titles: { [key: string]: { title: string; href: string } } = {
       shelf: { title: "Shelf", href: "/shelf" },
       clubs: { title: "Clubs", href: "/clubs" },
+      explore: { title: "Explore", href: "/explore" },
       search: { title: "Explore", href: "/search" },
       activity: { title: "Activity", href: "/activity" },
       chat: { title: "Chat", href: "/chat" },

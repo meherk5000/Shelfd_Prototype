@@ -211,14 +211,12 @@ export default function Explore() {
 
   return (
     <div className="container mx-auto py-6">
-      <h1 className="text-3xl font-bold mb-6">Explore</h1>
-
       <Tabs
         defaultValue="All"
         value={activeTab}
         onValueChange={handleTabChange}
       >
-        <TabsList className="mb-8">
+        <TabsList className="mb-8 w-full grid grid-cols-5">
           <TabsTrigger value="All">All</TabsTrigger>
           <TabsTrigger value="Movies">Movies</TabsTrigger>
           <TabsTrigger value="TV Shows">TV Shows</TabsTrigger>

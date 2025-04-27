@@ -1,5 +1,6 @@
 // lib/api.ts
-import axios from 'axios'
+// Revert to standard default import again
+import axios from 'axios';
 
 // Get the API base URL from environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
