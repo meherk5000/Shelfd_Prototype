@@ -182,29 +182,39 @@ async def create_club(
 ) -> ClubResponse:
     logger.debug("[Backend] Received club creation request with data: %s", request.model_dump())
     logger.debug("[Backend] Current user: %s (ID: %s)", current_user.username, current_user.id)
-    
+
     try:
-        club_data = request.model_dump()
-        logger.debug("[Backend] Processed request data: %s", club_data)
+        # Use the ClubService to handle creation
+        created_club = await ClubService.create_club(
+            name=request.name,
+            creator=current_user,
+            media_type=request.media_type,
+            description=request.description,
+            is_private=request.is_private,
+            cover_image=request.cover_image,
+            # Pass book/movie/tv specific fields if necessary (assuming service handles them)
+            # Note: The service method currently only explicitly takes book fields.
+            # We might need to update the service if movie/tv fields are needed at creation.
+            book_title=request.book_title,
+            book_author=request.book_author,
+            book_cover=request.book_cover,
+            book_id=request.book_id,
+            # TODO: Add movie/tv fields to ClubService.create_club if needed
+            # movie_title=request.movie_title, ...
+            # tv_title=request.tv_title, ...
+        )
         
-        # Correctly assign Links instead of raw IDs
-        club_data["creator"] = Link(current_user, document_class=User)
-        club_data["members"] = [Link(current_user, document_class=User)]
-        # Assuming admins field exists and also needs Links
-        # club_data["admins"] = [Link(current_user, document_class=User)] 
-        
-        logger.debug("[Backend] Final club data before creation (using Links): %s", club_data)
-        
-        club = Club(**club_data)
-        logger.debug("[Backend] Club object created, about to save to database")
-        
-        await club.create()
-        logger.debug("[Backend] Club successfully created in database with ID: %s", club.id)
-        
+        logger.debug("[Backend] Club successfully created via service with ID: %s", created_club.id)
+
         # Format the response using the helper function
-        return await format_club_response(club, current_user)
+        # Pass the club object returned by the service
+        return await format_club_response(created_club, current_user) 
+    except HTTPException as he:
+        # Re-raise HTTPExceptions directly (e.g., validation errors from service)
+        logger.error("[Backend] HTTPException during club creation: %s - %s", he.status_code, he.detail)
+        raise he
     except Exception as e:
-        logger.error("[Backend] Error creating club: %s", str(e), exc_info=True)
+        logger.error("[Backend] Error creating club via service: %s", str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create club: {str(e)}")
 
 @router.get("", response_model=List[ClubResponse])

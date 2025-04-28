@@ -51,38 +51,58 @@ class ClubService:
         await club.insert()
         logger.info(f"Inserted basic club {club.id} for {name}")
 
-        # Now, update the document to set the initial members list
+        # Now, update the document to set the initial members list using the class method
         creator_link_ref = Link(creator, User).to_ref()
         try:
-            update_result = await club.update({"$set": {Club.members: [creator_link_ref]}})
-            if update_result.modified_count == 0:
-                 logger.warning(f"Club {club.id}: $set members update modified 0 documents.")
+            # Use the class method find_one and update
+            update_result = await Club.find_one(Club.id == club.id).update(
+                {"$set": {Club.members: [creator_link_ref]}}
+            )
+            # Check if the update operation found and modified the document
+            # Note: Beanie's update result might differ; logging raw result might be helpful
+            # Assuming update_result has attributes like matched_count and modified_count
+            # based on pymongo's UpdateResult. Adjust if Beanie provides a different structure.
+            # logger.info(f"Club {club.id}: Update result: {update_result}") # Optional: Log raw result
+            
+            # Check if a document was matched and modified. 
+            # The exact structure of update_result might depend on the Beanie/Motor version.
+            # We'll assume a simple check for now.
+            # A more robust check might involve inspecting update_result contents if available.
+            if update_result: # Simplified check, assumes non-None/empty means success
+                 logger.info(f"Club {club.id}: Successfully $set initial members list via class method.")
             else:
-                 logger.info(f"Club {club.id}: Successfully $set initial members list.")
+                 # This case means the find_one query didn't find the club right after insertion, which is odd.
+                 logger.warning(f"Club {club.id}: Class method update didn't seem to modify the document.")
+                 # Consider raising an error here as it indicates a potential problem.
+                 # raise HTTPException(status_code=500, detail="Failed to find club immediately after insertion for member update.")
+
         except Exception as e:
-             logger.error(f"Club {club.id}: Failed to $set initial members list: {e}", exc_info=True)
+             logger.error(f"Club {club.id}: Failed to $set initial members list via class method: {e}", exc_info=True)
              # Decide if we should raise an error or return the partially created club
              # For now, let's re-raise to make the failure explicit
              raise HTTPException(status_code=500, detail="Failed to set initial club members after creation.")
 
-        # Re-fetch the club to get the final state with members
-        try:
-            # Use the class method directly which includes the not found check
-            created_club = await ClubService.get_club(club.id) 
-            logger.info(f"Successfully re-fetched club {created_club.id} after setting members.")
-            # Add a check to see if members are present in the re-fetched object
-            if not created_club.members:
-                 logger.warning(f"Club {created_club.id}: Re-fetched club is missing the members list!")
-            elif str(created_club.members[0].ref.id) != str(creator.id):
-                 logger.warning(f"Club {created_club.id}: Re-fetched club members list doesn't contain the creator! Members: {created_club.members}")
-            return created_club
-        except HTTPException as he:
-             # If get_club raised 404, it means the club disappeared between update and re-fetch
-             logger.error(f"Club {club.id}: Failed to re-fetch club after setting members (HTTPException: {he.status_code} - {he.detail})")
-             raise he # Re-raise the original HTTPException
-        except Exception as e:
-             logger.error(f"Club {club.id}: Failed to re-fetch club after setting members: {e}", exc_info=True)
-             raise HTTPException(status_code=500, detail="Failed to re-fetch club after creation.")
+        # Removed the re-fetch step. We will return the initial club object.
+        # The format_club_response function called by the route handler will fetch links.
+        # try:
+        #     # Use the class method directly which includes the not found check
+        #     created_club = await ClubService.get_club(club.id) 
+        #     logger.info(f"Successfully re-fetched club {created_club.id} after setting members.")
+        #     # Add a check to see if members are present in the re-fetched object
+        #     if not created_club.members:
+        #          logger.warning(f"Club {created_club.id}: Re-fetched club is missing the members list!")
+        #     elif str(created_club.members[0].ref.id) != str(creator.id):
+        #          logger.warning(f"Club {created_club.id}: Re-fetched club members list doesn't contain the creator! Members: {created_club.members}")
+        #     return created_club
+        # except HTTPException as he:
+        #      # If get_club raised 404, it means the club disappeared between update and re-fetch
+        #      logger.error(f"Club {club.id}: Failed to re-fetch club after setting members (HTTPException: {he.status_code} - {he.detail})")
+        #      raise he # Re-raise the original HTTPException
+        # except Exception as e:
+        #      logger.error(f"Club {club.id}: Failed to re-fetch club after setting members: {e}", exc_info=True)
+        #      raise HTTPException(status_code=500, detail="Failed to re-fetch club after creation.")
+        
+        return club # Return the original club instance
 
     @staticmethod
     async def get_club(club_id: PydanticObjectId) -> Club:

@@ -376,23 +376,9 @@ export function useClubs() {
       return { success: false, message: "Media type is required" };
     }
 
-    // Map frontend media types to backend format
-    const mediaTypeMap: Record<string, string> = {
-      "books": "book",
-      "movies": "movie",
-      "tv-shows": "tv"
-    };
-
-    const backendMediaType = mediaTypeMap[mediaType];
-    if (!backendMediaType) {
-      console.log("[Frontend] Validation failed: Invalid media type");
-      setError("Invalid media type");
-      return { success: false, message: "Invalid media type" };
-    }
-
     const requestData: any = {
       name,
-      media_type: backendMediaType,
+      media_type: mediaType,
       ...(description && { description }),
       is_private: isPrivate,
     };
