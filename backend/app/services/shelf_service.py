@@ -194,35 +194,69 @@ class ShelfService:
 
     @staticmethod
     async def remove_from_shelf(user_id: str, media_id: str, media_type: MediaType) -> bool:
-        """Remove an item from a user's shelf"""
+        """Remove an item from a user's shelf(s) and delete associated review if removed from Finished shelf."""
+        # --- Import ReviewService inside the method --- 
+        from .review_service import ReviewService
+        # --- End import ---
         try:
-            # Ensure user_id is string
             actual_user_id = str(user_id.id) if hasattr(user_id, 'id') else str(user_id)
-            
             print(f"Debug - Removing item: user={actual_user_id}, media_id={media_id}, type={media_type}")
 
-            # Find all ShelfItemModel documents for this user and media item
             shelf_items_to_delete = await ShelfItemModel.find({
                 "user_id": actual_user_id,
                 "media_id": media_id,
-                "media_type": media_type # Ensure we only target the correct media type
+                "media_type": media_type
             }).to_list()
 
             if not shelf_items_to_delete:
                 print(f"Debug - No ShelfItemModel found for media_id={media_id}, type={media_type}. Nothing to remove.")
-                # Consider if this should raise an error or return False gracefully
-                # For now, let's raise the same error as before for consistency
                 raise ValueError(f"Item with ID {media_id} (type: {media_type}) not found in any shelf item record.")
 
             deleted_count = 0
+            review_deleted = False # Flag to track if review deletion was attempted
+
             for item in shelf_items_to_delete:
                 print(f"Debug - Processing ShelfItemModel: {item.id}, on Shelf ID: {item.shelf_id}")
-                
-                # Find the parent shelf using the shelf_id from the item
-                parent_shelf = await ShelfModel.find_one({"_id": ObjectId(item.shelf_id)})
+                parent_shelf = None
+                try:
+                    parent_shelf = await ShelfModel.get(item.shelf_id) # Use get for potential None
+                except Exception as e:
+                     print(f"Warning - Could not fetch parent shelf {item.shelf_id} due to error: {e}")
 
                 if parent_shelf:
-                    print(f"Debug - Found parent shelf: {parent_shelf.id} ({parent_shelf.name})")
+                    print(f"Debug - Found parent shelf: {parent_shelf.id} ({parent_shelf.name}, Type: {parent_shelf.shelf_type}, Status: {parent_shelf.status})")
+                    
+                    # --- Check if it's the Finished shelf and delete review --- 
+                    if parent_shelf.shelf_type == ShelfType.DEFAULT and parent_shelf.status == ShelfStatus.FINISHED:
+                        if not review_deleted: # Only attempt review deletion once per call
+                            print(f"INFO: Item {item.id} is on the Finished shelf. Attempting to delete associated review...")
+                            try:
+                                # Find the review for this user/media
+                                # Note: Need to import Review model or use ReviewService.get_user_review
+                                from ..database.models.review import Review
+                                review_to_delete = await Review.find_one({
+                                    "user_id": actual_user_id,
+                                    "media_id": media_id,
+                                    "media_type": media_type
+                                })
+                                
+                                if review_to_delete:
+                                    print(f"INFO: Found review {review_to_delete.id}. Calling ReviewService.delete_review...")
+                                    # ReviewService.delete_review also handles removing from finished shelf,
+                                    # but calling it ensures likes etc are cleaned up properly.
+                                    # It should handle the case where the item is already gone from the shelf.
+                                    await ReviewService.delete_review(str(review_to_delete.id), actual_user_id)
+                                    print(f"INFO: Successfully triggered deletion for review {review_to_delete.id}")
+                                    review_deleted = True
+                                else:
+                                    print(f"INFO: No review found for user {actual_user_id} and media {media_id}. No review deletion needed.")
+                            except Exception as review_delete_error:
+                                print(f"ERROR: Failed to delete review for item {media_id} when removing from Finished shelf: {review_delete_error}")
+                                # Log error, but continue shelf removal
+                        else:
+                            print(f"INFO: Review deletion already attempted for this media item in this call. Skipping duplicate attempt.")
+                    # --- End review deletion check --- 
+
                     # Remove the media_id from the parent shelf's items list
                     if media_id in parent_shelf.items:
                         original_items = parent_shelf.items.copy()
@@ -232,7 +266,7 @@ class ShelfService:
                     else:
                         print(f"Debug - {media_id} not found in parent shelf {parent_shelf.id}'s items list. Skipping shelf update.")
                 else:
-                     print(f"Warning - Parent shelf with ID {item.shelf_id} not found for item {item.id}. Cannot update shelf items list.")
+                    print(f"Warning - Parent shelf with ID {item.shelf_id} not found for item {item.id}. Cannot update shelf items list.")
 
                 # Delete the ShelfItemModel document itself
                 await item.delete()
@@ -240,16 +274,15 @@ class ShelfService:
                 deleted_count += 1
 
             print(f"Debug - Successfully deleted {deleted_count} ShelfItemModel instance(s) for media_id {media_id}.")
-            return deleted_count > 0 # Return True if at least one item was deleted
+            return deleted_count > 0
 
-        except ValueError as ve: # Catch the specific ValueError we raise
+        except ValueError as ve:
             print(f"Debug - ValueError in remove_from_shelf: {str(ve)}")
-            raise ve # Re-raise it so the route handler catches it as 400/404
+            raise ve
         except Exception as e:
             print(f"Debug - Unexpected error in remove_from_shelf: {str(e)}")
             import traceback
             traceback.print_exc()
-            # Raise a generic exception for other errors (likely 500)
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred while removing the item: {str(e)}")
 
     @staticmethod

@@ -7,6 +7,8 @@ from bson import ObjectId
 from ..database.models.review import Review, ReviewLike, MediaType
 from ..database.models.user import User
 from ..database.schemas.review import ReviewStats
+from ..database.models.shelf import ShelfItemModel, ShelfModel, ShelfType
+from ..database.schemas.shelf import ShelfStatus
 
 
 class ReviewService:
@@ -91,7 +93,6 @@ class ReviewService:
         # --- Add logic to update ShelfItemModel rating --- 
         if "rating" in updates: # Only update shelf item if rating actually changed
             try:
-                from ..database.models.shelf import ShelfItemModel
                 # --- Add more specific logging before the update --- 
                 print(f"---> UPDATE_SHELF_ITEM: Attempting update for user '{actual_user_id}', media_id '{review.media_id}', type '{review.media_type}'")
                 update_query = {
@@ -120,35 +121,58 @@ class ReviewService:
 
     @staticmethod
     async def delete_review(review_id: str, user_id: str) -> bool:
-        """Delete a review if it exists and belongs to the user."""
-        review_oid = None # Initialize for logging
+        """Delete a review if it exists and belongs to the user. Also clears rating/review from associated shelf items."""
+        # --- ShelfService import no longer needed here ---
+        review_oid = None
         try:
             review_oid = ObjectId(review_id)
         except Exception as e:
             print(f"ERROR: Invalid review_id format for deletion: {review_id}, Error: {e}")
-            # Re-raise or raise specific validation error for route handler
             raise ValueError(f"Invalid review ID format: {review_id}")
 
-        # Find the review using ObjectId and string user_id
+        # Find the review
         review = await Review.find_one({"_id": review_oid, "user_id": user_id})
         if not review:
-             print(f"WARN: Review not found or user mismatch for deletion: review_id={review_id}, user_id={user_id}")
-             return False # Return False for not found/permission issue
+            print(f"WARN: Review not found or user mismatch for deletion: review_id={review_id}, user_id={user_id}")
+            return False
+
+        # Store media info before deleting review
+        media_id_to_clear = review.media_id
+        media_type_to_clear = review.media_type
+        actual_user_id = user_id # Already verified string from route
 
         # Proceed with deletion attempts
         try:
             print(f"INFO: Attempting to delete likes for review {review_id}...")
-            delete_likes_result = await ReviewLike.find({"review_id": review_id}).delete()
-            print(f"INFO: Likes deletion result for review {review_id}: {delete_likes_result}") # Log result
+            await ReviewLike.find({"review_id": review_id}).delete()
+            # Simplified log
+            print(f"INFO: Likes deletion result logged for review {review_id}.")
 
             print(f"INFO: Attempting to delete review document {review_id} ({review_oid})...")
             await review.delete()
             print(f"INFO: Successfully deleted review {review_id}")
-            return True
+
+            # --- Add logic to clear rating/review from ShelfItemModel(s) ---
+            try:
+                print(f"INFO: Clearing rating/review from ShelfItemModel(s) for user {actual_user_id}, media {media_id_to_clear} ({media_type_to_clear})...")
+                update_result = await ShelfItemModel.find(
+                    {
+                        "user_id": actual_user_id,
+                        "media_id": media_id_to_clear,
+                        "media_type": media_type_to_clear
+                    }
+                ).update(
+                    {"$set": {"rating": None, "review": None, "review_date": None}}
+                )
+                print(f"INFO: Cleared rating/review for {update_result.modified_count} ShelfItemModel instance(s).")
+            except Exception as shelf_clear_error:
+                print(f"ERROR: Failed to clear rating/review from ShelfItemModel(s) after review deletion: {shelf_clear_error}")
+                # Log error, but proceed as review deletion was successful
+            # --- End clear shelf item logic ---
+
+            return True # Return True as the review was deleted
         except Exception as e:
-            # Log the specific error during deletion
             print(f"ERROR: Database error during deletion process for review {review_id}: {e}")
-            # Re-raise the exception so the route handler catches it as a 500
             raise e
 
     @staticmethod
@@ -409,14 +433,13 @@ class ReviewService:
                 "media_id": media_id,
                 "media_type": media_type
             })
+            print(f"DEBUG [create_review_...]: Found existing_shelf_item? {existing_shelf_item.id if existing_shelf_item else 'None'}")
 
             shelf_item_to_update = None
             if not existing_shelf_item:
                 print(f"DEBUG [create_review_...]: Shelf item for {media_id} not found. Adding to Finished shelf.")
-                # If item doesn't exist, add it to the default "Finished" shelf
-                # Note: This requires title/image/creator data. We might need to pass these
-                # from the frontend payload if they aren't already available.
-                # For now, assume they might be missing and use placeholders.
+                # Log the metadata being used
+                print(f"DEBUG [create_review_...]: Metadata for new item - title='{title}', image_url='{image_url}', creator='{creator}'")
                 try:
                     # Find the Finished shelf for this media type
                     finished_shelf = await ShelfService.get_or_create_shelf(
@@ -428,42 +451,46 @@ class ReviewService:
                     if not finished_shelf:
                          raise ValueError(f"Could not find or create Finished shelf for {media_type}")
 
-                    # Create the shelf item
-                    # TODO: Get title, image, creator properly if needed
+                    # Create the shelf item - include rating/review directly
                     new_shelf_item = ShelfItemModel(
                         user_id=actual_user_id,
                         shelf_id=str(finished_shelf.id),
                         media_id=media_id,
                         media_type=media_type,
-                        # Use provided metadata or fallbacks
                         title=title or f"Item {media_id}", 
-                        cover_image=image_url, # Use provided image_url
-                        creator=creator, # Use provided creator
-                        rating=rating, # Set initial rating
-                        review=review_text, # Set initial review
-                        review_date=datetime.utcnow()
+                        cover_image=image_url, 
+                        creator=creator, 
+                        rating=rating, # Add rating here
+                        review=review_text, # Add review here
+                        review_date=datetime.utcnow() # Add review_date here
                     )
                     await new_shelf_item.save()
-                    print(f"DEBUG [create_review_...]: Created new ShelfItem {new_shelf_item.id} in Finished shelf.")
+                    print(f"DEBUG [create_review_...]: Created new ShelfItem {new_shelf_item.id} in Finished shelf with rating/review.")
                     shelf_item_to_update = new_shelf_item
                     # Add item ID to the shelf's list
-                    finished_shelf.items.append(media_id)
-                    await finished_shelf.save()
+                    if media_id not in finished_shelf.items:
+                        finished_shelf.items.append(media_id)
+                        await finished_shelf.save()
+                        print(f"DEBUG [create_review_...]: Added {media_id} to Finished shelf items list.")
+                    else:
+                         print(f"DEBUG [create_review_...]: {media_id} already in Finished shelf items list.")
 
                 except Exception as add_err:
                     print(f"WARNING [create_review_...]: Failed to add shelf item to Finished shelf: {add_err}")
                     # Continue to try updating anyway, in case it existed but query failed
             else:
-                print(f"DEBUG [create_review_...]: Found existing shelf item {existing_shelf_item.id}. Updating rating.")
+                print(f"DEBUG [create_review_...]: Found existing shelf item {existing_shelf_item.id}. Will update rating/review.")
                 shelf_item_to_update = existing_shelf_item
 
-            # Update the found or newly created shelf item
+            # Update the rating/review fields if an item was found or created
             if shelf_item_to_update:
+                # Rating/review might have been set during creation, but update again for consistency
+                # and to catch the case where the item existed previously.
                 shelf_item_to_update.rating = rating
                 shelf_item_to_update.review = review_text
                 shelf_item_to_update.review_date = datetime.utcnow()
                 await shelf_item_to_update.save()
-                print(f"DEBUG [create_review_...]: Successfully updated ShelfItem {shelf_item_to_update.id} rating/review.")
+                print(f"DEBUG [create_review_...]: Ensured ShelfItem {shelf_item_to_update.id} has rating={rating}, review='{review_text}'.")
             else:
                 print(f"WARNING [create_review_...]: Could not find or create ShelfItem to update for {media_id}.")
 

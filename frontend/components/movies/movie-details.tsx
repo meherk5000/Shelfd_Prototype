@@ -22,6 +22,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf";
 import { ReviewData } from "@/lib/hooks/use-reviews";
 import { UserReviewDisplay } from "@/components/media/UserReviewDisplay";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 interface MovieDetailsData {
   id: number;
@@ -65,6 +76,7 @@ export function MovieDetails({ id }: { id: number }) {
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const { addToShelf } = useShelf();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const fetchMovieDetails = useCallback(async () => {
     try {
@@ -128,8 +140,6 @@ export function MovieDetails({ id }: { id: number }) {
   const handleReviewSuccess = useCallback(
     async (reviewData?: ReviewData) => {
       console.log("[MovieDetails] Review success, handling updates...");
-      const wasAddingReview = !userReview; // Capture before potential update
-
       // Immediate UI Update
       if (reviewData) {
         console.log(
@@ -142,47 +152,12 @@ export function MovieDetails({ id }: { id: number }) {
           "[MovieDetails] No direct review data received, will refetch."
         );
       }
-
       // Background Updates / Refetching
-      // Ensure we refetch the review data after success
       await fetchAllReviewData();
       setRefreshReviews((prev) => prev + 1);
-
-      // Add to Shelf (if needed)
-      if (wasAddingReview && movie) {
-        console.log(
-          "[MovieDetails] Added a new review. Ensuring item is marked as FINISHED."
-        );
-        try {
-          await addToShelf("Movies", ShelfStatus.FINISHED, {
-            id: movie.id.toString(),
-            title: movie.title,
-            image_url: movie.poster_path
-              ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
-              : undefined,
-          });
-          // Optionally refetch again
-          // await fetchAllReviewData();
-        } catch (error) {
-          console.error(
-            "[MovieDetails] Failed to update shelf status after review add:",
-            error
-          );
-        }
-      } else {
-        console.log(
-          "[MovieDetails] Review was updated (not added) or movie data missing."
-        );
-      }
-
       console.log("[MovieDetails] Review success handling finished.");
     },
-    [
-      fetchAllReviewData,
-      userReview, // Still needed to determine wasAddingReview
-      addToShelf,
-      movie,
-    ]
+    [fetchAllReviewData]
   );
 
   const handleDeleteReview = async () => {
@@ -194,13 +169,18 @@ export function MovieDetails({ id }: { id: number }) {
         console.log("[MovieDetails] Review deleted successfully.");
         setUserReview(null);
         setRefreshReviews((prev) => prev + 1);
+        setIsDeleteDialogOpen(false);
+        toast.success("Review deleted.");
+        window.location.reload();
       } else {
         console.error("[MovieDetails] Failed to delete review:", result.error);
-        // Optionally show a toast notification for the error
+        toast.error(result.error || "Failed to delete review.");
+        setIsDeleteDialogOpen(false);
       }
     } catch (error) {
       console.error("[MovieDetails] Error calling deleteReview:", error);
-      // Optionally show a toast notification for the error
+      toast.error("An error occurred while deleting the review.");
+      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -397,14 +377,37 @@ export function MovieDetails({ id }: { id: number }) {
                     ) : userReview ? (
                       <div className="space-y-4">
                         <h2 className="text-xl font-semibold">Your Review</h2>
-                        <UserReviewDisplay
-                          review={userReview}
-                          onEdit={() => {
-                            // Edit functionality not implemented
-                            console.warn("Edit functionality not implemented.");
-                          }}
-                          onDelete={handleDeleteReview}
-                        />
+                        <AlertDialog
+                          open={isDeleteDialogOpen}
+                          onOpenChange={setIsDeleteDialogOpen}
+                        >
+                          <UserReviewDisplay
+                            review={userReview}
+                            onEdit={() => {
+                              console.warn(
+                                "Edit functionality not implemented."
+                              );
+                            }}
+                            onDelete={() => setIsDeleteDialogOpen(true)}
+                          />
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Are you absolutely sure?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will
+                                permanently delete your review.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleDeleteReview}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     ) : (
                       <ReviewForm

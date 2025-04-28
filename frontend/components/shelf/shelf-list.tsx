@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Grid, List, Filter, Search, MoreVertical } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useShelf } from "@/lib/hooks/use-shelf";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 import { TrashIcon } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { MediaType } from "@/lib/types";
@@ -198,15 +198,33 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
   }
 
   const handleRemove = async (itemId: string) => {
+    // --- Find the item title before deleting ---
+    let itemTitle = "Item"; // Default title
+    if (shelves) {
+      for (const shelf of shelves) {
+        const foundItem = shelf.items.find(
+          (item: any) => item.media_id === itemId
+        );
+        if (foundItem) {
+          itemTitle = foundItem.title;
+          break;
+        }
+      }
+    }
+    // --- End find title ---
     try {
       await api.delete(`/api/shelves/${type}/${itemId}`);
-      await mutate();
-      toast.success("Item removed from shelf");
+      await mutate(); // Revalidate SWR cache
+      // --- Use sonner toast ---
+      toast.success(`'${itemTitle}' removed from shelf`);
+      // --- End toast ---
     } catch (error: any) {
       console.error("Error removing item:", error);
+      // --- Use sonner toast for error ---
       toast.error(
         error.response?.data?.detail || "Failed to remove item from shelf"
       );
+      // --- End error toast ---
     }
   };
 

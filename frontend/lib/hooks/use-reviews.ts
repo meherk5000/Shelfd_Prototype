@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import { useToast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 import { ShelfStatus } from './use-shelf';
 
 export interface ReviewData {
@@ -48,7 +48,6 @@ export interface UserReviewResponse {
 export function useReviews() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
 
   const getMediaReviews = useCallback(async (
     mediaType: string,
@@ -135,10 +134,8 @@ export function useReviews() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Required",
-          description: "Please sign in to review media items",
+        toast.error('Authentication required', {
+          description: "Please sign in to review media items"
         });
         return { success: false, message: 'Authentication required' };
       }
@@ -147,10 +144,8 @@ export function useReviews() {
       const validRatings = [1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
       if (!validRatings.includes(rating)) {
         const errorMessage = 'Rating must be between 1 and 5 with half-star increments';
-        toast({
-          variant: "destructive",
-          title: "Invalid Rating",
-          description: errorMessage,
+        toast.error(errorMessage, {
+          description: "Invalid Rating"
         });
         return { success: false, message: errorMessage };
       }
@@ -181,8 +176,7 @@ export function useReviews() {
         }
       );
       
-      toast({
-        title: "Review Saved",
+      toast.success("Review Saved", {
         description: "Your review has been saved successfully",
       });
       
@@ -195,17 +189,15 @@ export function useReviews() {
       const errorMessage = err.response?.data?.detail || 'Failed to submit review';
       setError(errorMessage);
       
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
+      toast.error(errorMessage, {
+        description: "Failed to submit review"
       });
       
       return { success: false, message: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const updateReview = useCallback(async (
     reviewId: string,
@@ -251,8 +243,7 @@ export function useReviews() {
         }
       );
       
-      toast({
-        title: "Review Updated",
+      toast.success("Review Updated", {
         description: "Your review has been updated successfully",
       });
       
@@ -261,17 +252,15 @@ export function useReviews() {
       const errorMessage = err.response?.data?.detail || 'Failed to update review';
       setError(errorMessage);
       
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
+      toast.error(errorMessage, {
+        description: "Failed to update review"
       });
       
       return { success: false, message: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const deleteReview = useCallback(async (
     reviewId: string
@@ -292,8 +281,7 @@ export function useReviews() {
         }
       );
       
-      toast({
-        title: "Review Deleted",
+      toast.success("Review Deleted", {
         description: "Your review has been deleted",
       });
       
@@ -302,17 +290,15 @@ export function useReviews() {
       const errorMessage = err.response?.data?.detail || 'Failed to delete review';
       setError(errorMessage);
       
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
+      toast.error(errorMessage, {
+        description: "Failed to delete review"
       });
       
       return { success: false, message: errorMessage };
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, []);
 
   const likeReview = useCallback(async (
     reviewId: string
@@ -320,10 +306,8 @@ export function useReviews() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        toast({
-          variant: "destructive",
-          title: "Authentication Required",
-          description: "Please sign in to like reviews",
+        toast.error('Authentication required', {
+          description: "Please sign in to like reviews"
         });
         return { success: false, message: 'Authentication required' };
       }
@@ -343,15 +327,13 @@ export function useReviews() {
       console.error('Error liking review:', err);
       const errorMessage = err.response?.data?.detail || 'Failed to like review';
       
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
+      toast.error(errorMessage, {
+        description: "Failed to like review"
       });
       
       return { success: false, message: errorMessage };
     }
-  }, [toast]);
+  }, []);
 
   return {
     getMediaReviews,

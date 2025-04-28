@@ -151,8 +151,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUser(response.data.user);
         setIsAuthenticated(true);
         setError(null);
+        toast.success("Signed in successfully!");
         return true;
       } else {
+        toast.error("Login failed. Please try again.");
         throw new Error("Login failed: No tokens received");
       }
     } catch (err: any) {
@@ -160,6 +162,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const errorMessage =
         err.response?.data?.detail || err.message || "Login failed";
       setError(errorMessage);
+
+      // Check for specific error status codes or messages
+      if (err.response?.status === 429) {
+        toast.error("Too many login attempts. Please try again later.");
+      } else if (
+        err.response?.status === 400 &&
+        (errorMessage.includes("Incorrect email or password") ||
+          errorMessage.includes("Invalid credentials") ||
+          errorMessage.includes("Invalid email or password"))
+      ) {
+        toast.error("Invalid email or password. Please try again.");
+      } else {
+        // Generic error for other issues
+        toast.error(
+          "Login failed. Please check your connection or try again later."
+        );
+      }
+
       handleAuthFailure();
       return false;
     } finally {
@@ -175,7 +195,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.post("/api/auth/register", {
+      const response = await api.post("/api/auth/signup", {
         email,
         password,
         username,
@@ -184,12 +204,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         toast.success("Registration successful! Please log in.");
         return { success: true };
       } else {
-        throw new Error(response.data.detail || "Registration failed");
+        const errorMessage = response.data.detail || "Registration failed";
+        toast.error(errorMessage);
+        throw new Error(errorMessage);
       }
     } catch (err: any) {
       const errorMessage =
         err.response?.data?.detail || err.message || "Registration failed";
       setError(errorMessage);
+      if (
+        errorMessage.includes("Email already registered") ||
+        errorMessage.includes("User with this email already exists")
+      ) {
+        toast.error(
+          "Email already registered. Please sign in or use a different email."
+        );
+      } else {
+        toast.error("Sign-up failed. Please try again later.");
+      }
       return { success: false, message: errorMessage };
     } finally {
       setLoading(false);

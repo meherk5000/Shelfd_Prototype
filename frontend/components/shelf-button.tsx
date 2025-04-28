@@ -151,7 +151,23 @@ export function ShelfButton({
         error.response?.data?.detail ||
         error.message ||
         "Failed to update shelf. Please try again.";
-      toast.error(errorMessage);
+
+      // --- Check if it's the specific 409 "already exists" error ---
+      const isAlreadyExistsError =
+        error.response?.status === 409 &&
+        errorMessage.includes("is already in your");
+
+      if (!isAlreadyExistsError) {
+        // Show error toast only if it's NOT the expected 409 error
+        toast.error(errorMessage);
+      } else {
+        // Optionally log that we are ignoring the expected 409 error
+        console.log(
+          "[ShelfButton] Ignoring expected 409 'already exists' error during dialog complete flow."
+        );
+      }
+      // --- End check ---
+
       console.log("[ShelfButton] completeAddToShelf FAILED:", errorMessage);
     }
   };

@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2 } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -51,7 +51,6 @@ export function ReviewForm({
   const [submitting, setSubmitting] = useState(false);
 
   const { submitReview, updateReview, deleteReview } = useReviews();
-  const { toast } = useToast();
 
   // Reset form when initial values change
   useEffect(() => {
@@ -107,11 +106,7 @@ export function ReviewForm({
       }
     } catch (error) {
       console.error("Error submitting review:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to submit your review. Please try again.",
-      });
+      toast.error("Failed to submit your review. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -137,11 +132,7 @@ export function ReviewForm({
       }
     } catch (error) {
       console.error("Error deleting review:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to delete your review. Please try again.",
-      });
+      toast.error("Failed to delete your review. Please try again.");
     } finally {
       setSubmitting(false);
     }

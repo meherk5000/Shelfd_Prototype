@@ -24,6 +24,18 @@ import { useShelf, ShelfStatus } from "@/lib/hooks/use-shelf"; // Import useShel
 // Import ReviewData type from the correct hook
 import { ReviewData, useReviews } from "@/lib/hooks/use-reviews";
 import { useToast } from "@/components/ui/use-toast"; // Import useToast
+// --- Add AlertDialog imports ---
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+// --- End imports ---
 
 // Interface for the book data itself (keep as is)
 interface BookDetailsData {
@@ -68,6 +80,9 @@ export function BookDetails({ id }: { id: string }) {
   // Add state for review stats
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(true); // Separate loading for reviews
+  // --- Add state for delete confirmation dialog ---
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  // --- End state ---
 
   const fetchBookDetails = useCallback(async () => {
     setLoading(true);
@@ -139,12 +154,10 @@ export function BookDetails({ id }: { id: string }) {
     }
   }, [id, isAuthenticated, user]); // Keep only primitive/stable dependencies
 
-  // Update handleReviewSuccess to accept optional reviewData
+  // Simplify handleReviewSuccess: remove explicit addToShelf, rely on backend + refetch
   const handleReviewSuccess = useCallback(
     async (reviewData?: ReviewData) => {
       console.log("[BookDetails] Review success, handling updates...");
-      const wasAddingReview = !userReview;
-
       if (reviewData) {
         console.log(
           "[BookDetails] Received review data, updating state:",
@@ -155,35 +168,12 @@ export function BookDetails({ id }: { id: string }) {
         console.log(
           "[BookDetails] No direct review data received (likely update/delete), refetching..."
         );
-        // Refetch all data if specific data isn't provided
-        await fetchAllReviewData();
+        await fetchAllReviewData(); // Refetch if no specific data
       }
-
       setRefreshReviews((prev) => prev + 1);
-
-      if (wasAddingReview && book) {
-        console.log(
-          "[BookDetails] Added a new review. Setting shelf to FINISHED."
-        );
-        try {
-          await addToShelf("Books", ShelfStatus.FINISHED, {
-            id: book.id,
-            title: book.title,
-            image_url: book.image_url,
-            creator: book.author,
-          });
-          await fetchAllReviewData();
-        } catch (error) {
-          console.error("[BookDetails] Failed to update shelf status:", error);
-        }
-      } else {
-        // If it was an update or delete, refetch is likely needed
-        await fetchAllReviewData();
-        console.log("[BookDetails] Review potentially updated or deleted.");
-      }
       console.log("[BookDetails] Review success handling finished.");
     },
-    [userReview, book, addToShelf, fetchAllReviewData]
+    [fetchAllReviewData] // Only fetchAllReviewData needed
   );
 
   const handleShelfUpdate = useCallback(async () => {
@@ -192,14 +182,13 @@ export function BookDetails({ id }: { id: string }) {
     await fetchAllReviewData(); // Refetch review data when shelf status changes
   }, [fetchAllReviewData]);
 
-  // New handler for deleting a review
+  // Add AlertDialog logic to handleDeleteReview
   const handleDeleteReview = useCallback(async () => {
     if (!userReview?.id) return;
-    if (!window.confirm("Are you sure you want to delete this review?")) {
-      return;
-    }
+    // Confirmation handled by AlertDialog
     try {
       const result = await deleteReview(userReview.id);
+      setIsDeleteDialogOpen(false); // Close dialog regardless of outcome
       if (result.success) {
         toast({
           title: "Success",
@@ -207,7 +196,10 @@ export function BookDetails({ id }: { id: string }) {
         });
         setUserReview(null);
         setRefreshReviews((prev) => prev + 1);
-        await fetchAllReviewData();
+        await fetchAllReviewData(); // Refetch data after delete
+        // --- Add page reload ---
+        window.location.reload();
+        // --- End page reload ---
       } else {
         toast({
           variant: "destructive",
@@ -216,6 +208,7 @@ export function BookDetails({ id }: { id: string }) {
         });
       }
     } catch (error) {
+      setIsDeleteDialogOpen(false); // Close dialog on error
       console.error("Error deleting review:", error);
       toast({
         variant: "destructive",
@@ -223,7 +216,7 @@ export function BookDetails({ id }: { id: string }) {
         description: "An unexpected error occurred while deleting.",
       });
     }
-  }, [userReview?.id, deleteReview, toast, fetchAllReviewData]);
+  }, [userReview?.id, deleteReview, toast, fetchAllReviewData]); // Keep dependencies
 
   useEffect(() => {
     fetchBookDetails();
@@ -397,22 +390,51 @@ export function BookDetails({ id }: { id: string }) {
                         </Button>
                       </div>
                     ) : userReview ? (
-                      // --- User HAS reviewed: Show DISPLAY --- (No more edit state check)
+                      // --- User HAS reviewed: Show DISPLAY ---
                       <div className="space-y-4">
                         <h2 className="text-xl font-semibold">Your Review</h2>
-                        <UserReviewDisplay
-                          review={userReview}
-                          onEdit={() => {}} // Pass empty function or remove prop if not needed
-                          onDelete={handleDeleteReview}
-                        />
+                        {/* --- Wrap UserReviewDisplay trigger in AlertDialog --- */}
+                        <AlertDialog
+                          open={isDeleteDialogOpen}
+                          onOpenChange={setIsDeleteDialogOpen}
+                        >
+                          <UserReviewDisplay
+                            review={userReview}
+                            onEdit={() => {}} // Placeholder
+                            // Change onDelete to trigger the dialog
+                            onDelete={() => setIsDeleteDialogOpen(true)}
+                          />
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Are you absolutely sure?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will
+                                permanently delete your review.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              {/* Action button calls the actual delete logic */}
+                              <AlertDialogAction onClick={handleDeleteReview}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                        {/* --- End AlertDialog wrapper --- */}
                       </div>
                     ) : (
-                      // --- User has NOT reviewed: Show ADD form --- (No more edit state check)
+                      // --- User has NOT reviewed: Show ADD form ---
                       <ReviewForm
                         mediaId={book.id}
                         mediaType="book"
-                        // No initial props needed for add form
                         onSuccess={handleReviewSuccess}
+                        // Pass metadata for potential shelf creation by backend
+                        mediaTitle={book.title}
+                        mediaImageUrl={book.image_url}
+                        mediaCreator={book.author}
                       />
                     )}
                   </>

@@ -12,6 +12,18 @@ import { ShelfButton } from "@/components/shelf-button";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { toast } from "react-hot-toast";
 
 import { ReviewForm } from "@/components/media/review-form";
 import { UserReviewDisplay } from "@/components/media/UserReviewDisplay";
@@ -67,6 +79,7 @@ export function TVShowDetails({ id }: { id: number }) {
   const [reviewStats, setReviewStats] = useState<ReviewStats | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const { addToShelf } = useShelf();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const fetchAllReviewData = useCallback(async () => {
     if (!id || !isAuthenticated || !user) {
@@ -172,34 +185,9 @@ export function TVShowDetails({ id }: { id: number }) {
       await fetchAllReviewData();
       setRefreshReviews((prev) => prev + 1);
 
-      if (wasAddingReview && show) {
-        console.log(
-          "[TVShowDetails] Added a new review. Ensuring item is marked as FINISHED."
-        );
-        try {
-          await addToShelf("TV Shows", ShelfStatus.FINISHED, {
-            id: show.id.toString(),
-            title: show.name,
-            image_url: show.poster_path
-              ? `https://image.tmdb.org/t/p/w500${show.poster_path}`
-              : undefined,
-            creator: show.networks?.map((n) => n.name).join(", ") || undefined,
-          });
-        } catch (error) {
-          console.error(
-            "[TVShowDetails] Failed to update shelf status after review add:",
-            error
-          );
-        }
-      } else {
-        console.log(
-          "[TVShowDetails] Review was updated (not added) or show data missing."
-        );
-      }
-
       console.log("[TVShowDetails] Review success handling finished.");
     },
-    [fetchAllReviewData, userReview, addToShelf, show]
+    [fetchAllReviewData]
   );
 
   const handleShelfUpdate = useCallback(() => {
@@ -215,13 +203,18 @@ export function TVShowDetails({ id }: { id: number }) {
         console.log("[TVShowDetails] Review deleted successfully.");
         setUserReview(null);
         setRefreshReviews((prev) => prev + 1);
+        setIsDeleteDialogOpen(false);
+        toast.error(result.error || "Failed to delete review.");
+        window.location.reload();
       } else {
         console.error("[TVShowDetails] Failed to delete review:", result.error);
-        // Optionally show a toast notification for the error
+        toast.error(result.error || "Failed to delete review.");
+        setIsDeleteDialogOpen(false);
       }
     } catch (error) {
       console.error("[TVShowDetails] Error calling deleteReview:", error);
-      // Optionally show a toast notification for the error
+      toast.error("An error occurred while deleting the review.");
+      setIsDeleteDialogOpen(false);
     }
   };
 
@@ -432,14 +425,37 @@ export function TVShowDetails({ id }: { id: number }) {
                     ) : userReview ? (
                       <div className="space-y-4">
                         <h2 className="text-xl font-semibold">Your Review</h2>
-                        <UserReviewDisplay
-                          review={userReview}
-                          onEdit={() => {
-                            // For now, we don't have an edit state, could be added later
-                            console.warn("Edit functionality not implemented.");
-                          }}
-                          onDelete={handleDeleteReview}
-                        />
+                        <AlertDialog
+                          open={isDeleteDialogOpen}
+                          onOpenChange={setIsDeleteDialogOpen}
+                        >
+                          <UserReviewDisplay
+                            review={userReview}
+                            onEdit={() => {
+                              console.warn(
+                                "Edit functionality not implemented."
+                              );
+                            }}
+                            onDelete={() => setIsDeleteDialogOpen(true)}
+                          />
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Are you absolutely sure?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will
+                                permanently delete your review.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleDeleteReview}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     ) : (
                       <ReviewForm

@@ -66,6 +66,9 @@ export function ShelfStatusChangeDialog({
       console.log("[ShelfStatusChangeDialog] Calling onComplete...");
       onComplete();
       console.log("[ShelfStatusChangeDialog] onComplete finished.");
+      // --- Add page reload ---
+      window.location.reload();
+      // --- End page reload ---
     }
   };
 
@@ -103,6 +106,10 @@ export function ShelfStatusChangeDialog({
             mediaId={mediaId}
             mediaType={normalizedMediaType}
             onSuccess={handleReviewSubmitSuccess}
+            // Pass down the metadata props
+            mediaTitle={mediaTitle}
+            mediaImageUrl={mediaImage}
+            mediaCreator={mediaCreator}
             // We assume it's a new review here, so no initial values or reviewId needed
             // We also assume the item *is* now on a shelf (Finished) for the form to be active
           />
