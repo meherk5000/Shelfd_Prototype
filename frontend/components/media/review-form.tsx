@@ -26,6 +26,9 @@ interface ReviewFormProps {
   initialContainsSpoilers?: boolean;
   reviewId?: string;
   onSuccess?: (reviewData?: ReviewData) => void;
+  mediaTitle?: string;
+  mediaImageUrl?: string;
+  mediaCreator?: string;
 }
 
 export function ReviewForm({
@@ -36,6 +39,9 @@ export function ReviewForm({
   initialContainsSpoilers = false,
   reviewId,
   onSuccess,
+  mediaTitle,
+  mediaImageUrl,
+  mediaCreator,
 }: ReviewFormProps) {
   const [rating, setRating] = useState(initialRating);
   const [review, setReview] = useState(initialReview);
@@ -82,7 +88,10 @@ export function ReviewForm({
           mediaId,
           rating,
           review.trim() || undefined,
-          containsSpoilers
+          containsSpoilers,
+          mediaTitle,
+          mediaImageUrl,
+          mediaCreator
         );
 
         console.log("[ReviewForm] submitReview result:", result);

@@ -124,7 +124,10 @@ export function useReviews() {
     mediaId: string,
     rating: number,
     reviewText?: string,
-    containsSpoilers: boolean = false
+    containsSpoilers: boolean = false,
+    title?: string,
+    imageUrl?: string,
+    creator?: string
   ): Promise<{ success: boolean; message: string; review?: ReviewData }> => {
     setLoading(true);
     setError(null);
@@ -158,7 +161,10 @@ export function useReviews() {
         media_type: mediaType,
         rating,
         review_text: reviewText,
-        contains_spoilers: containsSpoilers
+        contains_spoilers: containsSpoilers,
+        title: title,
+        image_url: imageUrl,
+        creator: creator
       };
       
       // Log the payload before sending

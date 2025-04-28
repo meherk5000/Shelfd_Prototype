@@ -38,6 +38,9 @@ interface MovieDetailsData {
   budget: number;
   revenue: number;
   homepage?: string;
+  credits?: {
+    crew?: Array<{ job: string; name: string }>;
+  };
 }
 
 interface ReviewStats {
@@ -230,12 +233,17 @@ export function MovieDetails({ id }: { id: number }) {
     );
   }
 
+  const director =
+    movie.credits?.crew?.find((person) => person.job === "Director")?.name ||
+    "";
+
   const shelfButtonItem = {
     id: movie.id.toString(),
     title: movie.title,
     image_url: movie.poster_path
       ? `https://image.tmdb.org/t/p/w500${movie.poster_path}`
       : undefined,
+    creator: director,
   };
 
   return (
@@ -403,6 +411,9 @@ export function MovieDetails({ id }: { id: number }) {
                         mediaId={id.toString()}
                         mediaType="movie"
                         onSuccess={handleReviewSuccess}
+                        mediaTitle={movie.title}
+                        mediaImageUrl={shelfButtonItem.image_url}
+                        mediaCreator={shelfButtonItem.creator}
                       />
                     )}
                   </>

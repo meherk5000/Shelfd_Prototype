@@ -285,10 +285,10 @@ async def remove_from_shelf(
                 detail=f"Invalid media type: {media_type}"
             )
             
-        result = await ShelfService.remove_from_shelf(
+        removed = await ShelfService.remove_from_shelf(
             user_id=user_id,
             media_id=media_id,
-            shelf_type=media_type_enum
+            media_type=media_type_enum
         )
         print("Debug - Successfully removed item")
         return {"message": "Item removed successfully"}

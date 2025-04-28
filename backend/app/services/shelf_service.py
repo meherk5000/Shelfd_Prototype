@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 from beanie.exceptions import DocumentNotFound
 from fastapi import HTTPException
+from bson import ObjectId
 
 class ShelfService:
     DEFAULT_SHELVES = {
@@ -192,48 +193,64 @@ class ShelfService:
             raise HTTPException(status_code=500, detail="Failed to retrieve shelves.")
 
     @staticmethod
-    async def remove_from_shelf(user_id: str, media_id: str, shelf_type: MediaType) -> bool:
+    async def remove_from_shelf(user_id: str, media_id: str, media_type: MediaType) -> bool:
         """Remove an item from a user's shelf"""
         try:
-            print(f"Debug - Looking for shelf with: user_id={user_id}, media_type={shelf_type}, media_id={media_id}")
+            # Ensure user_id is string
+            actual_user_id = str(user_id.id) if hasattr(user_id, 'id') else str(user_id)
             
-            # First find the shelf that contains this item
-            shelf = await ShelfModel.find_one({
-                "user_id": user_id,
-                "media_type": shelf_type,
-                "items": media_id
-            })
-            
-            print(f"Debug - Found shelf: {shelf}")
-            
-            if not shelf:
-                raise ValueError(f"Item with ID {media_id} not found in any shelf")
-            
-            # Remove the item from the shelf's items array
-            original_items = shelf.items.copy()
-            shelf.items = [item for item in shelf.items if item != media_id]
-            print(f"Debug - Items before: {original_items}")
-            print(f"Debug - Items after: {shelf.items}")
-            
-            await shelf.save()
-            print("Debug - Saved shelf changes")
-            
-            # Also remove the shelf item if it exists
-            shelf_items = await ShelfItemModel.find({
-                "user_id": user_id,
-                "media_id": media_id
+            print(f"Debug - Removing item: user={actual_user_id}, media_id={media_id}, type={media_type}")
+
+            # Find all ShelfItemModel documents for this user and media item
+            shelf_items_to_delete = await ShelfItemModel.find({
+                "user_id": actual_user_id,
+                "media_id": media_id,
+                "media_type": media_type # Ensure we only target the correct media type
             }).to_list()
-            
-            print(f"Debug - Found {len(shelf_items)} shelf items to delete")
-            
-            for item in shelf_items:
+
+            if not shelf_items_to_delete:
+                print(f"Debug - No ShelfItemModel found for media_id={media_id}, type={media_type}. Nothing to remove.")
+                # Consider if this should raise an error or return False gracefully
+                # For now, let's raise the same error as before for consistency
+                raise ValueError(f"Item with ID {media_id} (type: {media_type}) not found in any shelf item record.")
+
+            deleted_count = 0
+            for item in shelf_items_to_delete:
+                print(f"Debug - Processing ShelfItemModel: {item.id}, on Shelf ID: {item.shelf_id}")
+                
+                # Find the parent shelf using the shelf_id from the item
+                parent_shelf = await ShelfModel.find_one({"_id": ObjectId(item.shelf_id)})
+
+                if parent_shelf:
+                    print(f"Debug - Found parent shelf: {parent_shelf.id} ({parent_shelf.name})")
+                    # Remove the media_id from the parent shelf's items list
+                    if media_id in parent_shelf.items:
+                        original_items = parent_shelf.items.copy()
+                        parent_shelf.items = [i for i in parent_shelf.items if i != media_id]
+                        await parent_shelf.save()
+                        print(f"Debug - Removed {media_id} from shelf {parent_shelf.id}. Items before: {original_items}, after: {parent_shelf.items}")
+                    else:
+                        print(f"Debug - {media_id} not found in parent shelf {parent_shelf.id}'s items list. Skipping shelf update.")
+                else:
+                     print(f"Warning - Parent shelf with ID {item.shelf_id} not found for item {item.id}. Cannot update shelf items list.")
+
+                # Delete the ShelfItemModel document itself
                 await item.delete()
-                print(f"Debug - Deleted shelf item: {item}")
-            
-            return True
+                print(f"Debug - Deleted ShelfItemModel: {item.id}")
+                deleted_count += 1
+
+            print(f"Debug - Successfully deleted {deleted_count} ShelfItemModel instance(s) for media_id {media_id}.")
+            return deleted_count > 0 # Return True if at least one item was deleted
+
+        except ValueError as ve: # Catch the specific ValueError we raise
+            print(f"Debug - ValueError in remove_from_shelf: {str(ve)}")
+            raise ve # Re-raise it so the route handler catches it as 400/404
         except Exception as e:
-            print(f"Debug - Error in remove_from_shelf: {str(e)}")
-            raise e
+            print(f"Debug - Unexpected error in remove_from_shelf: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Raise a generic exception for other errors (likely 500)
+            raise HTTPException(status_code=500, detail=f"An unexpected error occurred while removing the item: {str(e)}")
 
     @staticmethod
     async def get_or_create_shelf(user_id: str, media_type: MediaType, status: str, shelf_type: ShelfType) -> ShelfModel:

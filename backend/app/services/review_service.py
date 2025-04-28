@@ -92,20 +92,19 @@ class ReviewService:
         if "rating" in updates: # Only update shelf item if rating actually changed
             try:
                 from ..database.models.shelf import ShelfItemModel
-                print(f"DEBUG [update_review]: Updating ShelfItemModel for review {review_id}, media {review.media_id}, type {review.media_type}")
-                # Update all matching shelf items for this user and media
-                update_result = await ShelfItemModel.find({
+                # --- Add more specific logging before the update --- 
+                print(f"---> UPDATE_SHELF_ITEM: Attempting update for user '{actual_user_id}', media_id '{review.media_id}', type '{review.media_type}'")
+                update_query = {
                     "user_id": actual_user_id,
                     "media_id": review.media_id,
                     "media_type": review.media_type
-                }).update({
-                    "$set": {
-                        "rating": new_rating,
-                        # Optionally update review text/date on shelf item too?
-                        # "review": updates.get("review_text", review.review_text), # If review_text is updated
-                        # "review_date": datetime.utcnow() # Always update date if review/rating changes?
-                    }
-                })
+                }
+                update_data = {"$set": {"rating": new_rating}}
+                print(f"---> UPDATE_SHELF_ITEM: Query: {update_query}")
+                print(f"---> UPDATE_SHELF_ITEM: Update Data: {update_data}")
+                # --- End specific logging ---
+                # Update all matching shelf items for this user and media
+                update_result = await ShelfItemModel.find(update_query).update(update_data)
 
                 if update_result.modified_count > 0:
                     print(f"DEBUG [update_review]: Updated {update_result.modified_count} shelf item(s) rating for {review.media_id}")
@@ -383,7 +382,10 @@ class ReviewService:
         media_type: MediaType,
         rating: float,
         review_text: Optional[str] = None,
-        contains_spoilers: bool = False
+        contains_spoilers: bool = False,
+        title: Optional[str] = None,
+        image_url: Optional[str] = None,
+        creator: Optional[str] = None
     ) -> Review:
         """Create/update review and also update the shelf item(s) if they exist."""
         # Ensure user_id is a string
@@ -393,32 +395,81 @@ class ReviewService:
         review = await ReviewService.create_review(
             actual_user_id, media_id, media_type, rating, review_text, contains_spoilers
         )
-        
-        # Try to update the shelf item rating too for all instances of this item
+
+        # --- Ensure shelf item exists and update it --- 
         try:
-            from ..database.models.shelf import ShelfItemModel
+            from ..database.models.shelf import ShelfItemModel, ShelfModel, ShelfType
+            from ..database.schemas.shelf import ShelfStatus
             from datetime import datetime
-            
-            # Update all matching shelf items for this user and media
-            update_result = await ShelfItemModel.find({
+            from .shelf_service import ShelfService # Import ShelfService
+
+            # Check if shelf item exists for this user/media
+            existing_shelf_item = await ShelfItemModel.find_one({
                 "user_id": actual_user_id,
                 "media_id": media_id,
                 "media_type": media_type
-            }).update({
-                "$set": {
-                    "rating": rating,
-                    "review": review_text,
-                    "review_date": datetime.utcnow()
-                }
             })
-            
-            if update_result.modified_count > 0:
-                print(f"DEBUG: Updated {update_result.modified_count} shelf item(s) rating for {media_id}")
+
+            shelf_item_to_update = None
+            if not existing_shelf_item:
+                print(f"DEBUG [create_review_...]: Shelf item for {media_id} not found. Adding to Finished shelf.")
+                # If item doesn't exist, add it to the default "Finished" shelf
+                # Note: This requires title/image/creator data. We might need to pass these
+                # from the frontend payload if they aren't already available.
+                # For now, assume they might be missing and use placeholders.
+                try:
+                    # Find the Finished shelf for this media type
+                    finished_shelf = await ShelfService.get_or_create_shelf(
+                         user_id=actual_user_id,
+                         media_type=media_type,
+                         status=ShelfStatus.FINISHED.value,
+                         shelf_type=ShelfType.DEFAULT
+                     )
+                    if not finished_shelf:
+                         raise ValueError(f"Could not find or create Finished shelf for {media_type}")
+
+                    # Create the shelf item
+                    # TODO: Get title, image, creator properly if needed
+                    new_shelf_item = ShelfItemModel(
+                        user_id=actual_user_id,
+                        shelf_id=str(finished_shelf.id),
+                        media_id=media_id,
+                        media_type=media_type,
+                        # Use provided metadata or fallbacks
+                        title=title or f"Item {media_id}", 
+                        cover_image=image_url, # Use provided image_url
+                        creator=creator, # Use provided creator
+                        rating=rating, # Set initial rating
+                        review=review_text, # Set initial review
+                        review_date=datetime.utcnow()
+                    )
+                    await new_shelf_item.save()
+                    print(f"DEBUG [create_review_...]: Created new ShelfItem {new_shelf_item.id} in Finished shelf.")
+                    shelf_item_to_update = new_shelf_item
+                    # Add item ID to the shelf's list
+                    finished_shelf.items.append(media_id)
+                    await finished_shelf.save()
+
+                except Exception as add_err:
+                    print(f"WARNING [create_review_...]: Failed to add shelf item to Finished shelf: {add_err}")
+                    # Continue to try updating anyway, in case it existed but query failed
             else:
-                 print(f"DEBUG: No shelf items found to update rating for {media_id}")
-                 
+                print(f"DEBUG [create_review_...]: Found existing shelf item {existing_shelf_item.id}. Updating rating.")
+                shelf_item_to_update = existing_shelf_item
+
+            # Update the found or newly created shelf item
+            if shelf_item_to_update:
+                shelf_item_to_update.rating = rating
+                shelf_item_to_update.review = review_text
+                shelf_item_to_update.review_date = datetime.utcnow()
+                await shelf_item_to_update.save()
+                print(f"DEBUG [create_review_...]: Successfully updated ShelfItem {shelf_item_to_update.id} rating/review.")
+            else:
+                print(f"WARNING [create_review_...]: Could not find or create ShelfItem to update for {media_id}.")
+
         except Exception as e:
-            print(f"WARNING: Failed to update shelf item(s) rating: {str(e)}")
+            print(f"WARNING: Failed during shelf item update/creation: {str(e)}")
             # Continue anyway as the main review was saved
-        
+        # --- End ShelfItem logic --- 
+
         return review 

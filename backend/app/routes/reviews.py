@@ -37,7 +37,10 @@ async def create_review(
             media_type=data.media_type,
             rating=data.rating,
             review_text=data.review_text,
-            contains_spoilers=data.contains_spoilers
+            contains_spoilers=data.contains_spoilers,
+            title=data.title,
+            image_url=data.image_url,
+            creator=data.creator
         )
         
         return {

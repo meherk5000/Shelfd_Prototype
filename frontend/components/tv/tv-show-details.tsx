@@ -446,6 +446,9 @@ export function TVShowDetails({ id }: { id: number }) {
                         mediaId={id.toString()}
                         mediaType="tv"
                         onSuccess={handleReviewSuccess}
+                        mediaTitle={show.name}
+                        mediaImageUrl={shelfButtonItem.image_url}
+                        mediaCreator={shelfButtonItem.creator}
                       />
                     )}
                   </>

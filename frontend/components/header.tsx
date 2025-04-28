@@ -36,6 +36,7 @@ export function Header() {
       chat: { title: "Chat", href: "/chat" },
       create: { title: "Create", href: "/create" },
       profile: { title: "Profile", href: "/profile" },
+      settings: { title: "Settings", href: "/settings" },
       movies: { title: "Movie", href: "/movies" },
       tv: { title: "TV Show", href: "/tv" },
       books: { title: "Book", href: "/books" },

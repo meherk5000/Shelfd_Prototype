@@ -22,6 +22,9 @@ class CreateReviewRequest(ReviewBase):
     rating: float
     review_text: Optional[str] = None
     contains_spoilers: bool = False
+    title: Optional[str] = None
+    image_url: Optional[str] = None
+    creator: Optional[str] = None
     
     @validator('rating')
     def validate_rating(cls, v):
