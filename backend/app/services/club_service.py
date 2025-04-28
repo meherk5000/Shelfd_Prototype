@@ -32,11 +32,13 @@ class ClubService:
         if media_type not in ["book", "movie", "tv"]:
             raise HTTPException(status_code=400, detail="Invalid media type")
 
-        # Create club object without members initially
+        # Create club object WITH members list initially
+        creator_link = Link(creator, User)
         club = Club(
             name=name,
             description=description,
-            creator=Link(creator, User),
+            creator=creator_link,
+            members=[creator_link], # Add creator to members list directly
             media_type=media_type,
             is_private=is_private,
             cover_image=cover_image,
@@ -44,70 +46,25 @@ class ClubService:
             book_author=book_author,
             book_cover=book_cover,
             book_id=book_id,
-            # members field is omitted here
         )
         
-        # Insert the basic club document
-        await club.insert()
-        logger.info(f"Inserted basic club {club.id} for {name}")
-
-        # Now, update the document to set the initial members list using the class method
-        creator_link_ref = Link(creator, User).to_ref()
+        # Use create() like the old working route handler
         try:
-            # Use the class method find_one and update
-            update_result = await Club.find_one(Club.id == club.id).update(
-                {"$set": {Club.members: [creator_link_ref]}}
-            )
-            # Check if the update operation found and modified the document
-            # Note: Beanie's update result might differ; logging raw result might be helpful
-            # Assuming update_result has attributes like matched_count and modified_count
-            # based on pymongo's UpdateResult. Adjust if Beanie provides a different structure.
-            # logger.info(f"Club {club.id}: Update result: {update_result}") # Optional: Log raw result
-            
-            # Check if a document was matched and modified. 
-            # The exact structure of update_result might depend on the Beanie/Motor version.
-            # We'll assume a simple check for now.
-            # A more robust check might involve inspecting update_result contents if available.
-            if update_result: # Simplified check, assumes non-None/empty means success
-                 logger.info(f"Club {club.id}: Successfully $set initial members list via class method.")
-            else:
-                 # This case means the find_one query didn't find the club right after insertion, which is odd.
-                 logger.warning(f"Club {club.id}: Class method update didn't seem to modify the document.")
-                 # Consider raising an error here as it indicates a potential problem.
-                 # raise HTTPException(status_code=500, detail="Failed to find club immediately after insertion for member update.")
-
+            await club.create()
+            logger.info(f"Created club {club.id} for {name} using create()")
         except Exception as e:
-             logger.error(f"Club {club.id}: Failed to $set initial members list via class method: {e}", exc_info=True)
-             # Decide if we should raise an error or return the partially created club
-             # For now, let's re-raise to make the failure explicit
-             raise HTTPException(status_code=500, detail="Failed to set initial club members after creation.")
+             logger.error(f"Club {club.id}: Failed during club.create(): {e}", exc_info=True)
+             # It's possible club.id isn't set if create() fails early
+             raise HTTPException(status_code=500, detail=f"Failed to create club: {str(e)}")
 
-        # Removed the re-fetch step. We will return the initial club object.
-        # The format_club_response function called by the route handler will fetch links.
-        # try:
-        #     # Use the class method directly which includes the not found check
-        #     created_club = await ClubService.get_club(club.id) 
-        #     logger.info(f"Successfully re-fetched club {created_club.id} after setting members.")
-        #     # Add a check to see if members are present in the re-fetched object
-        #     if not created_club.members:
-        #          logger.warning(f"Club {created_club.id}: Re-fetched club is missing the members list!")
-        #     elif str(created_club.members[0].ref.id) != str(creator.id):
-        #          logger.warning(f"Club {created_club.id}: Re-fetched club members list doesn't contain the creator! Members: {created_club.members}")
-        #     return created_club
-        # except HTTPException as he:
-        #      # If get_club raised 404, it means the club disappeared between update and re-fetch
-        #      logger.error(f"Club {club.id}: Failed to re-fetch club after setting members (HTTPException: {he.status_code} - {he.detail})")
-        #      raise he # Re-raise the original HTTPException
-        # except Exception as e:
-        #      logger.error(f"Club {club.id}: Failed to re-fetch club after setting members: {e}", exc_info=True)
-        #      raise HTTPException(status_code=500, detail="Failed to re-fetch club after creation.")
-        
-        return club # Return the original club instance
+        # Return the club object directly
+        return club
 
     @staticmethod
     async def get_club(club_id: PydanticObjectId) -> Club:
         """Get a club by ID."""
-        club = await Club.get(club_id)
+        # Fetch links here to ensure consistency before formatting
+        club = await Club.get(club_id, fetch_links=True)
         if not club:
             raise HTTPException(status_code=404, detail="Club not found")
         return club
@@ -124,69 +81,93 @@ class ClubService:
         if media_type:
             query["media_type"] = media_type
         if search:
+            # Assuming a text index exists on relevant fields (e.g., name, description)
             query["$text"] = {"$search": search}
 
-        total = await Club.find(query).count()
-        clubs = await Club.find(query).sort([("created_at", -1)]).skip(skip).limit(limit).to_list()
+        # Apply fetch_links directly to the find query
+        find_query = Club.find(query, fetch_links=True)
+        
+        total = await find_query.count()
+        clubs = await find_query.sort([("created_at", -1)]).skip(skip).limit(limit).to_list()
         return clubs, total
 
     @staticmethod
     async def get_user_clubs(user: User, skip: int = 0, limit: int = 20) -> Tuple[List[Club], int]:
         """Get all clubs a user is a member of."""
-        # Fetch clubs where user is a member
-        # For Link objects, MongoDB stores them as {"_id": user_id, "_ref": "User"}
         query = {"members._id": user.id}
-        total = await Club.find(query).count()
-        clubs = await Club.find(query).skip(skip).limit(limit).to_list()
+        # Apply fetch_links directly to the find query
+        find_query = Club.find(query, fetch_links=True)
+        
+        total = await find_query.count()
+        clubs = await find_query.sort([("created_at", -1)]).skip(skip).limit(limit).to_list()
         return clubs, total
 
     @staticmethod
     async def get_created_clubs(user: User, skip: int = 0, limit: int = 20) -> Tuple[List[Club], int]:
         """Get all clubs created by a user."""
         logger.debug(f"[Service] Getting created clubs for user ID: {user.id} (Skip: {skip}, Limit: {limit})")
-        # Fetch clubs where user is the creator
         query = {"creator._id": user.id}
         logger.debug(f"[Service] Database query for created clubs: {query}")
         
         try:
-            total = await Club.find(query).count()
+            # Apply fetch_links directly to the find query
+            find_query = Club.find(query, fetch_links=True)
+            
+            total = await find_query.count()
             logger.debug(f"[Service] Found total {total} created clubs matching query.")
-            clubs = await Club.find(query).sort([("created_at", -1)]).skip(skip).limit(limit).to_list()
+            clubs = await find_query.sort([("created_at", -1)]).skip(skip).limit(limit).to_list()
             logger.debug(f"[Service] Fetched {len(clubs)} created clubs after skip/limit.")
-            # Log the names of the fetched clubs
             fetched_club_names = [c.name for c in clubs]
             logger.debug(f"[Service] Fetched created club names: {fetched_club_names}")
             return clubs, total
         except Exception as e:
              logger.error(f"[Service] Error fetching created clubs from DB: {e}", exc_info=True)
-             raise # Re-raise the exception after logging
+             raise
 
     @staticmethod
     async def join_club(club_id: PydanticObjectId, user: User) -> Club:
         """Join a club."""
         club = await ClubService.get_club(club_id)
         
-        # Check if user is already a member
-        for member in club.members:
-            if hasattr(member, 'fetch'):
-                fetched_member = await member.fetch()
-                if str(fetched_member.id) == str(user.id):
-                    raise HTTPException(status_code=400, detail="Already a member of this club")
-            elif str(member.id) == str(user.id):
-                raise HTTPException(status_code=400, detail="Already a member of this club")
+        # Check if user is already a member by fetching all members first
+        member_ids = []
+        if club.members:
+             try:
+                 fetched_members = await asyncio.gather(*[member.fetch() for member in club.members if hasattr(member, 'fetch')])
+                 member_ids = [str(m.id) for m in fetched_members if m] # Get IDs of successfully fetched members
+                 # Also consider members that might already be resolved
+                 for member in club.members:
+                      if isinstance(member, User) and str(member.id) not in member_ids:
+                          member_ids.append(str(member.id))
+             except Exception as e:
+                  logger.error(f"Error fetching members during join check for club {club_id}: {e}", exc_info=True)
+                  # Decide how to handle - potentially raise 500 or proceed cautiously
+                  raise HTTPException(status_code=500, detail="Failed to verify membership status")
 
-        # Create the Link object
+        if str(user.id) in member_ids:
+             raise HTTPException(status_code=400, detail="Already a member of this club")
+
+        # Create the Link object for the user joining
         user_link = Link(user, User)
         
-        # Add user as a member using $push with the DBRef structure
-        await club.update({"$push": {Club.members: user_link.to_ref()}})
-        # await club.save() # <-- Replaced with explicit update
+        # Add user link to the list in memory
+        if club.members is None: # Initialize list if it doesn't exist
+            club.members = []
+        club.members.append(user_link)
+        
+        # Save the entire club object using .save() for consistency and potential hook execution
+        try:
+            await club.save()
+            logger.info(f"User {user.id} successfully joined club {club_id} via club.save()")
+        except Exception as e:
+             logger.error(f"Failed to save club {club_id} after adding member {user.id}: {e}", exc_info=True)
+             raise HTTPException(status_code=500, detail="Failed to save membership update")
 
-        # Re-fetch the club after saving to ensure the latest state is returned
+        # Re-fetch is likely still needed if save() doesn't update the instance in place
+        # or to ensure links are fetched again for the response
         updated_club = await ClubService.get_club(club_id)
         if not updated_club:
-             # This case should ideally not happen if the club existed moments ago
-             logger.error(f"Failed to re-fetch club {club_id} after joining.")
+             logger.error(f"Failed to re-fetch club {club_id} after joining (using save).")
              raise HTTPException(status_code=404, detail="Club not found after update.")
              
         return updated_club

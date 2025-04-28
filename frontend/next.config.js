@@ -2,19 +2,6 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: [
-      'localhost',
-      'books.google.com',
-      'image.tmdb.org',
-      'avatars.githubusercontent.com',
-      'lh3.googleusercontent.com',
-      'www.themoviedb.org',
-      'images-na.ssl-images-amazon.com',
-      'storage.googleapis.com',
-      'images.aeonmedia.co',
-      'i.imgur.com',
-      'media.newyorker.com'
-    ],
     remotePatterns: [
       {
         protocol: 'https',

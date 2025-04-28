@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/config";
 
@@ -6,29 +6,32 @@ import { API_BASE_URL } from "@/lib/config";
 export const normalizeImageUrl = (url: string | undefined | null): string | undefined => {
   if (!url) return undefined;
   
-  // If it's already in the format we want, return it
-  if (url.startsWith('/api/club_covers/')) {
+  // Check if it's already an absolute URL
+  if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
   }
   
-  // If it has the old static path format
+  // If it's just the relative path (e.g., /club_covers/filename.jpg)
+  if (url.startsWith('/club_covers/')) {
+    return `${API_BASE_URL}${url}`; // Prepend the backend base URL
+  }
+  
+  // If it includes /static/ or just the filename part from older formats
   if (url.includes('/static/club_covers/') || url.includes('/club_covers/')) {
-    // Extract just the filename
     const parts = url.split('/');
     const filename = parts[parts.length - 1];
-    return `/api/club_covers/${filename}`;
+    return `${API_BASE_URL}/club_covers/${filename}`; // Construct full backend URL
   }
   
-  // If it's a full URL (with localhost, etc)
-  if (url.includes('localhost') && url.includes('/club_covers/')) {
-    const matches = url.match(/\/club_covers\/([^?&]+)/);
-    if (matches && matches[1]) {
-      return `/api/club_covers/${matches[1]}`;
-    }
+  // Try to extract filename if it somehow ended up different
+  const filenameMatch = url.match(/[^/]+$/);
+  if (filenameMatch) {
+     return `${API_BASE_URL}/club_covers/${filenameMatch[0]}`;
   }
-  
-  // Fallback to the original URL
-  return url;
+
+  // Fallback if we can't parse it
+  console.warn(`[normalizeImageUrl] Could not normalize URL: ${url}`);
+  return url; // Return original or undefined if it's truly unparseable
 };
 
 export interface ClubData {
@@ -132,28 +135,29 @@ interface ClubThreadResponse {
 export function useClubs() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [internalLoading, setInternalLoading] = useState<Record<string, boolean>>({}); // For join/leave
 
-  // Get auth headers for regular JSON requests
-  const getAuthHeaders = () => {
+  // Memoize getAuthHeaders
+  const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem("token");
-    const headers: HeadersInit = { // Use HeadersInit type for better type safety
+    const headers: HeadersInit = {
       "Content-Type": "application/json",
     };
     if (token) {
-      headers["Authorization"] = `Bearer ${token}`; // Only add Authorization if token exists
+      headers["Authorization"] = `Bearer ${token}`;
     }
     return headers;
-  };
-  
-  // For FormData requests (don't include Content-Type)
-  const getFormDataHeaders = () => {
+  }, []); // Empty dependency array: doesn't depend on component state/props
+
+  // Memoize getFormDataHeaders
+  const getFormDataHeaders = useCallback(() => {
     const token = localStorage.getItem("token");
     return {
       Authorization: token ? `Bearer ${token}` : "",
     };
-  };
+  }, []); // Empty dependency array
 
-  const getClubs = async (
+  const getClubs = useCallback(async (
     skip = 0,
     limit = 20,
     mediaType?: string,
@@ -213,9 +217,9 @@ export function useClubs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeaders]); // Dependency: getAuthHeaders
 
-  const getUserClubs = async (
+  const getUserClubs = useCallback(async (
     skip = 0,
     limit = 20
   ): Promise<ClubResponse> => {
@@ -259,9 +263,59 @@ export function useClubs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeaders]); // Dependency: getAuthHeaders
 
-  const getCreatedClubs = async (
+  const getMyClubs = useCallback(async (
+    skip = 0,
+    limit = 20
+  ): Promise<ClubResponse> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams({
+        skip: skip.toString(),
+        limit: limit.toString(),
+      });
+
+      // Fetch from the /api/clubs/my endpoint
+      const response = await fetch(`/api/clubs/my?${params}`, {
+        headers: getAuthHeaders(),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Failed to fetch my clubs");
+      }
+
+      // Normalize all image URLs
+      const clubs = data.map((club: any) => ({
+        ...club,
+        cover_image: normalizeImageUrl(club.cover_image),
+      }));
+
+      return {
+        success: true,
+        data: {
+          clubs,
+          // Note: The backend /my endpoint currently doesn't return a total count
+          // for pagination purposes after deduplication. We might need to adjust
+          // the backend later if precise total count is needed for pagination UI.
+          total: clubs.length, 
+        },
+      };
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to fetch my clubs";
+      setError(message);
+      return { success: false, message };
+    } finally {
+      setLoading(false);
+    }
+  }, [getAuthHeaders]); // Dependency: getAuthHeaders
+
+  const getCreatedClubs = useCallback(async (
     skip = 0,
     limit = 20
   ): Promise<ClubResponse> => {
@@ -305,9 +359,9 @@ export function useClubs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeaders]); // Dependency: getAuthHeaders
 
-  const uploadCoverImage = async (file: File): Promise<string | null> => {
+  const uploadCoverImage = useCallback(async (file: File): Promise<string | null> => {
     setLoading(true);
     setError(null);
 
@@ -330,11 +384,13 @@ export function useClubs() {
         throw new Error(data.detail || "Failed to upload image");
       }
 
-      // Format the URL consistently
-      const imageUrl = `/api/club_covers/${data.url.split('/').pop()}`;
-      
-      console.log("Image uploaded successfully. URL:", imageUrl);
-      return imageUrl;
+      // Return the full URL directly from the backend if possible, or normalize
+      // The backend's response `data.url` should be the relative path like '/club_covers/...'
+      const relativePath = data.url; // Assuming backend returns '/club_covers/filename.jpg'
+      const imageUrl = normalizeImageUrl(relativePath); // Use the updated normalizer
+
+      console.log("Image uploaded successfully. Full URL:", imageUrl);
+      return imageUrl || null; // Return the full URL or null if normalization failed
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to upload image";
       setError(message);
@@ -343,9 +399,9 @@ export function useClubs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [normalizeImageUrl]); // Dependency: normalizeImageUrl (if it's stable)
 
-  const createClub = async (
+  const createClub = useCallback(async (
     name: string,
     mediaType: string,
     description?: string,
@@ -440,10 +496,10 @@ export function useClubs() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getAuthHeaders, uploadCoverImage]); // Dependencies
 
-  const joinClub = async (clubId: string): Promise<boolean> => {
-    setLoading(true);
+  const joinClub = useCallback(async (clubId: string): Promise<boolean> => {
+    setInternalLoading(prev => ({ ...prev, [clubId]: true })); // Use specific loading state
     setError(null);
 
     try {
@@ -474,12 +530,12 @@ export function useClubs() {
       toast.error(message);
       return false;
     } finally {
-      setLoading(false);
+      setInternalLoading(prev => ({ ...prev, [clubId]: false }));
     }
-  };
+  }, [getAuthHeaders]); // Dependency
 
-  const leaveClub = async (clubId: string): Promise<boolean> => {
-    setLoading(true);
+  const leaveClub = useCallback(async (clubId: string): Promise<boolean> => {
+    setInternalLoading(prev => ({ ...prev, [clubId]: true })); // Use specific loading state
     setError(null);
 
     try {
@@ -502,9 +558,9 @@ export function useClubs() {
       toast.error(message);
       return false;
     } finally {
-      setLoading(false);
+      setInternalLoading(prev => ({ ...prev, [clubId]: false }));
     }
-  };
+  }, [getAuthHeaders]); // Dependency
 
   const deleteClub = async (clubId: string): Promise<boolean> => {
     setLoading(true);
@@ -908,9 +964,11 @@ export function useClubs() {
   // Return all the functions and state
   return {
     loading,
+    internalLoading,
     error,
     getClubs,
     getUserClubs,
+    getMyClubs,
     getCreatedClubs,
     createClub,
     joinClub,

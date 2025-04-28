@@ -38,9 +38,8 @@ app.add_middleware(
 # Ensure uploads directory exists
 os.makedirs("uploads/club_covers", exist_ok=True)
 
-# Mount the uploads directory to serve static files through multiple routes
+# Mount the uploads directory to serve static files
 app.mount("/club_covers", StaticFiles(directory="uploads/club_covers"), name="club_covers")
-app.mount("/api/club_covers", StaticFiles(directory="uploads/club_covers"), name="api_club_covers")
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])

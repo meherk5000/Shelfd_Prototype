@@ -271,17 +271,32 @@ async def get_my_clubs(
     current_user: User = Depends(get_current_user),
 ):
     """Get clubs the current user is a member of or has created."""
-    # Get clubs where user is a member
-    member_clubs, member_total = await ClubService.get_user_clubs(current_user, skip, limit)
+    # Get ALL clubs where user is a member (remove pagination here)
+    member_clubs, _ = await ClubService.get_user_clubs(current_user, skip=0, limit=0) # limit=0 to fetch all
     
-    # Get clubs created by the user
-    created_clubs, created_total = await ClubService.get_created_clubs(current_user, skip, limit)
+    # Get ALL clubs created by the user (remove pagination here)
+    created_clubs, _ = await ClubService.get_created_clubs(current_user, skip=0, limit=0) # limit=0 to fetch all
     
     # Combine and deduplicate clubs
-    all_clubs = list({club.id: club for club in member_clubs + created_clubs}.values())
+    # Ensure creator status is potentially preserved correctly if object identity matters
+    # (Using club.id as key is generally safe)
+    all_clubs_dict = {club.id: club for club in member_clubs + created_clubs}
+    all_combined_clubs = list(all_clubs_dict.values())
     
-    # Format all clubs
-    return [await format_club_response(club, current_user) for club in all_clubs]
+    # Apply pagination AFTER combining and deduplicating
+    paginated_clubs = all_combined_clubs[skip : skip + limit]
+    
+    # Format the paginated subset of clubs
+    formatted_clubs = []
+    for club in paginated_clubs:
+        try:
+            formatted_clubs.append(await format_club_response(club, current_user))
+        except Exception as e:
+            logger.error(f"Error formatting club {club.id} in get_my_clubs: {e}", exc_info=True)
+            # Optionally, skip clubs that fail to format
+            # continue 
+
+    return formatted_clubs
 
 @router.get("/{club_id}", response_model=ClubResponse)
 async def get_club(
@@ -421,20 +436,31 @@ async def update_club_book(
     """Update a club with book information"""
     try:
         obj_id = PydanticObjectId(club_id)
-        club = await Club.get(obj_id)
+        club = await Club.get(obj_id) # Step 1: Get club (no links needed yet)
         if not club:
             raise HTTPException(status_code=404, detail="Club not found")
         
-        # Check if user is creator/admin
-        creator = await club.creator.fetch() # Fetch creator directly
-        if str(creator.id) != str(current_user.id):
+        # Step 2: Check if user is creator/admin (Robustly handle Link or User)
+        if not club.creator:
+            raise HTTPException(status_code=500, detail="Club creator information is missing.")
+        
+        creator_user: Optional[User] = None
+        if hasattr(club.creator, 'fetch'): # Check if it's a Link
+            creator_user = await club.creator.fetch()
+        elif isinstance(club.creator, User): # Check if it's already a User
+            creator_user = club.creator
+        # else: We can optionally log an error if it's neither
+        
+        if not creator_user:
+            raise HTTPException(status_code=500, detail="Failed to resolve club creator details.")
+        
+        if str(creator_user.id) != str(current_user.id):
             raise HTTPException(status_code=403, detail="Only the club creator can update book information")
             
-        # Verify this is a book club
+        # Step 3: Verify media type and update fields
         if club.media_type != "book":
             raise HTTPException(status_code=400, detail="This club is not a book club")
             
-        # Update book information
         club.book_id = request.book_id
         club.book_title = request.book_title
         club.book_author = request.book_author
@@ -455,15 +481,22 @@ async def update_club_book(
         club.tv_episode = None
         
         club.updated_at = datetime.utcnow()
+        
+        # Step 4: Save changes
         await club.save()
         
-        # Removed thread generation call
-        # club_service = ClubService()
-        # await club_service.generate_book_threads(club, current_user)
+        # Step 5: Re-fetch the club WITH links to ensure data consistency for response
+        updated_club = await Club.get(club.id, fetch_links=True)
+        if not updated_club:
+             # Should not happen, but handle edge case
+             raise HTTPException(status_code=404, detail="Club not found after update.")
         
-        return await format_club_response(club, current_user)
+        # Step 6: Format the fully updated and fetched club
+        return await format_club_response(updated_club, current_user)
+        
     except Exception as e:
-        print(f"Error updating club book: {str(e)}")
+        # Log the actual error for debugging
+        logger.error(f"Error updating club book for club {club_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update club book: {str(e)}")
 
 @router.put("/{club_id}/movie", response_model=ClubResponse)
@@ -475,21 +508,31 @@ async def update_club_movie(
     """Update a club with movie information"""
     try:
         obj_id = PydanticObjectId(club_id)
-        club = await Club.get(obj_id, fetch_links=True)
+        club = await Club.get(obj_id) # Step 1: Get club (no links needed yet)
         if not club:
             raise HTTPException(status_code=404, detail="Club not found")
         
-        # Check if user is creator/admin (Now that links are fetched)
-        # Ensure creator is fetched and perform direct ID check
-        if not club.creator or club.creator.id != current_user.id:
-            logger.error(f"Auth failed: User {current_user.id} != Creator {club.creator.id if club.creator else 'None'} for club {club_id}")
-            raise HTTPException(status_code=403, detail="Only the club creator can update movie information")
-        
-        # Verify this is a movie club
+        # Step 2: Check if user is creator/admin (Robustly handle Link or User)
+        if not club.creator:
+             raise HTTPException(status_code=500, detail="Club creator information is missing.")
+
+        creator_user: Optional[User] = None
+        if hasattr(club.creator, 'fetch'): # Check if it's a Link
+            creator_user = await club.creator.fetch()
+        elif isinstance(club.creator, User): # Check if it's already a User
+            creator_user = club.creator
+            
+        if not creator_user:
+             raise HTTPException(status_code=500, detail="Failed to resolve club creator details.")
+
+        if str(creator_user.id) != str(current_user.id):
+             logger.error(f"Auth failed: User {current_user.id} != Creator {creator_user.id} for club {club_id}")
+             raise HTTPException(status_code=403, detail="Only the club creator can update movie information")
+
+        # Step 3: Verify media type and update fields
         if club.media_type != "movie":
             raise HTTPException(status_code=400, detail="This club is not a movie club")
             
-        # Update movie information
         club.movie_id = request.movie_id
         club.movie_title = request.movie_title
         club.movie_director = request.movie_director
@@ -510,11 +553,21 @@ async def update_club_movie(
         club.tv_episode = None
         
         club.updated_at = datetime.utcnow()
+        
+        # Step 4: Save changes
         await club.save()
         
-        return await format_club_response(club, current_user)
+        # Step 5: Re-fetch the club WITH links
+        updated_club = await Club.get(club.id, fetch_links=True)
+        if not updated_club:
+             raise HTTPException(status_code=404, detail="Club not found after update.")
+
+        # Step 6: Format the response
+        return await format_club_response(updated_club, current_user)
+        
     except Exception as e:
-        print(f"Error updating club movie: {str(e)}")
+        # Log the actual error for debugging
+        logger.error(f"Error updating club movie for club {club_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update club movie: {str(e)}")
 
 @router.put("/{club_id}/tv-show", response_model=ClubResponse)
@@ -526,21 +579,31 @@ async def update_club_tv(
     """Update a club with TV show information"""
     try:
         obj_id = PydanticObjectId(club_id)
-        # Fetch the club with the creator link resolved
-        club = await Club.get(obj_id, fetch_links=True) 
+        club = await Club.get(obj_id) # Step 1: Get club (no links needed yet)
         if not club:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found")
         
-        # Ensure creator is fetched and perform direct ID check
-        if not club.creator or club.creator.id != current_user.id:
-            logger.error(f"Auth failed: User {current_user.id} != Creator {club.creator.id if club.creator else 'None'} for club {club_id}")
+        # Step 2: Check if user is creator/admin (Robustly handle Link or User)
+        if not club.creator:
+             raise HTTPException(status_code=500, detail="Club creator information is missing.")
+
+        creator_user: Optional[User] = None
+        if hasattr(club.creator, 'fetch'): # Check if it's a Link
+            creator_user = await club.creator.fetch()
+        elif isinstance(club.creator, User): # Check if it's already a User
+            creator_user = club.creator
+            
+        if not creator_user:
+             raise HTTPException(status_code=500, detail="Failed to resolve club creator details.")
+
+        if str(creator_user.id) != str(current_user.id):
+            logger.error(f"Auth failed: User {current_user.id} != Creator {creator_user.id} for club {club_id}")
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the club creator can update TV show information")
         
-        # Verify this is a TV show club
+        # Step 3: Verify media type and update fields
         if club.media_type != "tv":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This club is not a TV show club")
             
-        # Update TV show information
         club.tv_id = request.tv_id
         club.tv_title = request.tv_title
         club.tv_creator = request.tv_creator
@@ -561,16 +624,21 @@ async def update_club_tv(
         club.movie_poster = None
         
         club.updated_at = datetime.utcnow()
+        
+        # Step 4: Save changes
         await club.save()
         
-        # Return the updated club details, correctly formatted
-        return await format_club_response(club, current_user) 
+        # Step 5: Re-fetch the club WITH links
+        updated_club = await Club.get(club.id, fetch_links=True)
+        if not updated_club:
+             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found after update.")
+        
+        # Step 6: Format the response
+        return await format_club_response(updated_club, current_user) 
         
     except HTTPException as he:
-        # Re-raise specific HTTP exceptions (like 404, 403, 400)
         raise he
     except Exception as e:
-        # Catch unexpected errors and return 500
         logger.error(f"Unexpected error updating club TV show for club {club_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to update club TV show: An unexpected error occurred.")
 
@@ -617,70 +685,96 @@ async def get_club_members(
 
 # Helper functions
 async def format_club_response(club: Club, current_user: Optional[User] = None) -> ClubResponse:
-    """Format a club object for response."""
-    # Fetch the creator user if it's a Link
-    if hasattr(club.creator, 'fetch'):
-        creator = await club.creator.fetch()
-    else:
-        # Creator is already a User object
-        creator = club.creator
-    
-    # Fetch all member users, handling both Link objects and direct User objects
-    member_ids = []
-    members = []
-    
-    # Ensure club.members is not None before iterating
-    if club.members:
-        for member_ref in club.members:
-            # Check if member_ref is valid before fetching/accessing
-            if member_ref:
-                if hasattr(member_ref, 'fetch'):
-                    # It's a Link object
-                    fetched_member = await member_ref.fetch()
-                    if fetched_member: # Ensure fetch was successful
-                        members.append(fetched_member)
-                        # Store string representation of ID
-                        member_ids.append(str(fetched_member.id)) 
-                elif isinstance(member_ref, User): 
-                    # It's already a User object
-                    members.append(member_ref)
-                    # Store string representation of ID
-                    member_ids.append(str(member_ref.id)) 
-                else:
-                    # Log unexpected member reference type if needed
-                    print(f"Warning: Unexpected member reference type in club {club.id}: {type(member_ref)}")
+    """Format a club object for response, handling Links/DBRefs robustly."""
+    creator: Optional[User] = None
+    creator_id_str = "None"
+    creator_username = "Unknown"
+
+    try:
+        if club.creator:
+            # Attempt to fetch the creator, assuming it's a Link or Beanie handles DBRef resolution implicitly via fetch_link
+            # Use fetch_link for potentially better DBRef handling if attribute access fails
+            logger.debug(f"Attempting to fetch creator for club {club.id}. Type: {type(club.creator)}")
+            # creator = await club.fetch_link(Club.creator) # More explicit fetch_link
+            # Simpler attempt first: rely on Link.fetch() which might handle DBRefs
+            if hasattr(club.creator, 'fetch'):
+                 creator = await club.creator.fetch()
+            elif isinstance(club.creator, User): # Handle case where it might already be resolved
+                 creator = club.creator
             else:
-                 print(f"Warning: Found None member reference in club {club.id}")
-    else:
-        print(f"Warning: club.members is None for club {club.id}")
+                 logger.warning(f"Club {club.id}: Creator is of unexpected type: {type(club.creator)}. Value: {club.creator}")
 
-    # Debugging logs
-    creator_id_str = str(creator.id) if creator else "None"
+            if creator:
+                creator_id_str = str(creator.id)
+                creator_username = creator.username
+                logger.debug(f"Club {club.id}: Successfully fetched creator: {creator_username} ({creator_id_str})")
+            else:
+                logger.warning(f"Club {club.id}: Failed to fetch creator from link/DBRef: {club.creator}")
+        else:
+             logger.warning(f"Club {club.id} has no creator link.")
+
+    except Exception as e:
+        logger.error(f"Error fetching creator for club {club.id}: {e}", exc_info=True)
+        # Continue formatting without creator info if fetching fails
+
+    # Explicitly fetch members (handle Links/DBRefs)
+    member_ids = []
+    processed_members = [] # Store fetched User objects
+    members_list = club.members or []
+    logger.debug(f"Club {club.id}: Processing {len(members_list)} member references.")
+
+    for i, member_ref in enumerate(members_list):
+        user_to_add = None
+        try:
+            if member_ref:
+                logger.debug(f"Club {club.id}, Member ref #{i}: Type={type(member_ref)}, Value={member_ref}")
+                # Attempt to fetch, assuming Link or Beanie handles DBRef resolution
+                if hasattr(member_ref, 'fetch'): # Standard Link check
+                    fetched_member = await member_ref.fetch()
+                    if fetched_member:
+                        user_to_add = fetched_member
+                        logger.debug(f"Club {club.id}, Member ref #{i}: Fetched user {user_to_add.username} via .fetch()")
+                    else:
+                         logger.warning(f"Club {club.id}, Member ref #{i}: .fetch() returned None for {member_ref}")
+                elif isinstance(member_ref, User): # Already resolved User
+                     user_to_add = member_ref
+                     logger.debug(f"Club {club.id}, Member ref #{i}: Is already User object {user_to_add.username}")
+                else:
+                     logger.warning(f"Club {club.id}, Member ref #{i}: Unexpected type: {type(member_ref)}")
+            else:
+                 logger.warning(f"Club {club.id}, Member ref #{i}: Reference is None.")
+
+            if user_to_add:
+                processed_members.append(user_to_add)
+                member_ids.append(str(user_to_add.id))
+
+        except Exception as e:
+            logger.error(f"Error fetching member ref #{i} for club {club.id} (Ref: {member_ref}): {e}", exc_info=True)
+            # Continue processing other members
+
+    logger.debug(f"Club {club.id}: Finished processing members. Found {len(processed_members)} valid members.")
+    logger.debug(f"Club {club.id}: Member IDs: {member_ids}")
+
+    # Calculate flags using fetched data
     current_user_id_str = str(current_user.id) if current_user else "None"
-    print(f"DEBUG [format_club_response] Club: {club.name} ({club.id})")
-    print(f"DEBUG [format_club_response] Creator ID: {creator_id_str}")
-    print(f"DEBUG [format_club_response] Current User ID: {current_user_id_str}")
-    print(f"DEBUG [format_club_response] Member IDs: {member_ids}")
-
-    # Calculate flags
     is_member_flag = bool(current_user and current_user_id_str in member_ids)
     is_creator_flag = bool(current_user and creator and current_user_id_str == creator_id_str)
-    
-    print(f"DEBUG [format_club_response] Calculated is_member: {is_member_flag}")
-    print(f"DEBUG [format_club_response] Calculated is_creator: {is_creator_flag}")
 
-    # Construct and return a ClubResponse instance
+    logger.debug(f"Club {club.id}: Current User ID: {current_user_id_str}")
+    logger.debug(f"Club {club.id}: Calculated is_member: {is_member_flag}")
+    logger.debug(f"Club {club.id}: Calculated is_creator: {is_creator_flag}")
+
+    # Construct and return response
     return ClubResponse(
         id=str(club.id),
         name=club.name,
         description=club.description,
-        creator_id=str(creator.id) if creator else None, # Handle case where creator might be None
-        creator_username=creator.username if creator else "Unknown", # Handle case where creator might be None
-        member_count=len(members),
+        creator_id=creator_id_str,
+        creator_username=creator_username,
+        member_count=len(processed_members), # Count based on successfully processed members
         media_type=club.media_type,
         is_private=club.is_private,
         created_at=club.created_at.isoformat(),
-        # Use calculated flags
         is_member=is_member_flag,
         is_creator=is_creator_flag,
         cover_image=club.cover_image,
