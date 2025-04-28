@@ -175,11 +175,11 @@ class UpdateClubTVShowRequest(BaseModel):
     tv_episode: Optional[int] = None
 
 # Routes
-@router.post("/create", response_model=Club)
+@router.post("/create", response_model=ClubResponse)
 async def create_club(
     request: CreateClubRequest,
     current_user: User = Depends(get_current_user)
-) -> Club:
+) -> ClubResponse:
     logger.debug("[Backend] Received club creation request with data: %s", request.model_dump())
     logger.debug("[Backend] Current user: %s (ID: %s)", current_user.username, current_user.id)
     
@@ -201,7 +201,8 @@ async def create_club(
         await club.create()
         logger.debug("[Backend] Club successfully created in database with ID: %s", club.id)
         
-        return club
+        # Format the response using the helper function
+        return await format_club_response(club, current_user)
     except Exception as e:
         logger.error("[Backend] Error creating club: %s", str(e), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to create club: {str(e)}")
@@ -464,13 +465,14 @@ async def update_club_movie(
     """Update a club with movie information"""
     try:
         obj_id = PydanticObjectId(club_id)
-        club = await Club.get(obj_id)
+        club = await Club.get(obj_id, fetch_links=True)
         if not club:
             raise HTTPException(status_code=404, detail="Club not found")
         
-        # Check if user is creator/admin
-        creator_id = str(club.creator.id) if hasattr(club.creator, 'id') else str(club.creator)
-        if creator_id != str(current_user.id):
+        # Check if user is creator/admin (Now that links are fetched)
+        # Ensure creator is fetched and perform direct ID check
+        if not club.creator or club.creator.id != current_user.id:
+            logger.error(f"Auth failed: User {current_user.id} != Creator {club.creator.id if club.creator else 'None'} for club {club_id}")
             raise HTTPException(status_code=403, detail="Only the club creator can update movie information")
         
         # Verify this is a movie club

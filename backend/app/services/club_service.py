@@ -3,12 +3,15 @@ from typing import List, Optional, Tuple, Dict, Any
 from beanie import PydanticObjectId, Link
 from fastapi import HTTPException
 import asyncio
+import logging
 
 from ..database.models.club import Club
 from ..database.models.club_post import ClubPost
 from ..database.models.user import User
 from ..database.models.club_milestone import ClubMilestone
 from ..database.models.club_thread import ClubThread
+
+logger = logging.getLogger(__name__)
 
 class ClubService:
     @staticmethod
@@ -29,6 +32,7 @@ class ClubService:
         if media_type not in ["book", "movie", "tv"]:
             raise HTTPException(status_code=400, detail="Invalid media type")
 
+        # Create club object without members initially
         club = Club(
             name=name,
             description=description,
@@ -40,13 +44,45 @@ class ClubService:
             book_author=book_author,
             book_cover=book_cover,
             book_id=book_id,
+            # members field is omitted here
         )
         
-        # Add creator as a member
-        club.members = [Link(creator, User)]
-        
+        # Insert the basic club document
         await club.insert()
-        return club
+        logger.info(f"Inserted basic club {club.id} for {name}")
+
+        # Now, update the document to set the initial members list
+        creator_link_ref = Link(creator, User).to_ref()
+        try:
+            update_result = await club.update({"$set": {Club.members: [creator_link_ref]}})
+            if update_result.modified_count == 0:
+                 logger.warning(f"Club {club.id}: $set members update modified 0 documents.")
+            else:
+                 logger.info(f"Club {club.id}: Successfully $set initial members list.")
+        except Exception as e:
+             logger.error(f"Club {club.id}: Failed to $set initial members list: {e}", exc_info=True)
+             # Decide if we should raise an error or return the partially created club
+             # For now, let's re-raise to make the failure explicit
+             raise HTTPException(status_code=500, detail="Failed to set initial club members after creation.")
+
+        # Re-fetch the club to get the final state with members
+        try:
+            # Use the class method directly which includes the not found check
+            created_club = await ClubService.get_club(club.id) 
+            logger.info(f"Successfully re-fetched club {created_club.id} after setting members.")
+            # Add a check to see if members are present in the re-fetched object
+            if not created_club.members:
+                 logger.warning(f"Club {created_club.id}: Re-fetched club is missing the members list!")
+            elif str(created_club.members[0].ref.id) != str(creator.id):
+                 logger.warning(f"Club {created_club.id}: Re-fetched club members list doesn't contain the creator! Members: {created_club.members}")
+            return created_club
+        except HTTPException as he:
+             # If get_club raised 404, it means the club disappeared between update and re-fetch
+             logger.error(f"Club {club.id}: Failed to re-fetch club after setting members (HTTPException: {he.status_code} - {he.detail})")
+             raise he # Re-raise the original HTTPException
+        except Exception as e:
+             logger.error(f"Club {club.id}: Failed to re-fetch club after setting members: {e}", exc_info=True)
+             raise HTTPException(status_code=500, detail="Failed to re-fetch club after creation.")
 
     @staticmethod
     async def get_club(club_id: PydanticObjectId) -> Club:
@@ -87,11 +123,23 @@ class ClubService:
     @staticmethod
     async def get_created_clubs(user: User, skip: int = 0, limit: int = 20) -> Tuple[List[Club], int]:
         """Get all clubs created by a user."""
+        logger.debug(f"[Service] Getting created clubs for user ID: {user.id} (Skip: {skip}, Limit: {limit})")
         # Fetch clubs where user is the creator
         query = {"creator._id": user.id}
-        total = await Club.find(query).count()
-        clubs = await Club.find(query).skip(skip).limit(limit).to_list()
-        return clubs, total
+        logger.debug(f"[Service] Database query for created clubs: {query}")
+        
+        try:
+            total = await Club.find(query).count()
+            logger.debug(f"[Service] Found total {total} created clubs matching query.")
+            clubs = await Club.find(query).sort([("created_at", -1)]).skip(skip).limit(limit).to_list()
+            logger.debug(f"[Service] Fetched {len(clubs)} created clubs after skip/limit.")
+            # Log the names of the fetched clubs
+            fetched_club_names = [c.name for c in clubs]
+            logger.debug(f"[Service] Fetched created club names: {fetched_club_names}")
+            return clubs, total
+        except Exception as e:
+             logger.error(f"[Service] Error fetching created clubs from DB: {e}", exc_info=True)
+             raise # Re-raise the exception after logging
 
     @staticmethod
     async def join_club(club_id: PydanticObjectId, user: User) -> Club:
@@ -107,10 +155,21 @@ class ClubService:
             elif str(member.id) == str(user.id):
                 raise HTTPException(status_code=400, detail="Already a member of this club")
 
-        # Add user as a member
-        club.members.append(Link(user, User))
-        await club.save()
-        return club
+        # Create the Link object
+        user_link = Link(user, User)
+        
+        # Add user as a member using $push with the DBRef structure
+        await club.update({"$push": {Club.members: user_link.to_ref()}})
+        # await club.save() # <-- Replaced with explicit update
+
+        # Re-fetch the club after saving to ensure the latest state is returned
+        updated_club = await ClubService.get_club(club_id)
+        if not updated_club:
+             # This case should ideally not happen if the club existed moments ago
+             logger.error(f"Failed to re-fetch club {club_id} after joining.")
+             raise HTTPException(status_code=404, detail="Club not found after update.")
+             
+        return updated_club
 
     @staticmethod
     async def leave_club(club_id: PydanticObjectId, user: User) -> Club:
