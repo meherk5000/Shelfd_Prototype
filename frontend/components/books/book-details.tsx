@@ -302,7 +302,10 @@ export function BookDetails({ id }: { id: string }) {
             <div className="space-y-6">
               <section>
                 <h2 className="text-xl font-semibold mb-2">Overview</h2>
-                <p className="text-muted-foreground">{book.description}</p>
+                <p
+                  className="text-muted-foreground"
+                  dangerouslySetInnerHTML={{ __html: book.description }}
+                />
               </section>
 
               <section>

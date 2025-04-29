@@ -32,7 +32,7 @@ import { Plus } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, FieldValues } from "react-hook-form";
 import * as z from "zod";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import { useShelf } from "@/lib/hooks/use-shelf";
 import { useAuth } from "@/lib/context/AuthContext";
 import api from "@/lib/api";

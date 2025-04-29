@@ -205,7 +205,10 @@ export function GlobalSearch() {
                             <Newspaper className="h-4 w-4" />
                           )}
                           <div>
-                            <div className="font-medium">{item.title}</div>
+                            <div
+                              className="font-medium"
+                              dangerouslySetInnerHTML={{ __html: item.title }}
+                            />
                             {item.subtitle && (
                               <div className="text-xs text-muted-foreground">
                                 {item.subtitle}

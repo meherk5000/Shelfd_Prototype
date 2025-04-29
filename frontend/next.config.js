@@ -18,6 +18,18 @@ const nextConfig = {
       {
         protocol: 'http',
         hostname: 'localhost',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.aeonmedia.co',
+      },
+      {
+        protocol: 'https',
+        hostname: 'media.newyorker.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.theatlantic.com',
       }
     ]
   },
