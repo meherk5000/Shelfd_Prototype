@@ -69,6 +69,11 @@ export default function Explore() {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      // --- Debug Logging ---
+      console.log(
+        `Explore useEffect: Loading data for activeTab: ${activeTab}`
+      );
+      // --- End Debug Logging ---
       try {
         // Fetch all data in parallel
         const [trendingData, newReleasesData, categoriesData] =
@@ -77,6 +82,13 @@ export default function Explore() {
             fetchNewReleases(activeTab),
             fetchCategoryItems(activeTab),
           ]);
+
+        // --- Debug Logging ---
+        console.log("Explore useEffect: Data received:");
+        console.log("  Trending:", trendingData);
+        console.log("  New Releases:", newReleasesData);
+        console.log("  Categories:", categoriesData);
+        // --- End Debug Logging ---
 
         setTrending(trendingData);
         setNewReleases(newReleasesData);
@@ -88,7 +100,13 @@ export default function Explore() {
       }
     };
 
-    loadData();
+    // Only load data if the tab is NOT 'for-you'
+    if (activeTab !== "for-you") {
+      loadData();
+    } else {
+      // If tab is 'for-you', ensure loading is false as ForYou component handles its own loading
+      setLoading(false);
+    }
   }, [activeTab]);
 
   const handleMediaClick = (item: MediaItem) => {
@@ -241,14 +259,16 @@ export default function Explore() {
               "/explore/new-releases"
             )}
 
-            {CATEGORIES.map((category) =>
-              renderMediaSection(
-                category.name,
-                categoryItems[category.id] || [],
-                true,
-                `/explore/category/${category.id}`
-              )
-            )}
+            {CATEGORIES.map((category) => (
+              <div key={category.id}>
+                {renderMediaSection(
+                  category.name,
+                  categoryItems[category.id] || [],
+                  true,
+                  `/explore/category/${category.id}`
+                )}
+              </div>
+            ))}
           </div>
         )}
       </Tabs>

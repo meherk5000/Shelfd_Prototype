@@ -403,10 +403,13 @@ async def get_articles(limit: int = 10, skip: int = 0):
 async def get_trending_media(tab: str = "All"):
     """Get trending media across all types or filtered by tab"""
     try:
+        # Convert tab to lowercase for case-insensitive comparison
+        tab_lower = tab.lower()
+        
         async with httpx.AsyncClient() as client:
             # Get popular movies
             movies_data = []
-            if tab == "All" or tab == "Movies":
+            if tab_lower == "all" or tab_lower == "movies":
                 movie_response = await client.get(
                     f"{settings.TMDB_BASE_URL}/movie/popular",
                     params={
@@ -430,7 +433,7 @@ async def get_trending_media(tab: str = "All"):
             
             # Get popular TV shows
             tv_data = []
-            if tab == "All" or tab == "TV Shows":
+            if tab_lower == "all" or tab_lower == "tv-shows":
                 tv_response = await client.get(
                     f"{settings.TMDB_BASE_URL}/tv/popular",
                     params={
@@ -454,7 +457,7 @@ async def get_trending_media(tab: str = "All"):
             
             # Get popular books (using search as a proxy)
             books_data = []
-            if tab == "All" or tab == "Books":
+            if tab_lower == "all" or tab_lower == "books":
                 books_response = await client.get(
                     f"{settings.GOOGLE_BOOKS_BASE_URL}/volumes",
                     params={
@@ -478,7 +481,7 @@ async def get_trending_media(tab: str = "All"):
             
             # Get recent articles
             articles_data = []
-            if tab == "All" or tab == "Articles":
+            if tab_lower == "all" or tab_lower == "articles":
                 articles = await ArticleService.get_recent_articles(limit=8)
                 articles_data = [
                     {
@@ -494,17 +497,17 @@ async def get_trending_media(tab: str = "All"):
                 ]
             
             # Combine results based on tab
-            if tab == "All":
+            if tab_lower == "all":
                 results = movies_data + tv_data + books_data + articles_data
                 # Shuffle or sort results as needed
                 return {"results": results}
-            elif tab == "Movies":
+            elif tab_lower == "movies":
                 return {"results": movies_data}
-            elif tab == "TV Shows":
+            elif tab_lower == "tv-shows":
                 return {"results": tv_data}
-            elif tab == "Books":
+            elif tab_lower == "books":
                 return {"results": books_data}
-            elif tab == "Articles":
+            elif tab_lower == "articles":
                 return {"results": articles_data}
             else:
                 return {"results": []}
@@ -517,10 +520,13 @@ async def get_trending_media(tab: str = "All"):
 async def get_new_releases(tab: str = "All"):
     """Get new releases across all types or filtered by tab"""
     try:
+        # Convert tab to lowercase for case-insensitive comparison
+        tab_lower = tab.lower()
+
         async with httpx.AsyncClient() as client:
             # Get new release movies
             movies_data = []
-            if tab == "All" or tab == "Movies":
+            if tab_lower == "all" or tab_lower == "movies":
                 movie_response = await client.get(
                     f"{settings.TMDB_BASE_URL}/movie/now_playing",
                     params={
@@ -544,7 +550,7 @@ async def get_new_releases(tab: str = "All"):
             
             # Get new TV shows
             tv_data = []
-            if tab == "All" or tab == "TV Shows":
+            if tab_lower == "all" or tab_lower == "tv-shows":
                 tv_response = await client.get(
                     f"{settings.TMDB_BASE_URL}/tv/on_the_air",
                     params={
@@ -568,7 +574,7 @@ async def get_new_releases(tab: str = "All"):
             
             # Get new books (using search as a proxy)
             books_data = []
-            if tab == "All" or tab == "Books":
+            if tab_lower == "all" or tab_lower == "books":
                 books_response = await client.get(
                     f"{settings.GOOGLE_BOOKS_BASE_URL}/volumes",
                     params={
@@ -592,7 +598,7 @@ async def get_new_releases(tab: str = "All"):
             
             # Get most recent articles
             articles_data = []
-            if tab == "All" or tab == "Articles":
+            if tab_lower == "all" or tab_lower == "articles":
                 articles = await ArticleService.get_recent_articles(limit=8)
                 articles_data = [
                     {
@@ -608,17 +614,17 @@ async def get_new_releases(tab: str = "All"):
                 ]
             
             # Combine results based on tab
-            if tab == "All":
+            if tab_lower == "all":
                 results = movies_data + tv_data + books_data + articles_data
                 # Sort by date (most recent first)
                 return {"results": results}
-            elif tab == "Movies":
+            elif tab_lower == "movies":
                 return {"results": movies_data}
-            elif tab == "TV Shows":
+            elif tab_lower == "tv-shows":
                 return {"results": tv_data}
-            elif tab == "Books":
+            elif tab_lower == "books":
                 return {"results": books_data}
-            elif tab == "Articles":
+            elif tab_lower == "articles":
                 return {"results": articles_data}
             else:
                 return {"results": []}
@@ -631,20 +637,21 @@ async def get_new_releases(tab: str = "All"):
 async def get_by_category(category: str, tab: str = "All"):
     """Get media by category"""
     try:
+        # Convert tab to lowercase for case-insensitive comparison
+        tab_lower = tab.lower()
+        
         # Map friendly category names to API search terms
         category_map = {
             "fantasy-sci-fi": "fantasy",
             "culture-ideas": "culture",
             "drama-romance": "drama",
         }
-        
         search_term = category_map.get(category, category)
         
         async with httpx.AsyncClient() as client:
             # Get category-specific movies
             movies_data = []
-            if tab == "All" or tab == "Movies":
-                # Use genre ID or keyword search based on the category
+            if tab_lower == "all" or tab_lower == "movies":
                 movie_response = await client.get(
                     f"{settings.TMDB_BASE_URL}/search/movie",
                     params={
@@ -669,7 +676,7 @@ async def get_by_category(category: str, tab: str = "All"):
             
             # Get category-specific TV shows
             tv_data = []
-            if tab == "All" or tab == "TV Shows":
+            if tab_lower == "all" or tab_lower == "tv-shows":
                 tv_response = await client.get(
                     f"{settings.TMDB_BASE_URL}/search/tv",
                     params={
@@ -694,7 +701,7 @@ async def get_by_category(category: str, tab: str = "All"):
             
             # Get category-specific books
             books_data = []
-            if tab == "All" or tab == "Books":
+            if tab_lower == "all" or tab_lower == "books":
                 books_response = await client.get(
                     f"{settings.GOOGLE_BOOKS_BASE_URL}/volumes",
                     params={
@@ -717,7 +724,7 @@ async def get_by_category(category: str, tab: str = "All"):
             
             # Get category-specific articles
             articles_data = []
-            if tab == "All" or tab == "Articles":
+            if tab_lower == "all" or tab_lower == "articles":
                 articles = await ArticleService.search_articles(search_term, limit=8)
                 articles_data = [
                     {
@@ -733,16 +740,16 @@ async def get_by_category(category: str, tab: str = "All"):
                 ]
             
             # Combine results based on tab
-            if tab == "All":
+            if tab_lower == "all":
                 results = movies_data + tv_data + books_data + articles_data
                 return {"results": results}
-            elif tab == "Movies":
+            elif tab_lower == "movies":
                 return {"results": movies_data}
-            elif tab == "TV Shows":
+            elif tab_lower == "tv-shows":
                 return {"results": tv_data}
-            elif tab == "Books":
+            elif tab_lower == "books":
                 return {"results": books_data}
-            elif tab == "Articles":
+            elif tab_lower == "articles":
                 return {"results": articles_data}
             else:
                 return {"results": []}
