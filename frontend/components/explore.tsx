@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import ForYou from "@/components/for-you";
 
 interface MediaItem {
   id: string;
@@ -33,7 +34,7 @@ const CATEGORIES = [
 
 export default function Explore() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState("All");
+  const [activeTab, setActiveTab] = useState("for-you");
   const [trending, setTrending] = useState<MediaItem[]>([]);
   const [newReleases, setNewReleases] = useState<MediaItem[]>([]);
   const [categoryItems, setCategoryItems] = useState<{
@@ -211,61 +212,46 @@ export default function Explore() {
 
   return (
     <div className="container mx-auto py-6">
-      <Tabs
-        defaultValue="All"
-        value={activeTab}
-        onValueChange={handleTabChange}
-      >
-        <TabsList className="mb-8 w-full grid grid-cols-5">
-          <TabsTrigger value="All">All</TabsTrigger>
-          <TabsTrigger value="Movies">Movies</TabsTrigger>
-          <TabsTrigger value="TV Shows">TV Shows</TabsTrigger>
-          <TabsTrigger value="Books">Books</TabsTrigger>
-          <TabsTrigger value="Articles">Articles</TabsTrigger>
+      <h1 className="text-3xl font-bold mb-8">Explore</h1>
+
+      <Tabs defaultValue="for-you" onValueChange={handleTabChange}>
+        <TabsList className="grid w-full grid-cols-6 mb-6">
+          <TabsTrigger value="for-you">For You</TabsTrigger>
+          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="movies">Movies</TabsTrigger>
+          <TabsTrigger value="tv-shows">TV Shows</TabsTrigger>
+          <TabsTrigger value="books">Books</TabsTrigger>
+          <TabsTrigger value="articles">Articles</TabsTrigger>
         </TabsList>
-      </Tabs>
 
-      {renderMediaSection("Trending", trending, true, "/explore/trending")}
+        {activeTab === "for-you" ? (
+          <ForYou />
+        ) : (
+          <div>
+            {renderMediaSection(
+              "Trending",
+              trending,
+              true,
+              "/explore/trending"
+            )}
+            {renderMediaSection(
+              "New Releases",
+              newReleases,
+              true,
+              "/explore/new-releases"
+            )}
 
-      {renderMediaSection(
-        "New Releases",
-        newReleases,
-        true,
-        "/explore/new-releases"
-      )}
-
-      {Object.keys(categoryItems).map((categoryId) => {
-        const category = CATEGORIES.find((c) => c.id === categoryId);
-        if (category && categoryItems[categoryId].length > 0) {
-          return (
-            <div key={categoryId}>
-              {renderMediaSection(
+            {CATEGORIES.map((category) =>
+              renderMediaSection(
                 category.name,
-                categoryItems[categoryId],
+                categoryItems[category.id] || [],
                 true,
-                `/explore/category/${categoryId}`
-              )}
-            </div>
-          );
-        }
-        return null;
-      })}
-
-      <div className="my-8">
-        <h2 className="text-2xl font-bold mb-4">Categories</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {CATEGORIES.map((category) => (
-            <Button
-              key={category.id}
-              variant="outline"
-              className="h-auto p-4 justify-start text-lg"
-              onClick={() => router.push(`/explore/category/${category.id}`)}
-            >
-              {category.name}
-            </Button>
-          ))}
-        </div>
-      </div>
+                `/explore/category/${category.id}`
+              )
+            )}
+          </div>
+        )}
+      </Tabs>
     </div>
   );
 }

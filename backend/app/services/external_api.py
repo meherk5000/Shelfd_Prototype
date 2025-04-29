@@ -2,19 +2,19 @@
 from typing import Dict, Optional, List
 import httpx
 from fastapi import HTTPException
-from config import Settings
-from database import database
-from utils import logger
-
-settings = Settings()
+import os
 
 async def search_movies(query: str, page: int = 1) -> Dict:
     """Search for movies using TMDB API"""
+    tmdb_base_url = os.getenv("TMDB_BASE_URL")
+    tmdb_api_key = os.getenv("TMDB_API_KEY")
+    if not tmdb_base_url or not tmdb_api_key:
+        raise HTTPException(status_code=500, detail="TMDB configuration missing")
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{settings.tmdb_base_url}/search/movie",
+            f"{tmdb_base_url}/search/movie",
             params={
-                "api_key": settings.tmdb_api_key,
+                "api_key": tmdb_api_key,
                 "query": query,
                 "page": page
             }
@@ -25,11 +25,15 @@ async def search_movies(query: str, page: int = 1) -> Dict:
 
 async def search_tv_shows(query: str, page: int = 1) -> Dict:
     """Search for TV shows using TMDB API"""
+    tmdb_base_url = os.getenv("TMDB_BASE_URL")
+    tmdb_api_key = os.getenv("TMDB_API_KEY")
+    if not tmdb_base_url or not tmdb_api_key:
+        raise HTTPException(status_code=500, detail="TMDB configuration missing")
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{settings.tmdb_base_url}/search/tv",
+            f"{tmdb_base_url}/search/tv",
             params={
-                "api_key": settings.tmdb_api_key,
+                "api_key": tmdb_api_key,
                 "query": query,
                 "page": page
             }
@@ -40,9 +44,12 @@ async def search_tv_shows(query: str, page: int = 1) -> Dict:
 
 async def search_books(query: str, page: int = 1) -> Dict:
     """Search for books using Google Books API"""
+    google_books_base_url = os.getenv("GOOGLE_BOOKS_BASE_URL")
+    if not google_books_base_url:
+        raise HTTPException(status_code=500, detail="Google Books configuration missing")
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{settings.google_books_base_url}/volumes",
+            f"{google_books_base_url}/volumes",
             params={
                 "q": query,
                 "startIndex": (page - 1) * 10,
@@ -55,11 +62,15 @@ async def search_books(query: str, page: int = 1) -> Dict:
 
 async def get_movie_details(movie_id: int) -> Dict:
     """Get detailed information about a specific movie"""
+    tmdb_base_url = os.getenv("TMDB_BASE_URL")
+    tmdb_api_key = os.getenv("TMDB_API_KEY")
+    if not tmdb_base_url or not tmdb_api_key:
+        raise HTTPException(status_code=500, detail="TMDB configuration missing")
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{settings.tmdb_base_url}/movie/{movie_id}",
+            f"{tmdb_base_url}/movie/{movie_id}",
             params={
-                "api_key": settings.tmdb_api_key,
+                "api_key": tmdb_api_key,
                 "append_to_response": "credits,videos,similar"
             }
         )
@@ -69,11 +80,15 @@ async def get_movie_details(movie_id: int) -> Dict:
 
 async def get_tv_details(tv_id: int) -> Dict:
     """Get detailed information about a specific TV show"""
+    tmdb_base_url = os.getenv("TMDB_BASE_URL")
+    tmdb_api_key = os.getenv("TMDB_API_KEY")
+    if not tmdb_base_url or not tmdb_api_key:
+        raise HTTPException(status_code=500, detail="TMDB configuration missing")
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{settings.tmdb_base_url}/tv/{tv_id}",
+            f"{tmdb_base_url}/tv/{tv_id}",
             params={
-                "api_key": settings.tmdb_api_key,
+                "api_key": tmdb_api_key,
                 "append_to_response": "credits,videos,similar"
             }
         )
@@ -83,9 +98,12 @@ async def get_tv_details(tv_id: int) -> Dict:
 
 async def get_book_details(book_id: str) -> Dict:
     """Get detailed information about a specific book"""
+    google_books_base_url = os.getenv("GOOGLE_BOOKS_BASE_URL")
+    if not google_books_base_url:
+        raise HTTPException(status_code=500, detail="Google Books configuration missing")
     async with httpx.AsyncClient() as client:
         response = await client.get(
-            f"{settings.google_books_base_url}/volumes/{book_id}"
+            f"{google_books_base_url}/volumes/{book_id}"
         )
         if response.status_code == 200:
             return response.json()
@@ -106,5 +124,5 @@ async def remove_from_shelf(user_id: str, book_id: str, shelf_type: str):
         )
         return True
     except Exception as e:
-        logger.error(f"Error removing book from shelf: {e}")
+        print(f"Error removing book from shelf: {e}")
         raise HTTPException(status_code=500, detail="Failed to remove book from shelf")
