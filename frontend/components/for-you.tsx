@@ -199,8 +199,9 @@ export default function ForYou() {
         Powered by AI content-based recommendations
       </p>
 
-      {Object.keys(groupedRecommendations).map((mediaType) => {
-        const items = groupedRecommendations[mediaType];
+      {/* Explicitly define the sections to render */}
+      {["book", "movie", "tv"].map((mediaType) => {
+        const items = groupedRecommendations[mediaType] || []; // Get items or empty array
         const title =
           mediaType === "book"
             ? "Books You Might Like"
@@ -208,6 +209,8 @@ export default function ForYou() {
             ? "Movies You Might Like"
             : "TV Shows You Might Like";
 
+        // Always render the section, passing empty array if no recommendations
+        // The placeholder logic is handled within renderMediaSection
         return <div key={mediaType}>{renderMediaSection(title, items)}</div>;
       })}
     </div>
