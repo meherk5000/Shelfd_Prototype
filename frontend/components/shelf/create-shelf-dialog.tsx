@@ -72,11 +72,7 @@ export function CreateShelfDialog() {
 
   const onSubmit = async (data: FormValues) => {
     if (!isAuthenticated) {
-      toast({
-        title: "Error",
-        description: "Please sign in to create a shelf list",
-        variant: "destructive",
-      });
+      toast.error("Please sign in to create a shelf list");
       return;
     }
 
@@ -92,10 +88,7 @@ export function CreateShelfDialog() {
         has_collaborators: data.hasCollaborators,
       });
 
-      toast({
-        title: "Success",
-        description: "Shelf list created successfully!",
-      });
+      toast.success("Shelf list created successfully!");
 
       // Refresh the shelves data
       getUserShelves(data.mediaType);
@@ -103,13 +96,10 @@ export function CreateShelfDialog() {
       form.reset();
     } catch (error: any) {
       console.error("Error creating shelf:", error);
-      toast({
-        title: "Error",
-        description:
-          error.response?.data?.detail ||
-          "Failed to create shelf list. Please try again.",
-        variant: "destructive",
-      });
+      toast.error(
+        error.response?.data?.detail ||
+          "Failed to create shelf list. Please try again."
+      );
     } finally {
       setIsLoading(false);
     }

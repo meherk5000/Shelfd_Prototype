@@ -2,12 +2,25 @@
 
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
-import { useShelf, type MediaTypeMapping } from "@/lib/hooks/use-shelf";
+import {
+  useShelf,
+  type MediaTypeMapping,
+  ShelfStatus,
+} from "@/lib/hooks/use-shelf";
 import { MediaPreview } from "@/components/media-preview";
 import { Layout } from "@/components/layout";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CreateShelfDialog } from "@/components/shelf/create-shelf-dialog";
 import useSWR from "swr";
+
+// Define a more complete Shelf type for this page
+interface Shelf {
+  _id: string;
+  name: string;
+  shelf_type: string; // Added shelf_type
+  status: ShelfStatus | string; // Added status field
+  items: any[]; // Keeping items simple for now, adjust if MediaPreview needs more detail
+}
 
 const mediaTypes: Array<keyof MediaTypeMapping> = [
   "Books",
@@ -28,6 +41,44 @@ export default function ShelfPage() {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
   });
+
+  // Define sort order for default shelf statuses
+  const bookMovieTvStatusOrder: { [key: string]: number } = {
+    [ShelfStatus.WANT_TO]: 1,
+    [ShelfStatus.CURRENT]: 2,
+    [ShelfStatus.FINISHED]: 3,
+    [ShelfStatus.DNF]: 4,
+  };
+
+  const articleStatusOrder: { [key: string]: number } = {
+    [ShelfStatus.SAVED]: 1,
+    [ShelfStatus.FINISHED]: 2,
+  };
+
+  const sortedShelfData = (shelfData || [])
+    .slice() // Create a shallow copy
+    .sort((a: Shelf, b: Shelf) => {
+      const isADefault = a.shelf_type !== "custom";
+      const isBDefault = b.shelf_type !== "custom";
+
+      // Group Default shelves before Custom shelves
+      if (isADefault && !isBDefault) return -1;
+      if (!isADefault && isBDefault) return 1;
+
+      // If both are Custom, sort alphabetically by name
+      if (!isADefault && !isBDefault) {
+        return a.name.localeCompare(b.name);
+      }
+
+      // If both are Default, sort by predefined status order
+      const orderMap =
+        activeTab === "Articles" ? articleStatusOrder : bookMovieTvStatusOrder;
+      // Use 99 as default order for any unexpected statuses
+      const aOrder = orderMap[a.status] || 99;
+      const bOrder = orderMap[b.status] || 99;
+
+      return aOrder - bOrder;
+    });
 
   return (
     <Layout>
@@ -66,10 +117,11 @@ export default function ShelfPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {(shelfData || []).map((shelf, index) => (
+            {/* Map over the explicitly sorted data */}
+            {sortedShelfData.map((shelf: Shelf, index: number) => (
               <MediaPreview
                 key={shelf._id}
-                shelf={shelf}
+                shelf={shelf} // Pass the whole shelf object
                 mediaType={activeTab}
               />
             ))}

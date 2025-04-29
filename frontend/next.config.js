@@ -30,6 +30,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'cdn.theatlantic.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'image.tmdb.org',
       }
     ]
   },
