@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/context/AuthContext";
-import { AuthDebug } from "@/components/auth-debug";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 import { UserProvider } from "@auth0/nextjs-auth0/client";
@@ -41,8 +40,6 @@ export default function RootLayout({
             <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
               {children}
               <Toaster richColors />
-              {/* Remove AuthDebug component */}
-              {/* {process.env.NODE_ENV === "development" && <AuthDebug />} */}
             </ThemeProvider>
           </AuthProvider>
         </UserProvider>
