@@ -1,3 +1,10 @@
+# app/database/models/club_thread.py
+# This file contains the ClubThread model, which represents a thread in a club.
+# It includes fields for the club, creator, title, thread type, chapter number, order, created at, updated at, is locked, is pinned, and is auto-generated.
+# It also includes settings for the model, including the name of the collection and the indexes.
+# It also includes an example of the model. 
+# NOTE: This is a work in progress and is not yet complete/added to the club page functionality.
+
 from datetime import datetime
 from typing import Optional
 from beanie import Document, Link, PydanticObjectId

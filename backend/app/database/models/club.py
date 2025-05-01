@@ -1,3 +1,9 @@
+# app/database/models/club.py
+# This file contains the Club model, which represents a club in the database.
+# It includes fields for the club, creator, members, created at, updated at, media type, is private, cover image, book title, book author, book cover, book id, movie title, movie director, movie year, movie poster, movie id, tv title, tv creator, tv year, tv poster, tv id, tv season, tv episode.
+# It also includes settings for the model, including the name of the collection and the indexes.
+# It also includes an example of the model.
+
 from datetime import datetime
 from typing import List, Optional
 from beanie import Document, Link, PydanticObjectId

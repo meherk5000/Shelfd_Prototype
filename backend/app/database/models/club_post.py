@@ -1,3 +1,9 @@
+# app/database/models/club_post.py
+# This file contains the ClubPost model, which represents a post in a club.
+# It includes fields for the club, author, content, created at, updated at, is pinned, and is edited.
+# It also includes settings for the model, including the name of the collection and the indexes.
+# It also includes an example of the model.
+# NOTE: This is a work in progress and is not yet complete/added to the club page functionality.
 from datetime import datetime
 from typing import Optional
 from beanie import Document, Link, PydanticObjectId
@@ -12,15 +18,15 @@ class ClubPost(Document):
     content: str = Field(..., min_length=1, max_length=5000)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-    is_pinned: bool = Field(default=False)  # For important announcements
+    is_pinned: bool = Field(default=False)  
     is_edited: bool = Field(default=False)
     
     class Settings:
         name = "club_posts"
         indexes = [
-            [("club", 1), ("created_at", -1)],  # For fetching posts in a club by date
-            "author",  # Simple index on author
-            [("is_pinned", -1)],  # For showing pinned posts first
+            [("club", 1), ("created_at", -1)],  
+            "author",  
+            [("is_pinned", -1)],  
         ]
 
     model_config = {

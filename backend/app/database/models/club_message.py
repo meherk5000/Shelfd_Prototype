@@ -1,3 +1,9 @@
+# app/database/models/club_message.py
+# This file contains the ClubMessage model, which represents a message in a club.
+# It includes fields for the club, author, content, created at, updated at.
+# It also includes settings for the model, including the name of the collection and the indexes.
+# It also includes an example of the model.
+
 from datetime import datetime
 from typing import Optional
 from beanie import Document, Indexed, Link
@@ -24,9 +30,9 @@ class ClubMessage(Document):
     class Settings:
         name = "club_messages"
         indexes = [
-            [("club.$id", 1), ("created_at", -1)],  # For efficient club message queries
-            [("author.$id", 1)],  # For user message queries
-            [("created_at", -1)],  # For sorting by date
+            [("club.$id", 1), ("created_at", -1)],  
+            [("author.$id", 1)],  
+            [("created_at", -1)],  
         ]
 
     model_config = ConfigDict(
