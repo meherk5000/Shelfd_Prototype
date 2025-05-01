@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { User, Settings, LogOut } from "lucide-react";
+import { MobileNav } from "./mobile-nav";
 
 export function Header() {
   const { isAuthenticated, user, logout } = useAuth();
@@ -48,19 +49,22 @@ export function Header() {
   const pageInfo = getPageTitle(pathname);
 
   return (
-    <div className="flex h-24 items-center w-full px-6">
-      <div className="w-[150px]">
+    <div className="flex h-16 items-center w-full px-4 md:px-6 border-b">
+      <div className="md:hidden mr-2">
+        <MobileNav />
+      </div>
+      <div className="flex-shrink-0 mr-4">
         <Link
           href={pageInfo.href}
-          className="font-semibold text-3xl hover:text-primary transition-colors block"
+          className="font-semibold text-xl md:text-2xl hover:text-primary transition-colors block truncate"
         >
           {pageInfo.title}
         </Link>
       </div>
-      <div className="flex-1 flex justify-center">
+      <div className="flex-1 flex justify-center px-4">
         <GlobalSearch />
       </div>
-      <div className="flex items-center justify-end w-[150px]">
+      <div className="flex items-center justify-end flex-shrink-0 ml-4">
         {isAuthenticated && user ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -109,7 +113,7 @@ export function Header() {
               </Button>
             </Link>
             <Link href="/auth/sign-up">
-              <Button size="lg">Sign up</Button>
+              <Button size="sm">Sign up</Button>
             </Link>
           </div>
         )}
