@@ -324,7 +324,13 @@ async def generate_recommendations_for_user(user_id, book_vectors, book_mapping,
         elif item.media_type == MediaType.TV:
             user_tv_shows.append(item)
     
-    # Generate recommendations
+    # --- Add TV Show Debugging --- 
+    if user_id == "67cd988d2cf7abfe3da0ae7d": # Specific check for Jake
+        print(f"--- Debug Jake (TV): Found {len(user_tv_shows)} TV shows in profile after shelf filter.")
+        if user_tv_shows:
+            print(f"--- Debug Jake (TV): Profile TV IDs: {[item.media_id for item in user_tv_shows]}")
+    # --- End TV Show Debugging --- 
+    
     all_recommendations = []
     
     # Books
@@ -346,14 +352,27 @@ async def generate_recommendations_for_user(user_id, book_vectors, book_mapping,
         all_recommendations.extend(movie_recs)
     
     # TV Shows
-    if user_tv_shows and tv_vectors is not None:
+    tv_recs = [] # Initialize tv_recs
+    if user_tv_shows and tv_vectors is not None and tv_mapping:
+        print(f"--- Debug Jake (TV): Calling get_similar_items for TV...") # Log before call
         tv_recs = get_similar_items(
             user_tv_shows, tv_vectors, tv_mapping, tv_details,
             exclude_ids=[item.media_id for item in user_items],
-            media_type="tv", limit=10
+            media_type="tv", limit=10 # Make sure limit is reasonable
         )
+        # --- Add TV Show Debugging --- 
+        if user_id == "67cd988d2cf7abfe3da0ae7d":
+            print(f"--- Debug Jake (TV): get_similar_items returned {len(tv_recs)} TV recs.")
+            if tv_recs:
+                print(f"--- Debug Jake (TV): Returned TV Rec IDs: {[rec['id'] for rec in tv_recs]}")
+        # --- End TV Show Debugging ---
         all_recommendations.extend(tv_recs)
-    
+    elif user_id == "67cd988d2cf7abfe3da0ae7d": # Log why TV recs might be skipped
+         print(f"--- Debug Jake (TV): Skipping TV recommendation generation. Reasons:")
+         if not user_tv_shows: print(f"    - No user TV shows found after filtering.")
+         if tv_vectors is None: print(f"    - tv_vectors is None.")
+         if not tv_mapping: print(f"    - tv_mapping is empty.")
+            
     # Store recommendations in database
     # First, remove old recommendations
     await Recommendation.find({"user_id": user_id}).delete()
@@ -361,6 +380,10 @@ async def generate_recommendations_for_user(user_id, book_vectors, book_mapping,
     # Create new recommendation documents
     recommendations_to_insert = []
     for rec in all_recommendations:
+        # --- Add TV Show Debugging --- 
+        if user_id == "67cd988d2cf7abfe3da0ae7d" and rec["mediaType"] == "tv":
+            print(f"--- Debug Jake (TV): Preparing TV recommendation for insertion: ID={rec['id']}, Title={rec['title']}")
+        # --- End TV Show Debugging --- 
         recommendations_to_insert.append(
             Recommendation(
                 user_id=user_id,
@@ -375,20 +398,49 @@ async def generate_recommendations_for_user(user_id, book_vectors, book_mapping,
     
     if recommendations_to_insert:
         await Recommendation.insert_many(recommendations_to_insert)
-        print(f"Stored {len(recommendations_to_insert)} recommendations for user {user_id}")
-    
+        # --- Add TV Show Debugging --- 
+        jake_tv_inserted_count = sum(1 for r in recommendations_to_insert if r.user_id == "67cd988d2cf7abfe3da0ae7d" and r.media_type == MediaType.TV)
+        if user_id == "67cd988d2cf7abfe3da0ae7d" and jake_tv_inserted_count > 0:
+             print(f"--- Debug Jake (TV): Attempted to insert {jake_tv_inserted_count} TV recommendations.")
+        elif user_id == "67cd988d2cf7abfe3da0ae7d":
+             print(f"--- Debug Jake (TV): No TV recommendations were prepared for insertion.")
+        # --- End TV Show Debugging ---
+        # print(f"Stored {len(recommendations_to_insert)} recommendations for user {user_id}") # Make original log less verbose for clarity
+
     return len(recommendations_to_insert)
 
 
 def get_similar_items(user_items, vectors, id_to_index, item_details, exclude_ids, media_type, limit=10):
     """Find similar items based on vector similarity"""
+    
+    # --- Add Debugging --- 
+    is_jake_tv = (media_type == "tv" and any(item.user_id == "67cd988d2cf7abfe3da0ae7d" for item in user_items))
+    if is_jake_tv:
+        print(f"--- Debug Jake (get_similar): Processing {len(user_items)} TV items for Jake.")
+        print(f"--- Debug Jake (get_similar): id_to_index size: {len(id_to_index)}")
+        print(f"--- Debug Jake (get_similar): exclude_ids size: {len(exclude_ids)}")
+        user_tv_ids = [item.media_id for item in user_items]
+        print(f"--- Debug Jake (get_similar): Jake's input TV IDs: {user_tv_ids}")
+    # --- End Debugging --- 
+    
     # Get indices of user's items
     user_indices = []
+    found_indices_count = 0 # Debug counter
     for item in user_items:
         if item.media_id in id_to_index:
             user_indices.append(id_to_index[item.media_id])
+            found_indices_count += 1
+        elif is_jake_tv: # Log only if it's Jake's TV and ID is missing
+            print(f"--- Debug Jake (get_similar): WARNING - TV ID {item.media_id} not found in id_to_index/mapping!")
     
+    # --- Add Debugging --- 
+    if is_jake_tv:
+        print(f"--- Debug Jake (get_similar): Found {found_indices_count} indices for Jake's TV shows.")
+        print(f"--- Debug Jake (get_similar): User Indices: {user_indices}")
+    # --- End Debugging --- 
+
     if not user_indices:
+        if is_jake_tv: print(f"--- Debug Jake (get_similar): Returning empty list because user_indices is empty.")
         return []
     
     # Get user item vectors
@@ -400,9 +452,21 @@ def get_similar_items(user_items, vectors, id_to_index, item_details, exclude_id
     # Average similarities across user's items
     avg_similarities = np.mean(similarities, axis=0)
     
+    # --- Add Debugging --- 
+    if is_jake_tv:
+        print(f"--- Debug Jake (get_similar): Calculated avg_similarities. Shape: {avg_similarities.shape}")
+    # --- End Debugging --- 
+
     # Get top similar items
     similar_items = []
-    for i in np.argsort(-avg_similarities):
+    potential_recs_checked = 0 # Debug counter
+    recs_excluded_count = 0 # Debug counter
+    
+    sorted_indices = np.argsort(-avg_similarities)
+    if is_jake_tv: print(f"--- Debug Jake (get_similar): Top 5 sorted indices by similarity: {sorted_indices[:5]}")
+    
+    for i in sorted_indices:
+        potential_recs_checked += 1
         media_id = None
         for mid, idx in id_to_index.items():
             if idx == i:
@@ -428,8 +492,23 @@ def get_similar_items(user_items, vectors, id_to_index, item_details, exclude_id
             })
             
             if len(similar_items) >= limit:
-                break
-    
+                if is_jake_tv: print(f"--- Debug Jake (get_similar): Reached limit ({limit}).")
+                break # Exit outer loop
+        elif media_id in exclude_ids:
+             recs_excluded_count += 1
+             # Optional verbose logging for excluded items
+             # if is_jake_tv: print(f"--- Debug Jake (get_similar): Excluding item {media_id} because it's already in exclude_ids.")
+        
+        # Safety break if we check too many (shouldn't happen with argsort)
+        # if potential_recs_checked > len(id_to_index) + 5: break
+            
+    # --- Add Debugging --- 
+    if is_jake_tv:
+        print(f"--- Debug Jake (get_similar): Checked {potential_recs_checked} potential recs.")
+        print(f"--- Debug Jake (get_similar): Excluded {recs_excluded_count} items already owned.")
+        print(f"--- Debug Jake (get_similar): Returning {len(similar_items)} TV recommendations.")
+    # --- End Debugging --- 
+
     return similar_items
 
 
