@@ -52,13 +52,39 @@ class ClubService:
         try:
             await club.create()
             logger.info(f"Created club {club.id} for {name} using create()")
+
+            # --- Attempt to reload the instance from DB first ---
+            try:
+                await club.reload()
+                logger.info(f"[Service] Successfully reloaded club {club.id} instance in memory. Members now: {club.members}")
+            except Exception as reload_err:
+                logger.error(f"[Service] Error during club.reload() for {club.id}: {reload_err}", exc_info=True)
+                # Continue anyway, maybe the get_club below will work
+
+            # --- Re-fetch within the service --- 
+            # Use the class's own get_club method which uses fetch_links=True
+            # Increase delay slightly
+            await asyncio.sleep(0.5) # Increased delay
+            
+            fetched_club = await ClubService.get_club(club.id)
+            if not fetched_club:
+                logger.error(f"[Service] Failed to re-fetch club {club.id} immediately after creation (after reload).")
+                # Raise an error or return the original (possibly incomplete) club object?
+                # Let's raise for now to make the problem clear if fetching fails
+                raise HTTPException(status_code=500, detail="Failed to retrieve club details after creation within service.")
+            
+            logger.info(f"[Service] Re-fetched club {fetched_club.id} after creation (using get_club). Members: {fetched_club.members}")
+            return fetched_club # Return the fetched object
+            # --- End re-fetch --- 
+
         except Exception as e:
-             logger.error(f"Club {club.id}: Failed during club.create(): {e}", exc_info=True)
-             # It's possible club.id isn't set if create() fails early
+             # Determine if club.id was set before logging
+             club_id_str = str(club.id) if hasattr(club, 'id') and club.id else "UNKNOWN_ID"
+             logger.error(f"Club {club_id_str}: Failed during club.create(), reload(), or re-fetch: {e}", exc_info=True)
              raise HTTPException(status_code=500, detail=f"Failed to create club: {str(e)}")
 
-        # Return the club object directly
-        return club
+        # This part should not be reached
+        # return club 
 
     @staticmethod
     async def get_club(club_id: PydanticObjectId) -> Club:

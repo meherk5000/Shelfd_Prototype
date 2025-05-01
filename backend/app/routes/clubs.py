@@ -184,7 +184,7 @@ async def create_club(
     logger.debug("[Backend] Current user: %s (ID: %s)", current_user.username, current_user.id)
 
     try:
-        # Use the ClubService to handle creation
+        # Use the ClubService to handle creation (which now returns a fetched object)
         created_club = await ClubService.create_club(
             name=request.name,
             creator=current_user,
@@ -192,23 +192,24 @@ async def create_club(
             description=request.description,
             is_private=request.is_private,
             cover_image=request.cover_image,
-            # Pass book/movie/tv specific fields if necessary (assuming service handles them)
-            # Note: The service method currently only explicitly takes book fields.
-            # We might need to update the service if movie/tv fields are needed at creation.
             book_title=request.book_title,
             book_author=request.book_author,
             book_cover=request.book_cover,
             book_id=request.book_id,
-            # TODO: Add movie/tv fields to ClubService.create_club if needed
-            # movie_title=request.movie_title, ...
-            # tv_title=request.tv_title, ...
         )
         
-        logger.debug("[Backend] Club successfully created via service with ID: %s", created_club.id)
+        logger.debug("[Backend Route] Club successfully created and fetched via service with ID: %s", created_club.id)
 
-        # Format the response using the helper function
-        # Pass the club object returned by the service
-        return await format_club_response(created_club, current_user) 
+        # Add the creator to the members list
+        if current_user not in created_club.members:
+            created_club.members.append(current_user)
+            await created_club.save() # Save the change to the database
+            logger.debug("[Backend Route] Added creator %s to members list for club %s", current_user.id, created_club.id)
+            # Optional: Refetch the club to ensure all links are resolved, if save() doesn't handle it
+            # created_club = await Club.get(created_club.id, fetch_links=True)
+
+        # Format the response using the updated club object
+        return await format_club_response(created_club, current_user)
     except HTTPException as he:
         # Re-raise HTTPExceptions directly (e.g., validation errors from service)
         logger.error("[Backend] HTTPException during club creation: %s - %s", he.status_code, he.detail)
@@ -690,16 +691,14 @@ async def format_club_response(club: Club, current_user: Optional[User] = None) 
     creator_id_str = "None"
     creator_username = "Unknown"
 
+    # --- Re-added Link Fetching Logic for Creator ---
     try:
         if club.creator:
-            # Attempt to fetch the creator, assuming it's a Link or Beanie handles DBRef resolution implicitly via fetch_link
-            # Use fetch_link for potentially better DBRef handling if attribute access fails
-            logger.debug(f"Attempting to fetch creator for club {club.id}. Type: {type(club.creator)}")
-            # creator = await club.fetch_link(Club.creator) # More explicit fetch_link
-            # Simpler attempt first: rely on Link.fetch() which might handle DBRefs
             if hasattr(club.creator, 'fetch'):
+                 logger.debug(f"Club {club.id}: Creator is a Link, fetching...")
                  creator = await club.creator.fetch()
-            elif isinstance(club.creator, User): # Handle case where it might already be resolved
+            elif isinstance(club.creator, User):
+                 logger.debug(f"Club {club.id}: Creator is already a User object.")
                  creator = club.creator
             else:
                  logger.warning(f"Club {club.id}: Creator is of unexpected type: {type(club.creator)}. Value: {club.creator}")
@@ -707,89 +706,90 @@ async def format_club_response(club: Club, current_user: Optional[User] = None) 
             if creator:
                 creator_id_str = str(creator.id)
                 creator_username = creator.username
-                logger.debug(f"Club {club.id}: Successfully fetched creator: {creator_username} ({creator_id_str})")
+                logger.debug(f"Club {club.id}: Successfully processed creator: {creator_username} ({creator_id_str})")
             else:
                 logger.warning(f"Club {club.id}: Failed to fetch creator from link/DBRef: {club.creator}")
         else:
              logger.warning(f"Club {club.id} has no creator link.")
 
     except Exception as e:
-        logger.error(f"Error fetching creator for club {club.id}: {e}", exc_info=True)
-        # Continue formatting without creator info if fetching fails
+        logger.error(f"Error processing creator for club {club.id}: {e}", exc_info=True)
+    # --- End Re-added Logic ---
 
-    # Explicitly fetch members (handle Links/DBRefs)
+    # --- Re-added Link Fetching Logic for Members ---
     member_ids = []
-    processed_members = [] # Store fetched User objects
+    valid_members_count = 0 
     members_list = club.members or []
-    logger.debug(f"Club {club.id}: Processing {len(members_list)} member references.")
-
-    for i, member_ref in enumerate(members_list):
-        user_to_add = None
-        try:
-            if member_ref:
-                logger.debug(f"Club {club.id}, Member ref #{i}: Type={type(member_ref)}, Value={member_ref}")
-                # Attempt to fetch, assuming Link or Beanie handles DBRef resolution
-                if hasattr(member_ref, 'fetch'): # Standard Link check
-                    fetched_member = await member_ref.fetch()
-                    if fetched_member:
-                        user_to_add = fetched_member
-                        logger.debug(f"Club {club.id}, Member ref #{i}: Fetched user {user_to_add.username} via .fetch()")
+    logger.debug(f"[Robust Format] Club {club.id}: Input members_list (type={type(members_list)}): {members_list}") # Log input
+    if members_list:
+        logger.debug(f"[Robust Format] Club {club.id}: Processing {len(members_list)} potential members.")
+        for i, member_link_or_obj in enumerate(members_list):
+            logger.debug(f"[Robust Format] Club {club.id}: Processing item {i} (type={type(member_link_or_obj)}): {member_link_or_obj}")
+            if member_link_or_obj: 
+                try:
+                    member_user = None
+                    if hasattr(member_link_or_obj, 'fetch') and not isinstance(member_link_or_obj, User):
+                        logger.debug(f"[Robust Format] Club {club.id}: Item {i} is a Link, fetching...")
+                        member_user = await member_link_or_obj.fetch()
+                        if member_user:
+                           logger.debug(f"[Robust Format] Club {club.id}: Fetched member {member_user.id}")
+                        else:
+                           logger.warning(f"[Robust Format] Club {club.id}: Fetch returned None for item {i}")
+                    elif isinstance(member_link_or_obj, User):
+                        logger.debug(f"[Robust Format] Club {club.id}: Item {i} is already a User object.")
+                        member_user = member_link_or_obj
                     else:
-                         logger.warning(f"Club {club.id}, Member ref #{i}: .fetch() returned None for {member_ref}")
-                elif isinstance(member_ref, User): # Already resolved User
-                     user_to_add = member_ref
-                     logger.debug(f"Club {club.id}, Member ref #{i}: Is already User object {user_to_add.username}")
-                else:
-                     logger.warning(f"Club {club.id}, Member ref #{i}: Unexpected type: {type(member_ref)}")
+                        logger.warning(f"[Robust Format] Club {club.id}: Item {i} is unexpected type: {type(member_link_or_obj)}")
+                    
+                    if member_user and hasattr(member_user, 'id'): # Ensure fetched/existing user has ID
+                        member_id_str = str(member_user.id)
+                        if member_id_str not in member_ids: # Avoid duplicates if logic error somewhere
+                            member_ids.append(member_id_str)
+                            valid_members_count += 1 
+                        else:
+                            logger.warning(f"[Robust Format] Club {club.id}: Duplicate member ID {member_id_str} detected.")
+                    # No need for an else here, warnings logged above if fetch fails or type is wrong
+                except Exception as e:
+                    logger.error(f"[Robust Format] Error processing member item {i} ({member_link_or_obj}) for club {club.id}: {e}", exc_info=True)
             else:
-                 logger.warning(f"Club {club.id}, Member ref #{i}: Reference is None.")
+                 logger.warning(f"[Robust Format] Club {club.id}: Found a None value in members list at index {i}.")
+    else:
+         logger.debug(f"[Robust Format] Club {club.id}: No members list found or it's empty.")
+    logger.debug(f"[Robust Format] Club {club.id}: Finished processing members. Count={valid_members_count}, IDs={member_ids}")
+    # --- End Re-added Logic ---
 
-            if user_to_add:
-                processed_members.append(user_to_add)
-                member_ids.append(str(user_to_add.id))
+    # Determine if the current user is a member/creator
+    current_user_id_str = str(current_user.id) if current_user else None
 
-        except Exception as e:
-            logger.error(f"Error fetching member ref #{i} for club {club.id} (Ref: {member_ref}): {e}", exc_info=True)
-            # Continue processing other members
-
-    logger.debug(f"Club {club.id}: Finished processing members. Found {len(processed_members)} valid members.")
-    logger.debug(f"Club {club.id}: Member IDs: {member_ids}")
-
-    # Calculate flags using fetched data
-    current_user_id_str = str(current_user.id) if current_user else "None"
     is_member_flag = bool(current_user and current_user_id_str in member_ids)
-    is_creator_flag = bool(current_user and creator and current_user_id_str == creator_id_str)
+    is_creator_flag = bool(current_user and creator and current_user_id_str == str(creator.id))
 
-    logger.debug(f"Club {club.id}: Current User ID: {current_user_id_str}")
-    logger.debug(f"Club {club.id}: Calculated is_member: {is_member_flag}")
-    logger.debug(f"Club {club.id}: Calculated is_creator: {is_creator_flag}")
+    logger.debug(f"[Robust Format] Club {club.id}: Calculated member_count: {valid_members_count}")
+    logger.debug(f"[Robust Format] Club {club.id}: Calculated is_member: {is_member_flag}")
+    logger.debug(f"[Robust Format] Club {club.id}: Calculated is_creator: {is_creator_flag}")
 
-    # Construct and return response
     return ClubResponse(
         id=str(club.id),
         name=club.name,
         description=club.description,
         creator_id=creator_id_str,
         creator_username=creator_username,
-        member_count=len(processed_members), # Count based on successfully processed members
+        member_count=valid_members_count, # Use count from explicit processing
         media_type=club.media_type,
         is_private=club.is_private,
         created_at=club.created_at.isoformat(),
         is_member=is_member_flag,
         is_creator=is_creator_flag,
         cover_image=club.cover_image,
-        # Book fields
         book_title=club.book_title,
         book_author=club.book_author,
         book_cover=club.book_cover,
         book_id=club.book_id,
-        # Movie fields
         movie_title=club.movie_title,
         movie_director=club.movie_director,
         movie_poster=club.movie_poster,
         movie_id=club.movie_id,
         movie_year=club.movie_year,
-        # TV show fields
         tv_title=club.tv_title,
         tv_creator=club.tv_creator,
         tv_poster=club.tv_poster,

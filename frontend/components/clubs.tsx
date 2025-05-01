@@ -4,7 +4,16 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Filter, Users, Plus, Loader2 } from "lucide-react";
+import {
+  Filter,
+  Users,
+  Plus,
+  Loader2,
+  BookOpen,
+  Clapperboard,
+  Tv,
+  Search,
+} from "lucide-react";
 import { useClubs, ClubData } from "@/lib/hooks/use-clubs";
 import Link from "next/link";
 import { useDebounce } from "@/lib/hooks/use-debounce";
@@ -18,6 +27,7 @@ import {
 import Image from "next/image";
 import { useAuth } from "@/lib/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { API_BASE_URL } from "@/lib/config";
 
 const mediaTypes = [
   { value: "any", label: "All Types" },
@@ -38,40 +48,63 @@ export function Clubs() {
   const router = useRouter();
 
   const [exploreClubs, setExploreClubs] = useState<ClubData[]>([]);
-  const [myClubs, setMyClubs] = useState<ClubData[]>([]);
-  const [createdClubs, setCreatedClubs] = useState<ClubData[]>([]);
+  const [createdClubsPreview, setCreatedClubsPreview] = useState<ClubData[]>(
+    []
+  );
+  const [joinedClubsPreview, setJoinedClubsPreview] = useState<ClubData[]>([]);
 
   const [exploreSkip, setExploreSkip] = useState(0);
-  const [myClubsSkip, setMyClubsSkip] = useState(0);
   const [createdClubsSkip, setCreatedClubsSkip] = useState(0);
+  const [joinedClubsSkip, setJoinedClubsSkip] = useState(0);
 
   const [canLoadMoreExplore, setCanLoadMoreExplore] = useState(true);
-  const [canLoadMoreMyClubs, setCanLoadMoreMyClubs] = useState(true);
   const [canLoadMoreCreatedClubs, setCanLoadMoreCreatedClubs] = useState(true);
+  const [canLoadMoreJoinedClubs, setCanLoadMoreJoinedClubs] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingYourClubs, setLoadingYourClubs] = useState(false);
+
+  type YourClubsViewMode = "overview" | "allCreated" | "allJoined";
+  const [yourClubsViewMode, setYourClubsViewMode] =
+    useState<YourClubsViewMode>("overview");
+
+  const [paginatedCreatedClubs, setPaginatedCreatedClubs] = useState<
+    ClubData[]
+  >([]);
+  const [paginatedJoinedClubs, setPaginatedJoinedClubs] = useState<ClubData[]>(
+    []
+  );
 
   const {
     loading,
     error,
     getClubs,
-    getMyClubs,
-    getUserClubs,
     getCreatedClubs,
+    getUserClubs,
     joinClub,
     leaveClub,
     internalLoading,
   } = useClubs();
 
+  // Preview limit for the overview
+  const yourClubsPreviewLimit = 4;
+
   const loadInitialClubs = useCallback(async () => {
+    // Reset pagination and lists for both tabs
     setExploreSkip(0);
-    setMyClubsSkip(0);
     setCreatedClubsSkip(0);
+    setJoinedClubsSkip(0);
     setExploreClubs([]);
-    setMyClubs([]);
-    setCreatedClubs([]);
+    setCreatedClubsPreview([]);
+    setJoinedClubsPreview([]);
+    setPaginatedCreatedClubs([]);
+    setPaginatedJoinedClubs([]);
+    setCanLoadMoreExplore(true);
+    setCanLoadMoreCreatedClubs(true);
+    setCanLoadMoreJoinedClubs(true);
+    setYourClubsViewMode("overview"); // Reset view mode
 
     if (activeTab === "explore") {
-      setCanLoadMoreExplore(true);
+      setLoadingYourClubs(false); // Not loading your clubs
       const currentLimit =
         mediaType === "any" && !debouncedSearch ? previewLimit : loadLimit;
       const result = await getClubs(
@@ -92,21 +125,58 @@ export function Clubs() {
         );
       }
     } else if (activeTab === "your") {
+      setLoadingYourClubs(true);
       if (isAuthenticated) {
-        setCanLoadMoreMyClubs(true);
-        const result = await getMyClubs(0, loadLimit);
-        if (result.success && result.data?.clubs) {
-          console.log(
-            "[Your Clubs Tab - Initial Load] Fetched clubs:",
-            result.data.clubs
+        try {
+          // Fetch created preview
+          const createdResult = await getCreatedClubs(0, yourClubsPreviewLimit);
+          if (createdResult.success && createdResult.data?.clubs) {
+            console.log(
+              "[Your Clubs Tab - Overview] Fetched created preview:",
+              createdResult.data.clubs
+            );
+            setCreatedClubsPreview(createdResult.data.clubs);
+          } else {
+            setCreatedClubsPreview([]); // Set empty if error or no data
+          }
+
+          // Fetch joined preview
+          const joinedResult = await getUserClubs(0, yourClubsPreviewLimit);
+          if (joinedResult.success && joinedResult.data?.clubs) {
+            console.log(
+              "[Your Clubs Tab - Overview] Fetched joined preview (raw):",
+              joinedResult.data.clubs
+            );
+            // Filter out clubs where the user is the creator
+            const filteredJoinedPreview = joinedResult.data.clubs.filter(
+              (club) => !club.is_creator
+            );
+            console.log(
+              "[Your Clubs Tab - Overview] Filtered joined preview:",
+              filteredJoinedPreview
+            );
+            setJoinedClubsPreview(filteredJoinedPreview);
+          } else {
+            setJoinedClubsPreview([]); // Set empty if error or no data
+          }
+        } catch (error) {
+          console.error(
+            "[Your Clubs Tab - Overview] Error loading previews:",
+            error
           );
-          setMyClubs(result.data.clubs);
-          setMyClubsSkip(result.data.clubs.length);
-          setCanLoadMoreMyClubs(result.data.clubs.length === loadLimit);
+          setCreatedClubsPreview([]);
+          setJoinedClubsPreview([]);
+          // Optionally show a toast error
+        } finally {
+          setLoadingYourClubs(false);
         }
       } else {
-        setMyClubs([]);
-        setCanLoadMoreMyClubs(false);
+        // Not authenticated, clear everything for this tab
+        setCreatedClubsPreview([]);
+        setJoinedClubsPreview([]);
+        setPaginatedCreatedClubs([]);
+        setPaginatedJoinedClubs([]);
+        setLoadingYourClubs(false);
       }
     }
   }, [
@@ -114,11 +184,12 @@ export function Clubs() {
     debouncedSearch,
     mediaType,
     getClubs,
-    getMyClubs,
     getCreatedClubs,
+    getUserClubs,
     isAuthenticated,
     previewLimit,
     loadLimit,
+    yourClubsPreviewLimit,
   ]);
 
   const loadMoreClubs = useCallback(async () => {
@@ -145,12 +216,16 @@ export function Clubs() {
         mediaType === "any" ? undefined : mediaType,
         debouncedSearch
       );
-    } else if (activeTab === "your" && canLoadMoreMyClubs && isAuthenticated) {
-      currentSkip = myClubsSkip;
-      setClubsFunc = setMyClubs;
-      setSkipFunc = setMyClubsSkip;
-      setCanLoadMoreFunc = setCanLoadMoreMyClubs;
-      result = await getMyClubs(currentSkip, loadLimit);
+    } else if (
+      activeTab === "your" &&
+      canLoadMoreCreatedClubs &&
+      isAuthenticated
+    ) {
+      currentSkip = createdClubsSkip;
+      setClubsFunc = setCreatedClubsPreview;
+      setSkipFunc = setCreatedClubsSkip;
+      setCanLoadMoreFunc = setCanLoadMoreCreatedClubs;
+      result = await getCreatedClubs(currentSkip, loadLimit);
     }
 
     if (
@@ -178,12 +253,12 @@ export function Clubs() {
     loading,
     loadingMore,
     exploreSkip,
-    myClubsSkip,
+    createdClubsSkip,
     canLoadMoreExplore,
-    canLoadMoreMyClubs,
+    canLoadMoreCreatedClubs,
     getClubs,
-    getMyClubs,
     getCreatedClubs,
+    getUserClubs,
   ]);
 
   useEffect(() => {
@@ -206,7 +281,10 @@ export function Clubs() {
           : c;
 
       setExploreClubs((prev) => prev.map(updateClub));
-      setMyClubs((prev) => prev.map(updateClub));
+      setCreatedClubsPreview((prev) => prev.map(updateClub));
+      setJoinedClubsPreview((prev) => prev.map(updateClub));
+      setPaginatedCreatedClubs((prev) => prev.map(updateClub));
+      setPaginatedJoinedClubs((prev) => prev.map(updateClub));
     }
   };
 
@@ -230,43 +308,9 @@ export function Clubs() {
     return groups;
   }, [exploreClubs, activeTab, mediaType]);
 
-  const groupedUserClubs = useMemo(() => {
-    if (activeTab !== "your" || mediaType !== "any") {
-      return null;
-    }
-
-    const groups: Record<string, ClubData[]> = {
-      book: [],
-      movie: [],
-      tv: [],
-    };
-
-    myClubs
-      .filter((club) => !club.is_creator)
-      .forEach((club) => {
-        if (groups[club.media_type]) {
-          groups[club.media_type].push(club);
-        }
-      });
-
-    return groups;
-  }, [myClubs, activeTab, mediaType]);
-
-  const displayedClubs = activeTab === "explore" ? exploreClubs : myClubs;
-
   const handleSeeAll = (type: string) => {
     setMediaType(type);
   };
-
-  // Filter myClubs for display in the 'Your Clubs' tab
-  const createdByMe = useMemo(
-    () => myClubs.filter((club) => club.is_creator),
-    [myClubs]
-  );
-  const joinedByMe = useMemo(
-    () => myClubs.filter((club) => !club.is_creator),
-    [myClubs]
-  );
 
   const ClubCard = ({
     club,
@@ -298,7 +342,11 @@ export function Clubs() {
           {club.cover_image ? (
             <div className="w-full h-full relative">
               <Image
-                src={club.cover_image}
+                src={
+                  club.cover_image && club.cover_image.startsWith("http")
+                    ? club.cover_image
+                    : `${API_BASE_URL}${club.cover_image || ""}`
+                }
                 alt={club.name}
                 fill
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
@@ -358,28 +406,170 @@ export function Clubs() {
                 <Users className="w-4 h-4 mr-1" />
                 <span>{club.member_count} members</span>
               </div>
-              {!club.is_creator && (
-                <Button
-                  variant={club.is_member ? "outline" : "default"}
-                  size="sm"
-                  onClick={() => handleJoinLeave(club)}
-                  disabled={isJoiningOrLeaving}
-                >
-                  {isJoiningOrLeaving ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : club.is_member ? (
-                    "Leave"
-                  ) : (
-                    "Join"
-                  )}
-                </Button>
-              )}
             </div>
           </div>
+          {/* Join/Leave Button - moved below details, full width */}
+          {!club.is_creator && (
+            <Button
+              variant={club.is_member ? "outline" : "default"}
+              size="sm"
+              onClick={() => handleJoinLeave(club)}
+              disabled={isJoiningOrLeaving}
+              className="w-full mt-4" // Add width and top margin
+            >
+              {isJoiningOrLeaving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : club.is_member ? (
+                "Leave"
+              ) : (
+                "Join"
+              )}
+            </Button>
+          )}
         </div>
       </div>
     );
   };
+
+  // Helper function to load paginated created or joined clubs
+  const loadPaginatedYourClubs = useCallback(
+    async (type: "created" | "joined", skip: number) => {
+      if (loadingYourClubs) return;
+      setLoadingYourClubs(true);
+      setLoadingMore(true);
+
+      try {
+        let result;
+        if (type === "created") {
+          result = await getCreatedClubs(skip, loadLimit);
+        } else {
+          result = await getUserClubs(skip, loadLimit);
+        }
+
+        if (result.success && result.data?.clubs) {
+          const newClubs = result.data.clubs;
+          if (type === "created") {
+            setPaginatedCreatedClubs((prev: ClubData[]) =>
+              skip === 0 ? newClubs : [...prev, ...newClubs]
+            );
+            setCreatedClubsSkip((prev: number) => prev + newClubs.length);
+            setCanLoadMoreCreatedClubs(newClubs.length === loadLimit);
+          } else {
+            const filteredNewJoinedClubs = newClubs.filter(
+              (club) => !club.is_creator
+            );
+            setPaginatedJoinedClubs((prev: ClubData[]) =>
+              skip === 0
+                ? filteredNewJoinedClubs
+                : [...prev, ...filteredNewJoinedClubs]
+            );
+            setJoinedClubsSkip((prev: number) => prev + newClubs.length);
+            setCanLoadMoreJoinedClubs(newClubs.length === loadLimit);
+          }
+        } else {
+          if (type === "created") setCanLoadMoreCreatedClubs(false);
+          else setCanLoadMoreJoinedClubs(false);
+        }
+      } catch (error) {
+        console.error(
+          `[Your Clubs Tab - Loading Paginated] Error loading ${type} clubs:`,
+          error
+        );
+        if (type === "created") setCanLoadMoreCreatedClubs(false);
+        else setCanLoadMoreJoinedClubs(false);
+      } finally {
+        setLoadingYourClubs(false);
+        setLoadingMore(false);
+      }
+    },
+    [
+      getCreatedClubs,
+      getUserClubs,
+      loadLimit,
+      loadingYourClubs,
+      setPaginatedCreatedClubs,
+      setCreatedClubsSkip,
+      setCanLoadMoreCreatedClubs,
+      setPaginatedJoinedClubs,
+      setJoinedClubsSkip,
+      setCanLoadMoreJoinedClubs,
+    ]
+  );
+
+  // Function to handle clicking "See All"
+  const handleSeeAllYourClubs = (type: "created" | "joined") => {
+    setYourClubsViewMode(type === "created" ? "allCreated" : "allJoined");
+    // Reset the specific list and pagination before loading the first page
+    if (type === "created") {
+      setPaginatedCreatedClubs([]);
+      setCreatedClubsSkip(0);
+      setCanLoadMoreCreatedClubs(true);
+    } else {
+      setPaginatedJoinedClubs([]);
+      setJoinedClubsSkip(0);
+      setCanLoadMoreJoinedClubs(true);
+    }
+    loadPaginatedYourClubs(type, 0); // Load the first page
+  };
+
+  // Function to handle clicking "Load More" in the "Your Clubs" tab
+  const loadMoreYourClubs = () => {
+    if (
+      yourClubsViewMode === "allCreated" &&
+      !loadingMore &&
+      canLoadMoreCreatedClubs
+    ) {
+      loadPaginatedYourClubs("created", createdClubsSkip);
+    } else if (
+      yourClubsViewMode === "allJoined" &&
+      !loadingMore &&
+      canLoadMoreJoinedClubs
+    ) {
+      loadPaginatedYourClubs("joined", joinedClubsSkip);
+    }
+  };
+
+  // Function to handle clicking "Load More" in the "Explore" tab
+  const loadMoreExploreClubs = useCallback(async () => {
+    if (loading || loadingMore || mediaType === "any") return;
+    setLoadingMore(true);
+
+    try {
+      const result = await getClubs(
+        exploreSkip,
+        loadLimit,
+        mediaType === "any" ? undefined : mediaType,
+        debouncedSearch
+      );
+
+      if (result?.success && result.data?.clubs) {
+        const newClubs = result.data.clubs;
+        setExploreClubs((prev) => [...prev, ...newClubs]);
+        setExploreSkip((prev) => prev + newClubs.length);
+        setCanLoadMoreExplore(newClubs.length === loadLimit);
+      } else {
+        setCanLoadMoreExplore(false);
+      }
+    } catch (error) {
+      console.error("[Explore Tab - Load More] Error:", error);
+      setCanLoadMoreExplore(false);
+      // Optionally show toast
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [
+    exploreSkip,
+    loadLimit,
+    mediaType,
+    debouncedSearch,
+    getClubs,
+    loading,
+    loadingMore,
+  ]);
+
+  useEffect(() => {
+    loadInitialClubs();
+  }, [loadInitialClubs]);
 
   return (
     <div className="space-y-6">
@@ -474,7 +664,7 @@ export function Clubs() {
               exploreClubs.length > 0 && (
                 <div className="flex justify-center mt-6">
                   <Button
-                    onClick={loadMoreClubs}
+                    onClick={loadMoreExploreClubs}
                     disabled={loadingMore}
                     variant="outline"
                   >
@@ -495,74 +685,188 @@ export function Clubs() {
               <div className="text-center py-10 text-muted-foreground">
                 Please log in to see the clubs you've joined or created.
               </div>
-            ) : loading && myClubs.length === 0 ? (
+            ) : loadingYourClubs &&
+              yourClubsViewMode === "overview" &&
+              !createdClubsPreview.length &&
+              !joinedClubsPreview.length ? (
+              // Show loader only on initial overview load if no previews exist yet
               <div className="flex justify-center items-center pt-10">
                 <Loader2 className="w-8 h-8 animate-spin text-primary" />
               </div>
             ) : (
               <>
-                {/* Clubs You Created Section */}
-                {createdByMe.length > 0 && (
+                {/* Overview Mode */}
+                {yourClubsViewMode === "overview" && (
+                  <>
+                    {/* Created Clubs Preview */}
+                    {createdClubsPreview.length > 0 && (
+                      <div>
+                        <div className="flex justify-between items-center mb-4">
+                          <h2 className="text-2xl font-semibold">
+                            Clubs You Created
+                          </h2>
+                          <Button
+                            variant="link"
+                            onClick={() => handleSeeAllYourClubs("created")}
+                          >
+                            See All
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {createdClubsPreview.map((club) => (
+                            <ClubCard
+                              key={club.id}
+                              club={club}
+                              isAuthenticated={isAuthenticated}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Joined Clubs Preview */}
+                    {joinedClubsPreview.length > 0 && (
+                      <div>
+                        <div
+                          className={`flex justify-between items-center mb-4 ${
+                            createdClubsPreview.length > 0 ? "mt-6" : ""
+                          }`}
+                        >
+                          <h2 className="text-2xl font-semibold">
+                            Clubs You Joined
+                          </h2>
+                          <Button
+                            variant="link"
+                            onClick={() => handleSeeAllYourClubs("joined")}
+                          >
+                            See All
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                          {joinedClubsPreview.map((club) => (
+                            <ClubCard
+                              key={club.id}
+                              club={club}
+                              isAuthenticated={isAuthenticated}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Message if no clubs at all in overview */}
+                    {createdClubsPreview.length === 0 &&
+                      joinedClubsPreview.length === 0 &&
+                      !loadingYourClubs && (
+                        <div className="text-center py-10 text-muted-foreground">
+                          You haven't joined or created any clubs yet. Explore
+                          clubs or create a new one!
+                        </div>
+                      )}
+                  </>
+                )}
+
+                {/* All Created Mode */}
+                {yourClubsViewMode === "allCreated" && (
                   <div>
-                    <h2 className="text-2xl font-semibold mb-4">
-                      Clubs You Created
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {createdByMe.map((club) => (
-                        <ClubCard
-                          key={club.id}
-                          club={club}
-                          isAuthenticated={isAuthenticated}
-                        />
-                      ))}
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-semibold">
+                        Clubs You Created
+                      </h2>
+                      <Button
+                        variant="outline"
+                        onClick={() => setYourClubsViewMode("overview")}
+                      >
+                        Back to Overview
+                      </Button>
                     </div>
+                    {loadingYourClubs && paginatedCreatedClubs.length === 0 ? (
+                      <div className="flex justify-center items-center pt-10">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      </div>
+                    ) : paginatedCreatedClubs.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {paginatedCreatedClubs.map((club) => (
+                          <ClubCard
+                            key={club.id}
+                            club={club}
+                            isAuthenticated={isAuthenticated}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-muted-foreground">
+                        You haven't created any clubs yet.
+                      </div>
+                    )}
+                    {/* Load More Button */}
+                    {canLoadMoreCreatedClubs &&
+                      paginatedCreatedClubs.length > 0 && (
+                        <div className="flex justify-center mt-6">
+                          <Button
+                            onClick={loadMoreYourClubs}
+                            disabled={loadingMore}
+                            variant="outline"
+                          >
+                            {loadingMore ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : null}
+                            Load More
+                          </Button>
+                        </div>
+                      )}
                   </div>
                 )}
 
-                {/* Clubs You Joined Section */}
-                {joinedByMe.length > 0 && (
+                {/* All Joined Mode */}
+                {yourClubsViewMode === "allJoined" && (
                   <div>
-                    {/* Add margin top if created section also exists */}
-                    <h2
-                      className={`text-2xl font-semibold mb-4 ${
-                        createdByMe.length > 0 ? "mt-6" : ""
-                      }`}
-                    >
-                      Clubs You Joined
-                    </h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {joinedByMe.map((club) => (
-                        <ClubCard
-                          key={club.id}
-                          club={club}
-                          isAuthenticated={isAuthenticated}
-                        />
-                      ))}
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-semibold">
+                        Clubs You Joined
+                      </h2>
+                      <Button
+                        variant="outline"
+                        onClick={() => setYourClubsViewMode("overview")}
+                      >
+                        Back to Overview
+                      </Button>
                     </div>
-                  </div>
-                )}
-
-                {/* Message if no clubs at all */}
-                {myClubs.length === 0 && !loading && (
-                  <div className="text-center py-10 text-muted-foreground">
-                    You haven't joined or created any clubs yet. Explore clubs
-                    or create a new one!
-                  </div>
-                )}
-
-                {/* Load More Button - Loads more for the combined list */}
-                {canLoadMoreMyClubs && myClubs.length > 0 && (
-                  <div className="flex justify-center mt-6">
-                    <Button
-                      onClick={loadMoreClubs}
-                      disabled={loadingMore}
-                      variant="outline"
-                    >
-                      {loadingMore ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Load More
-                    </Button>
+                    {loadingYourClubs && paginatedJoinedClubs.length === 0 ? (
+                      <div className="flex justify-center items-center pt-10">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      </div>
+                    ) : paginatedJoinedClubs.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {paginatedJoinedClubs.map((club) => (
+                          <ClubCard
+                            key={club.id}
+                            club={club}
+                            isAuthenticated={isAuthenticated}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-10 text-muted-foreground">
+                        You haven't joined any clubs yet.
+                      </div>
+                    )}
+                    {/* Load More Button */}
+                    {canLoadMoreJoinedClubs &&
+                      paginatedJoinedClubs.length > 0 && (
+                        <div className="flex justify-center mt-6">
+                          <Button
+                            onClick={loadMoreYourClubs}
+                            disabled={loadingMore}
+                            variant="outline"
+                          >
+                            {loadingMore ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : null}
+                            Load More
+                          </Button>
+                        </div>
+                      )}
                   </div>
                 )}
               </>

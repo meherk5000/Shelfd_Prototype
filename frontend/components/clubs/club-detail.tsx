@@ -40,6 +40,8 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/config";
 import { Command } from "cmdk";
 import { useDebounce } from "@/lib/hooks/use-debounce";
+import { DiscussionChat } from "@/components/clubs/discussion-chat";
+import { useAuth } from "@/lib/context/AuthContext";
 
 // Generic Media Interface (can be expanded later if needed)
 interface MediaItem {
@@ -77,6 +79,8 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
   const [isSearching, setIsSearching] = useState(false);
   const debouncedQuery = useDebounce(searchQuery, 300);
 
+  const { user } = useAuth();
+
   const {
     getClubs,
     createPost,
@@ -88,6 +92,9 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     updateClubBook,
     updateClubMovie,
     updateClubTVShow,
+    joinClub,
+    leaveClub,
+    internalLoading,
   } = useClubs();
 
   useEffect(() => {
@@ -307,6 +314,24 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     }
   };
 
+  // Function to handle joining or leaving the club
+  const handleJoinLeave = async () => {
+    if (!club) return;
+
+    const action = club.is_member ? leaveClub : joinClub;
+    const success = await action(club.id);
+
+    if (success) {
+      toast.success(
+        `Successfully ${club.is_member ? "left" : "joined"} the club!`
+      );
+      // Re-fetch club data to update membership status, count, etc.
+      await loadClub();
+    } else {
+      // Error handled by toast within the hook
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[50vh]">
@@ -441,9 +466,24 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
     <div className="px-4 py-6 max-w-[1200px] mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">{club.name}</h1>
-        <div className="flex gap-2">
-          {!club.is_member && <Button variant="default">Join Club</Button>}
-        </div>
+        {user && club.creator_id !== user.id && (
+          <Button
+            variant={club.is_member ? "outline" : "default"}
+            onClick={handleJoinLeave}
+            disabled={internalLoading[club.id]} // Disable while loading
+            className="gap-2"
+          >
+            {internalLoading[club.id] ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : null}
+            {club.is_member ? "Leave Club" : "Join Club"}
+          </Button>
+        )}
+        {club.is_creator && (
+          <Button variant="secondary" disabled>
+            Settings (TODO)
+          </Button> // Placeholder for creator actions
+        )}
       </div>
 
       {club.description && (
@@ -609,89 +649,35 @@ export function ClubDetail({ clubId }: ClubDetailProps) {
         </TabsList>
 
         <TabsContent value="discussion" className="space-y-4">
-          {threads.length === 0 ? (
+          {/* Render DiscussionChat if user is a member */}
+          {club.is_member ? (
+            <DiscussionChat clubId={club.id} isMember={club.is_member} />
+          ) : (
             <div className="text-center p-8 border rounded-lg bg-muted/20">
               <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/60 mb-3" />
               <h3 className="text-lg font-medium mb-2">
-                No discussion threads yet
+                Join the club to participate
               </h3>
-              <p className="text-muted-foreground mb-4">
-                Start the first conversation about this book club!
+              <p className="text-muted-foreground">
+                Only members can view and participate in the discussion.
               </p>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button>Create Thread</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Thread</DialogTitle>
-                    <DialogDescription>
-                      Start a new discussion thread for this club.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <Button>Create Thread</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Discussion Threads</h3>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button size="sm">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      New Thread
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create New Thread</DialogTitle>
-                      <DialogDescription>
-                        Start a new discussion thread for this club.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                      <Button>Create Thread</Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-              </div>
-              {threads.map((thread) => (
-                <Card
-                  key={thread.id}
-                  className="p-4 hover:shadow-md transition-shadow"
+              {!club.is_creator && (
+                <Button
+                  variant="default"
+                  onClick={handleJoinLeave}
+                  disabled={internalLoading[club.id]} // Disable while loading
+                  className="mt-4 gap-2"
                 >
-                  <div className="flex justify-between">
-                    <div>
-                      <h4 className="font-semibold text-md">{thread.title}</h4>
-                      <div className="flex items-center mt-2 space-x-3">
-                        <div className="flex items-center text-xs text-muted-foreground">
-                          <Avatar className="h-6 w-6 mr-1">
-                            <AvatarFallback>
-                              {thread.creator_username
-                                ?.substring(0, 2)
-                                .toUpperCase() || "U"}
-                            </AvatarFallback>
-                          </Avatar>
-                          {thread.creator_username || "Anonymous"}
-                        </div>
-                        {thread.created_at && (
-                          <div className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(thread.created_at), {
-                              addSuffix: true,
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
+                  {internalLoading[club.id] ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : null}
+                  Join Club
+                </Button>
+              )}
             </div>
           )}
+          {/* TODO: Add logic for displaying threads if needed alongside chat */}
+          {/* {threads.length === 0 ? ( ... ) : ( ... )} */}
         </TabsContent>
 
         <TabsContent value="schedule" className="space-y-4">

@@ -384,13 +384,15 @@ export function useClubs() {
         throw new Error(data.detail || "Failed to upload image");
       }
 
-      // Return the full URL directly from the backend if possible, or normalize
-      // The backend's response `data.url` should be the relative path like '/club_covers/...'
-      const relativePath = data.url; // Assuming backend returns '/club_covers/filename.jpg'
-      const imageUrl = normalizeImageUrl(relativePath); // Use the updated normalizer
+      // Return the RELATIVE path (e.g., '/club_covers/...') directly from the backend response
+      const relativePath = data.url; 
+      if (!relativePath || typeof relativePath !== 'string' || !relativePath.startsWith('/club_covers/')) {
+          console.error("[uploadCoverImage] Backend did not return a valid relative path in 'url' field:", data);
+          throw new Error("Invalid response from image upload endpoint.");
+      }
 
-      console.log("Image uploaded successfully. Full URL:", imageUrl);
-      return imageUrl || null; // Return the full URL or null if normalization failed
+      console.log("Image uploaded successfully. Relative Path:", relativePath);
+      return relativePath; // Return the relative path
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to upload image";
       setError(message);
@@ -444,9 +446,12 @@ export function useClubs() {
     // Handle cover image upload if provided
     if (coverImage) {
       try {
-        const imageUrl = await uploadCoverImage(coverImage);
-        if (imageUrl) {
-          requestData.cover_image = imageUrl;
+        const relativePath = await uploadCoverImage(coverImage); // Now returns relative path
+        if (relativePath) {
+          // Assign the relative path directly
+          requestData.cover_image = relativePath; 
+        } else {
+          console.error("[Frontend] Failed to upload cover image: Image upload returned null");
         }
       } catch (err) {
         console.error("[Frontend] Failed to upload cover image:", err);

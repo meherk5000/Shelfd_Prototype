@@ -204,6 +204,8 @@ export default function ClubDetailPage() {
   }, [isBookSearchOpen, isMovieSearchOpen, isTVShowSearchOpen]);
 
   const loadClub = async () => {
+    // Add logging for state check
+    console.log("[loadClub] Fetching club details for ID:", clubId);
     setIsLoading(true);
     try {
       const result = await getClubs(0, 1, undefined, undefined, clubId);
@@ -213,20 +215,29 @@ export default function ClubDetailPage() {
         result.data.clubs.length > 0
       ) {
         const clubData = result.data.clubs[0];
+        // Log fetched data
+        console.log("[loadClub] Fetched club data:", clubData);
         setClub(clubData);
+        // Log state update
+        console.log("[loadClub] Club state SET to:", clubData);
 
-        // Load each resource separately and handle errors individually
-        // Each function now handles its own errors
+        // Load related data
         await loadPosts(clubData.id);
         await loadThreads(clubData.id);
         await loadMilestones(clubData.id);
+        // Load members AFTER setting club, in case needed later
+        await loadMembers(clubData.id);
       } else {
-        console.error("Club not found or access denied");
+        console.error(
+          "[loadClub] Club not found or access denied. Result:",
+          result
+        );
         toast.error("Club not found or you don't have access");
         setClub(null);
         setPosts([]);
         setThreads([]);
         setMilestones([]);
+        setMembers([]); // Clear members too
       }
     } catch (error) {
       console.error("Error loading club:", error);
@@ -235,6 +246,7 @@ export default function ClubDetailPage() {
       setPosts([]);
       setThreads([]);
       setMilestones([]);
+      setMembers([]); // Clear members too
     } finally {
       setIsLoading(false);
     }
@@ -479,42 +491,41 @@ export default function ClubDetailPage() {
 
   const handleJoinClub = async () => {
     if (!club) return;
-
     try {
-      console.log("Attempting to join club:", {
-        clubId: club.id,
-        clubName: club.name,
-        isPrivate: club.is_private,
-        isMember: club.is_member,
-      });
-
       const success = await joinClub(club.id);
       if (success) {
-        // Refresh club data to update member status
-        await loadClub();
         toast.success("Successfully joined the club!");
+        await loadClub(); // Refresh club data (includes member count, is_member)
+        await loadMembers(club.id); // Refresh member list
       } else {
-        console.error("Failed to join club - joinClub returned false");
-        toast.error("Failed to join club");
+        // joinClub hook should show specific error via toast
+        console.error(
+          "Failed to join club - joinClub hook returned false/threw error"
+        );
       }
     } catch (error) {
+      // This catch might be redundant if useClubs handles errors, but keep for safety
       console.error("Error in handleJoinClub:", error);
-      toast.error("Failed to join club");
+      toast.error("Failed to join club due to an unexpected error.");
     }
   };
 
   const handleLeaveClub = async () => {
     if (!club) return;
-
     try {
       const success = await leaveClub(club.id);
       if (success) {
         toast.success("Successfully left the club");
-        router.push("/clubs"); // Redirect to clubs page
+        // Don't refresh state if redirecting immediately
+        router.push("/clubs"); // Redirect AFTER success
+      } else {
+        console.error(
+          "Failed to leave club - leaveClub hook returned false/threw error"
+        );
       }
     } catch (error) {
       console.error("Error leaving club:", error);
-      toast.error("Failed to leave club");
+      toast.error("Failed to leave club due to an unexpected error.");
     }
   };
 
@@ -866,6 +877,18 @@ export default function ClubDetailPage() {
   // Main content (without Layout wrapper)
   return (
     <div className="px-4 py-6 max-w-[1200px] mx-auto space-y-6">
+      {club.cover_image && (
+        <div className="relative w-full h-48 md:h-64 rounded-lg overflow-hidden mb-6">
+          <Image
+            src={club.cover_image}
+            alt={`${club.name} cover image`}
+            layout="fill"
+            objectFit="cover"
+            priority // Load image sooner
+          />
+        </div>
+      )}
+
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">{club.name}</h1>
         <div className="flex gap-2">

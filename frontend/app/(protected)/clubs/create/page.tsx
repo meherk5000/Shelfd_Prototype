@@ -72,22 +72,31 @@ export default function CreateClubPage() {
   const [description, setDescription] = useState("");
   const [mediaType, setMediaType] = useState<MediaType>("books");
   const [isPrivate, setIsPrivate] = useState(false);
-  const [coverImage, setCoverImage] = useState<string | null>(null);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
 
-  // Cover image handlers (remain the same)
+  // Cover image handlers
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setCoverImage(URL.createObjectURL(file));
+      setCoverImageFile(file);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
       setPreviewUrl(URL.createObjectURL(file));
+    } else {
+      setCoverImageFile(null);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
     }
   };
 
   const handleRemoveImage = () => {
-    setCoverImage(null);
+    setCoverImageFile(null);
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
       setPreviewUrl(null);
@@ -136,17 +145,24 @@ export default function CreateClubPage() {
         backendMediaType,
         description,
         isPrivate,
-        coverImage
-          ? new File([coverImage], "cover.jpg", { type: "image/jpeg" })
-          : undefined
+        coverImageFile || undefined
       );
 
       if (success && clubId) {
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
         router.push(`/clubs/${clubId}`);
+      } else {
+        if (!success) {
+          toast.error("Club creation failed. Please check the details.");
+        }
       }
     } catch (error) {
       console.error("Error creating club:", error);
-      toast.error("Failed to create club");
+      const message =
+        error instanceof Error ? error.message : "An unexpected error occurred";
+      toast.error("Failed to create club", { description: message });
     } finally {
       setIsLoading(false);
     }
