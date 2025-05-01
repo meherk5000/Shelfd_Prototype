@@ -165,6 +165,8 @@ export function ShelfButton({
         console.log(
           "[ShelfButton] Ignoring expected 409 'already exists' error during dialog complete flow."
         );
+        // *** SHOW A TOAST TO THE USER ***
+        toast.error(errorMessage); // Display the specific conflict message from the backend
       }
       // --- End check ---
 

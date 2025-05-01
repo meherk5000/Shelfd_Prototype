@@ -173,30 +173,28 @@ class ClubService:
         if str(user.id) in member_ids:
              raise HTTPException(status_code=400, detail="Already a member of this club")
 
-        # Create the Link object for the user joining
-        user_link = Link(user, User)
-        
-        # Add user link to the list in memory
-        if club.members is None: # Initialize list if it doesn't exist
-            club.members = []
-        club.members.append(user_link)
-        
-        # Save the entire club object using .save() for consistency and potential hook execution
+        # Use $addToSet to add the user link directly in the database
         try:
-            await club.save()
-            logger.info(f"User {user.id} successfully joined club {club_id} via club.save()")
-        except Exception as e:
-             logger.error(f"Failed to save club {club_id} after adding member {user.id}: {e}", exc_info=True)
-             raise HTTPException(status_code=500, detail="Failed to save membership update")
+            # Construct the DBRef manually for the update operation
+            user_dbref = {
+                "$ref": User.Settings.name, # Get collection name from User model settings
+                "$id": user.id
+            }
+            await club.update({"$addToSet": {"members": user_dbref}})
+            logger.info(f"User {user.id} successfully added to club {club_id} members via $addToSet.")
 
-        # Re-fetch is likely still needed if save() doesn't update the instance in place
-        # or to ensure links are fetched again for the response
+        except Exception as e:
+             logger.error(f"Failed to update club {club_id} using $addToSet for member {user.id}: {e}", exc_info=True)
+             raise HTTPException(status_code=500, detail="Failed to update membership")
+
+        # Re-fetch the club with links after the update to return the latest state
         updated_club = await ClubService.get_club(club_id)
         if not updated_club:
-             logger.error(f"Failed to re-fetch club {club_id} after joining (using save).")
+             logger.error(f"Failed to re-fetch club {club_id} after joining (using $addToSet).")
+             # This shouldn't happen if the update succeeded, but handle defensively.
              raise HTTPException(status_code=404, detail="Club not found after update.")
              
-        return updated_club
+        return updated_club # Return the newly fetched club
 
     @staticmethod
     async def leave_club(club_id: PydanticObjectId, user: User) -> Club:
@@ -204,8 +202,13 @@ class ClubService:
         print(f"DEBUG - Leave club: Attempting to leave club {club_id} for user {user.id}")
         club = await ClubService.get_club(club_id)
         
-        # Get creator ID by fetching the creator first
-        creator = await club.creator.fetch()
+        # Get creator object (already fetched by get_club)
+        creator = club.creator # Directly use the fetched creator object
+        if not creator:
+             # Handle case where creator link might be broken or null
+             logger.error(f"Club {club_id} is missing creator information.")
+             raise HTTPException(status_code=500, detail="Club creator information missing.")
+             
         print(f"DEBUG - Leave club: Creator ID = {creator.id}, User ID = {user.id}")
         
         # Check if user is the creator
@@ -282,8 +285,13 @@ class ClubService:
         """Delete a club and all its posts."""
         club = await ClubService.get_club(club_id)
         
-        # Fetch the creator to properly compare IDs
-        creator = await club.creator.fetch()
+        # Fetch the creator to properly compare IDs (already fetched by get_club)
+        creator = club.creator # Use the fetched object directly
+        if not creator:
+             # Handle case where creator link might be broken or null
+             logger.error(f"Club {club_id} is missing creator information for deletion check.")
+             raise HTTPException(status_code=500, detail="Club creator information missing.")
+
         print(f"DEBUG - Delete club: user.id={user.id}, creator.id={creator.id}")
         
         if str(user.id) != str(creator.id):

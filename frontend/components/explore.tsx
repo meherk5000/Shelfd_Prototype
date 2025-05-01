@@ -55,10 +55,7 @@ export default function Explore() {
   const fetchCategoryItems = async (tab: string) => {
     const categoryData: { [key: string]: MediaItem[] } = {};
 
-    // Only fetch for first two categories to avoid too many requests
-    const categoriesToFetch = CATEGORIES.slice(0, 3);
-
-    for (const category of categoriesToFetch) {
+    for (const category of CATEGORIES) {
       const data = await getCategoryMedia(category.id, tab);
       categoryData[category.id] = data.results || [];
     }
@@ -230,8 +227,6 @@ export default function Explore() {
 
   return (
     <div className="container mx-auto py-6">
-      <h1 className="text-3xl font-bold mb-8">Explore</h1>
-
       <Tabs defaultValue="for-you" onValueChange={handleTabChange}>
         <TabsList className="grid w-full grid-cols-6 mb-6">
           <TabsTrigger value="for-you">For You</TabsTrigger>

@@ -46,6 +46,7 @@ import Image from "next/image";
 import { useRouter, useParams } from "next/navigation";
 import { DiscussionChat } from "@/components/clubs/discussion-chat";
 import { useAuth } from "@/lib/context/AuthContext";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 // Define media types
 interface Book {
@@ -118,6 +119,9 @@ export default function ClubDetailPage() {
   const [showCreateThreadDialog, setShowCreateThreadDialog] = useState(false);
   const [newThreadTitle, setNewThreadTitle] = useState("");
   const [isCreatingThread, setIsCreatingThread] = useState(false);
+
+  // State for Delete Confirmation Dialog
+  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
 
   // Generic Media Search State
   const [searchQuery, setSearchQuery] = useState("");
@@ -532,21 +536,23 @@ export default function ClubDetailPage() {
   const handleDeleteClub = async () => {
     if (!club) return;
 
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this club? This action cannot be undone."
-    );
-
-    if (!confirmed) return;
-
-    try {
-      const success = await deleteClub(club.id);
-      if (success) {
-        router.push("/clubs"); // Redirect to clubs page
+    // Actual deletion logic moved to a separate function
+    const performDelete = async () => {
+      try {
+        const success = await deleteClub(club.id);
+        if (success) {
+          router.push("/clubs"); // Redirect to clubs page
+        } else {
+          // Error toast is likely handled in the useClubs hook
+        }
+      } catch (error) {
+        console.error("Error deleting club:", error);
+        toast.error("Failed to delete club");
       }
-    } catch (error) {
-      console.error("Error deleting club:", error);
-      toast.error("Failed to delete club");
-    }
+    };
+
+    // Open the confirmation dialog instead of window.confirm
+    setShowDeleteConfirmDialog(true);
   };
 
   const handleRemoveMedia = async () => {
@@ -893,7 +899,10 @@ export default function ClubDetailPage() {
         <h1 className="text-3xl font-bold">{club.name}</h1>
         <div className="flex gap-2">
           {club.is_creator ? (
-            <Button variant="destructive" onClick={handleDeleteClub}>
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteConfirmDialog(true)}
+            >
               <Trash2 className="h-4 w-4 mr-2" />
               Delete Club
             </Button>
@@ -1263,6 +1272,39 @@ export default function ClubDetailPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        open={showDeleteConfirmDialog}
+        onOpenChange={setShowDeleteConfirmDialog}
+        title="Delete Club?"
+        description={
+          <>
+            Are you sure you want to delete the club "
+            <strong>{club?.name}</strong>"?
+            <br />
+            This action cannot be undone.
+          </>
+        }
+        onConfirm={async () => {
+          // Call the actual delete function when confirmed
+          if (!club) return;
+          try {
+            const success = await deleteClub(club.id);
+            if (success) {
+              toast.success(`Club "${club.name}" deleted.`);
+              router.push("/clubs");
+            } else {
+              // Error handled by hook
+            }
+          } catch (error) {
+            console.error("Error deleting club:", error);
+            toast.error("Failed to delete club");
+          }
+        }}
+        confirmText="Delete"
+        confirmVariant="destructive"
+      />
     </div>
   );
 }

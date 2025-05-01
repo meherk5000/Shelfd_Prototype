@@ -29,7 +29,7 @@ class PasswordReset(BaseModel):
     token: str
     new_password: str
 
-@router.post("/signup")
+@router.post("/signup", status_code=201)
 async def signup(user_data: UserCreate, request: Request):
     try:
         print(f"Debug - Received signup request for email: {user_data.email}")
