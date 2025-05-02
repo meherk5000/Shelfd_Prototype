@@ -135,100 +135,114 @@ export default api
 
 export const searchMedia = async (query: string, mediaType?: string, page: number = 1) => {
   try {
-      console.log('Making API request with:', { query, mediaType, page }); // Debug log
+      // Development/Debug Logging: console.log('Making API request with:', { query, mediaType, page });
 
-      const params = new URLSearchParams({
-          query,
-          ...(mediaType && { media_type: mediaType }),
+      // Create a params object for axios
+      const paramsObject: { query: string; media_type?: string; page: string } = {
+          query: query,
           page: page.toString(),
-      });
-
-      // Correct path for media search
-      const url = `${API_BASE_URL}/media/search?${params}`;
-      console.log('Request URL:', url); // Debug log
-
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+      };
+      if (mediaType) {
+          paramsObject.media_type = mediaType;
       }
-      
-      const data = await response.json();
-      console.log('API response data:', data); // Debug log
-      return data;
-  } catch (error) {
-      console.error('Search API error:', error);
-      throw error;
+
+      // Use relative path and params object with the configured api instance
+      const path = '/media/search';
+      // Development/Debug Logging: console.log('Request Path:', path, 'Params:', paramsObject);
+
+      // Use the configured axios instance 'api'
+      const response = await api.get(path, { params: paramsObject });
+
+      // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
+
+      // Development/Debug Logging: console.log('API response data:', response.data);
+      return response.data;
+
+  } catch (error: any) { // Catch potential Axios errors or interceptor errors
+      console.error('Search API error:', error); // Log the error
+      // Extract detail from FastAPI/Axios error structure, fallback to message
+      const detail = error.response?.data?.detail || error.message || "Failed to perform search.";
+      // Re-throw a standard error for the calling component to handle
+      throw new Error(detail);
   }
 };
 
 
 export const getMovieDetails = async (movieId: number) => {
   try {
-    console.log('Fetching movie details for:', movieId);
-    // Correct path for movie details
-    const url = `${API_BASE_URL}/media/movies/${movieId}`;
-    console.log('Request URL:', url);
-    
-    const response = await fetch(url);
-    console.log('Response status:', response.status);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.log('Error response text:', errorText);
-      
-      let errorData;
-      try {
-        errorData = JSON.parse(errorText);
-      } catch (e) {
-        console.log('Failed to parse error response as JSON:', e);
-        errorData = { detail: errorText };
-      }
-      
-      throw new Error(
-        errorData.detail || 
-        `Failed to fetch movie details: ${response.statusText}`
-      );
-    }
-    
-    const data = await response.json();
-    console.log('Movie details received:', data);
-    return data;
-  } catch (error) {
-    console.error('Movie details error:', error);
-    throw error;
+    // Development/Debug Logging: console.log('Fetching movie details for:', movieId);
+    // Use relative path for the configured api instance
+    const path = `/media/movies/${movieId}`;
+    // Development/Debug Logging: console.log('Request Path:', path);
+
+    // Use the configured axios instance 'api'
+    const response = await api.get(path);
+
+    // Axios automatically handles non-2xx errors & JSON parsing.
+    // Interceptors on 'api' handle auth header and token refresh.
+
+    // Development/Debug Logging: console.log('Movie details received:', response.data);
+    // Return the data property from the axios response
+    return response.data;
+
+  } catch (error: any) { // Catch potential Axios errors or interceptor errors
+    console.error('Movie details error:', error); // Log the error
+    // Extract detail from FastAPI/Axios error structure, fallback to message
+    const detail = error.response?.data?.detail || error.message || "Failed to fetch movie details.";
+    // Re-throw a standard error for the calling component to handle
+    throw new Error(detail);
   }
 };
 
 
 export const getTVDetails = async (tvId: number) => {
   try {
-    // Correct path for TV details
-    const url = `${API_BASE_URL}/media/tv/${tvId}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch TV show details (${response.status})`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('[TV Details Frontend] Error:', error);
-    throw error;
+    // Use relative path for the configured api instance
+    const path = `/media/tv/${tvId}`;
+    // Development/Debug Logging: console.log('Request Path:', path);
+
+    // Use the configured axios instance 'api'
+    const response = await api.get(path);
+
+    // Axios automatically handles non-2xx errors & JSON parsing.
+    // Interceptors on 'api' handle auth header and token refresh.
+
+    // Development/Debug Logging: console.log('TV details received:', response.data);
+    // Return the data property from the axios response
+    return response.data;
+
+  } catch (error: any) { // Catch potential Axios errors or interceptor errors
+    console.error('[TV Details Frontend] Error:', error); // Log the error
+    // Extract detail from FastAPI/Axios error structure, fallback to message
+    const detail = error.response?.data?.detail || error.message || "Failed to fetch TV show details.";
+    // Re-throw a standard error for the calling component to handle
+    throw new Error(detail);
   }
 };
 
 export const getBookDetails = async (id: string) => {
-  // Correct path for book details
-  const response = await axios.get(
-    `${API_BASE_URL}/media/books/${id}`,
-    {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    }
-  );
-  return response.data;
+  try {
+    // Use relative path for the configured api instance
+    const path = `/media/books/${id}`;
+    // Development/Debug Logging: console.log('Request Path:', path);
+
+    // Use the configured axios instance 'api'
+    const response = await api.get(path);
+
+    // Axios automatically handles non-2xx errors & JSON parsing.
+    // Interceptors on 'api' handle auth header and token refresh.
+
+    // Development/Debug Logging: console.log('Book details received:', response.data);
+    // Return the data property from the axios response
+    return response.data;
+
+  } catch (error: any) { // Catch potential Axios errors or interceptor errors
+    console.error('Book details error:', error); // Log the error
+    // Extract detail from FastAPI/Axios error structure, fallback to message
+    const detail = error.response?.data?.detail || error.message || "Failed to fetch book details.";
+    // Re-throw a standard error for the calling component to handle
+    throw new Error(detail);
+  }
 };
 
 export const searchQuick = async (query: string) => {
@@ -240,47 +254,51 @@ export const searchQuick = async (query: string) => {
   };
 
   try {
-    // Correct path for quick search
-    const url = `${API_BASE_URL}/media/search/quick?query=${encodeURIComponent(query)}`;
-    console.log('[Quick Search] Request URL:', url);
-    
-    const response = await fetch(url);
-    console.log('[Quick Search] Response status:', response.status);
-    
-    if (!response.ok) {
-      console.log('[Quick Search] Error response status:', response.status);
-      return emptyResults;
-    }
-    
-    const data = await response.json();
-    console.log('[Quick Search] Success response:', data);
-    return data;
-  } catch (error) {
-    console.error('[Quick Search] Error:', error);
+    // Use relative path and params option for the configured api instance
+    const path = `/media/search/quick`;
+    // Development/Debug Logging: console.log('[Quick Search] Request Path:', path, 'Query:', query);
+
+    // Use the configured axios instance 'api' with query params
+    const response = await api.get(path, { params: { query } });
+
+    // Axios automatically handles non-2xx errors & JSON parsing.
+    // Interceptors on 'api' handle auth header and token refresh.
+
+    // Development/Debug Logging: console.log('[Quick Search] Success response:', response.data);
+    // Return the data property from the axios response
+    return response.data;
+
+  } catch (error: any) { // Catch potential Axios errors or interceptor errors
+    console.error('[Quick Search] Error:', error); // Log the error
+    // Maintain original behavior: return empty results on error
     return emptyResults;
   }
 };
 
 export const getArticleDetails = async (articleId: string) => {
   try {
-    console.log("[Frontend] Fetching article with ID:", articleId);
-    
-    // Correct path for article details
-    console.log(`[Frontend] Making request to: ${API_BASE_URL}/media/article/${articleId}`);
-    const response = await axios.get(
-      `${API_BASE_URL}/media/article/${articleId}`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    
-    console.log("[Frontend] Article data received:", response.data);
+    // Development/Debug Logging: console.log("[Frontend] Fetching article with ID:", articleId);
+
+    // Use relative path for the configured api instance
+    const path = `/media/article/${articleId}`;
+    // Development/Debug Logging: console.log(`[Frontend] Making request to path: ${path}`);
+
+    // Use the configured axios instance 'api'
+    const response = await api.get(path);
+
+    // Axios automatically handles non-2xx errors & JSON parsing.
+    // Interceptors on 'api' handle auth header and token refresh.
+
+    // Development/Debug Logging: console.log("[Frontend] Article data received:", response.data);
+    // Return the data property from the axios response
     return response.data;
-  } catch (error) {
-    console.error("[Frontend] Error fetching article details:", error);
-    throw error;
+
+  } catch (error: any) { // Catch potential Axios errors or interceptor errors
+    console.error("[Frontend] Error fetching article details:", error); // Log the error
+    // Extract detail from FastAPI/Axios error structure, fallback to message
+    const detail = error.response?.data?.detail || error.message || "Failed to fetch article details.";
+    // Re-throw a standard error for the calling component to handle
+    throw new Error(detail);
   }
 };
 
@@ -301,67 +319,67 @@ export const checkAuth = async () => {
 
 // Explore API Endpoints
 export async function getTrendingMedia(
-  tab: string = "All", 
-  options?: { 
-    minRating?: number, 
-    maxRating?: number, 
+  tab: string = "All",
+  options?: {
+    minRating?: number,
+    maxRating?: number,
     page?: number,
     limit?: number
   }
 ) {
-  console.log(`Fetching trending media for tab: ${tab}`);
+  // Development/Debug Logging: console.log(`Fetching trending media for tab: ${tab}`);
+  const defaultResponse = { results: [] };
   try {
     // Build query parameters
     const params = new URLSearchParams({
       tab: tab
     });
-    
+
     // Add optional filters if provided
     if (options?.minRating) params.append('min_rating', options.minRating.toString());
     if (options?.maxRating) params.append('max_rating', options.maxRating.toString());
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
-    
-    // Correct path for explore trending (uses NEXT_PUBLIC_API_URL directly, which is fine)
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/media/explore/trending?${params.toString()}`,
-      {
-        next: { revalidate: 3600 }, // Cache for 1 hour
-      }
-    );
 
-    if (!response.ok) {
-      console.error("Error fetching trending media:", response.statusText);
-      return { results: [] };
-    }
+    // Use relative path for the configured api instance
+    const path = `/media/explore/trending`;
+    // Development/Debug Logging: console.log('Request Path:', path, 'Params:', params.toString());
 
-    const data = await response.json();
-    console.log(`Received ${data.results.length} trending items`);
-    return data;
-  } catch (error) {
-    console.error("Failed to fetch trending media:", error);
-    return { results: [] };
+    // Use the configured axios instance 'api' with query params object
+    // Note: Pass URLSearchParams directly to axios params
+    const response = await api.get(path, { params });
+
+    // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
+
+    // Development/Debug Logging: console.log(`Received ${response.data.results.length} trending items`);
+    return response.data;
+
+  } catch (error: any) {
+    console.error("Failed to fetch trending media:", error); // Log error
+    // Maintain original behavior: return empty results array on error
+    return defaultResponse;
   }
 }
 
 export async function getNewReleases(
-  tab: string = "All", 
-  options?: { 
-    minRating?: number, 
-    maxRating?: number, 
-    fromDate?: string, 
+  tab: string = "All",
+  options?: {
+    minRating?: number,
+    maxRating?: number,
+    fromDate?: string,
     toDate?: string,
     page?: number,
     limit?: number
   }
 ) {
-  console.log(`Fetching new releases for tab: ${tab}`);
+  // Development/Debug Logging: console.log(`Fetching new releases for tab: ${tab}`);
+  const defaultResponse = { results: [] };
   try {
     // Build query parameters
     const params = new URLSearchParams({
       tab: tab
     });
-    
+
     // Add optional filters if provided
     if (options?.minRating) params.append('min_rating', options.minRating.toString());
     if (options?.maxRating) params.append('max_rating', options.maxRating.toString());
@@ -369,70 +387,65 @@ export async function getNewReleases(
     if (options?.toDate) params.append('to_date', options.toDate);
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
-    
-    // Correct path for explore new releases (uses NEXT_PUBLIC_API_URL directly, which is fine)
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/media/explore/new-releases?${params.toString()}`,
-      {
-        next: { revalidate: 3600 }, // Cache for 1 hour
-      }
-    );
 
-    if (!response.ok) {
-      console.error("Error fetching new releases:", response.statusText);
-      return { results: [] };
-    }
+    // Use relative path for the configured api instance
+    const path = `/media/explore/new-releases`;
+    // Development/Debug Logging: console.log('Request Path:', path, 'Params:', params.toString());
 
-    const data = await response.json();
-    console.log(`Received ${data.results.length} new releases`);
-    return data;
-  } catch (error) {
-    console.error("Failed to fetch new releases:", error);
-    return { results: [] };
+    // Use the configured axios instance 'api' with query params object
+    const response = await api.get(path, { params });
+
+    // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
+
+    // Development/Debug Logging: console.log(`Received ${response.data.results.length} new releases`);
+    return response.data;
+
+  } catch (error: any) {
+    console.error("Failed to fetch new releases:", error); // Log error
+    // Maintain original behavior: return empty results array on error
+    return defaultResponse;
   }
 }
 
 export async function getCategoryMedia(
-  category: string, 
-  tab: string = "All", 
-  options?: { 
-    minRating?: number, 
-    maxRating?: number, 
+  category: string,
+  tab: string = "All",
+  options?: {
+    minRating?: number,
+    maxRating?: number,
     page?: number,
     limit?: number
   }
 ) {
-  console.log(`Fetching ${category} media for tab: ${tab}`);
+  // Development/Debug Logging: console.log(`Fetching ${category} media for tab: ${tab}`);
+  const defaultResponse = { results: [] };
   try {
     // Build query parameters
     const params = new URLSearchParams({
       tab: tab
     });
-    
+
     // Add optional filters if provided
     if (options?.minRating) params.append('min_rating', options.minRating.toString());
     if (options?.maxRating) params.append('max_rating', options.maxRating.toString());
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
-    
-    // Correct path for explore category (uses NEXT_PUBLIC_API_URL directly, which is fine)
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/media/explore/category/${category}?${params.toString()}`,
-      {
-        next: { revalidate: 3600 }, // Cache for 1 hour
-      }
-    );
 
-    if (!response.ok) {
-      console.error(`Error fetching ${category} media:`, response.statusText);
-      return { results: [] };
-    }
+    // Use relative path including the category for the configured api instance
+    const path = `/media/explore/category/${category}`;
+    // Development/Debug Logging: console.log('Request Path:', path, 'Params:', params.toString());
 
-    const data = await response.json();
-    console.log(`Received ${data.results.length} items for ${category}`);
-    return data;
-  } catch (error) {
-    console.error(`Failed to fetch ${category} media:`, error);
-    return { results: [] };
+    // Use the configured axios instance 'api' with query params object
+    const response = await api.get(path, { params });
+
+    // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
+
+    // Development/Debug Logging: console.log(`Received ${response.data.results.length} items for ${category}`);
+    return response.data;
+
+  } catch (error: any) {
+    console.error(`Failed to fetch ${category} media:`, error); // Log error
+    // Maintain original behavior: return empty results array on error
+    return defaultResponse;
   }
 }
