@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { api } from '@/lib/api'; // Import api instance
+import axios from 'axios'; // Import for error checking
 
 // Define interfaces for the returned media items
 interface BookResult {
@@ -40,25 +42,25 @@ export function useMediaSearch() {
   const [results, setResults] = useState<MediaSearchResult[]>([]);
 
   const searchMedia = async (query: string, mediaType: string = "all") => {
-    if (!query) return;
-    
+    if (!query) {
+        setResults([]); // Clear results if query is empty
+        return;
+    }
+
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Use the existing media/search endpoint
-      const response = await fetch(
-        `/api/media/search?q=${encodeURIComponent(query)}&media_type=${mediaType}`
+      // Use api instance with params option
+      const response = await api.get(
+        `/api/media/search`, // Relative URL
+        {
+          params: { q: query, media_type: mediaType }
+        }
       );
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        setError(data.detail || "Search failed");
-        setResults([]);
-        return;
-      }
-      
+
+      const data = response.data; // Axios provides data directly
+
       // Transform the API response to our MediaSearchResult format
       let searchResults: MediaSearchResult[] = [];
       
@@ -101,9 +103,11 @@ export function useMediaSearch() {
       }
       
       setResults(searchResults);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error searching media:", err);
-      setError("Failed to search for media");
+      // Try to get detail from Axios error structure
+      const message = err.response?.data?.detail || (err instanceof Error ? err.message : "Failed to search for media");
+      setError(message);
       setResults([]);
     } finally {
       setLoading(false);

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from beanie import PydanticObjectId, Link
 from pydantic import BaseModel, Field, validator
 import asyncio
@@ -378,8 +378,11 @@ async def upload_club_cover(
     current_user: User = Depends(get_current_user),
 ):
     """Upload a cover image for a club."""
-    # Validate file type
-    if not file.content_type.startswith("image/"):
+    logger.debug(f"[Upload Cover] Received file: {file.filename}, Content-Type: {file.content_type}")
+
+    # Validate file type (using the automatically parsed file)
+    if not file.content_type or not file.content_type.startswith("image/"):
+        logger.warning(f"[Upload Cover] Validation failed: Invalid content type '{file.content_type}' for file '{file.filename}'")
         raise HTTPException(status_code=400, detail="File must be an image")
     
     # Generate a unique filename
@@ -388,11 +391,17 @@ async def upload_club_cover(
     file_path = f"uploads/club_covers/{unique_filename}"
     
     # Save the file
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Return the file URL (path that can be accessed via API)
-    return {"url": f"/club_covers/{unique_filename}"}
+    try:
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        logger.info(f"[Upload Cover] Successfully saved file to: {file_path}")
+    except Exception as e:
+        logger.error(f"[Upload Cover] Failed to save uploaded file '{file.filename}' to '{file_path}': {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file.")
+
+    relative_url = f"/club_covers/{unique_filename}"
+    logger.debug(f"[Upload Cover] Returning URL: {relative_url}")
+    return {"url": relative_url}
 
 @router.post("/{club_id}/milestones", response_model=MilestoneResponse)
 async def create_milestone(
