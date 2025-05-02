@@ -81,52 +81,60 @@ api.interceptors.response.use(
         
         if (!refreshToken) {
           // No refresh token, logout
-          localStorage.removeItem('token')
-          window.location.href = '/auth/sign-in'
-          return Promise.reject(error)
-        }
-        
-        // Use the correct path for the backend refresh endpoint
-        const response = await axios.post(`${API_BASE_URL}/api/auth/refresh-token`, {}, {
-          headers: {
-            'Authorization': `Bearer ${refreshToken}`
-          }
-        })
-        
-        // If successful, update tokens
-        if (response.data.access_token) {
-          localStorage.setItem('token', response.data.access_token)
-          
-          // Process the queue with the new token
-          processQueue(null, response.data.access_token)
-          
-          // Update the original request with the new token
-          originalRequest.headers.Authorization = `Bearer ${response.data.access_token}`
-          
-          // Reset refreshing flag
-          isRefreshing = false
-          
-          // Retry the original request
-          return api(originalRequest)
-        } else {
-          // Unexpected response - logout
-          processQueue(error, null)
+          console.error("Refresh Token not found. Logging out.");
+          processQueue(new Error("Refresh token not found."), null);
           localStorage.removeItem('token')
           localStorage.removeItem('refresh_token')
-          window.location.href = '/auth/sign-in'
-          return Promise.reject(error)
+          if (typeof window !== 'undefined') window.location.href = '/auth/sign-in'
+          return Promise.reject(new Error("Refresh token not found."))
         }
-      } catch (refreshError) {
-        // Refresh failed - logout
-        processQueue(refreshError as Error, null)
+        
+        console.log("Attempting token refresh...");
+        const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
+           refresh_token: refreshToken
+        });
+
+        // If successful, update tokens
+        if (response.data.access_token) {
+          console.log("Token refresh successful.");
+          const newAccessToken = response.data.access_token;
+          localStorage.setItem('token', newAccessToken);
+
+          // Update default header for subsequent requests
+          api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+
+          // Process the queue with the new token
+          processQueue(null, newAccessToken)
+
+          // Update the original request's header with the new token
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
+
+          // Reset refreshing flag AFTER processing queue and setting header
+          isRefreshing = false
+
+          // Retry the original request using the main api instance
+          return api(originalRequest)
+        } else {
+          // Unexpected response from refresh endpoint
+          console.error("Token refresh failed: Invalid response format.");
+          processQueue(new Error("Token refresh failed: Invalid response format."), null);
+          localStorage.removeItem('token')
+          localStorage.removeItem('refresh_token')
+          if (typeof window !== 'undefined') window.location.href = '/auth/sign-in'
+          return Promise.reject(new Error("Token refresh failed: Invalid response format."))
+        }
+      } catch (refreshError: any) {
+        // Refresh failed (e.g., refresh token invalid/expired -> 401 from /refresh)
+        console.error("Token refresh failed:", refreshError?.response?.data?.detail || refreshError);
+        processQueue(refreshError, null)
         localStorage.removeItem('token')
         localStorage.removeItem('refresh_token')
-        window.location.href = '/auth/sign-in'
+        if (typeof window !== 'undefined') window.location.href = '/auth/sign-in'
         return Promise.reject(refreshError)
       }
     }
     
-    // For other error status codes, just reject
+    // For other error status codes or if it was already a retry, just reject
     return Promise.reject(error)
   }
 )

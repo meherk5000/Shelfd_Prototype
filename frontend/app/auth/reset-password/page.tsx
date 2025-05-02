@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
+import { api } from "@/lib/api";
 import axios from "axios";
 
 export default function ResetPassword() {
@@ -48,13 +49,10 @@ export default function ResetPassword() {
     setIsLoading(true);
 
     try {
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/reset-password`,
-        {
-          token,
-          new_password: password,
-        }
-      );
+      await api.post(`/api/auth/reset-password`, {
+        token,
+        new_password: password,
+      });
 
       setSuccess(true);
       toast({

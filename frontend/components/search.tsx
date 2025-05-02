@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Filter, ArrowRight, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from "@/lib/config";
+import { api } from "@/lib/api";
 import axios from "axios";
 import Link from "next/link";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -37,16 +38,13 @@ export function Search() {
     const fetchTrending = async () => {
       setLoading(true);
       try {
-        // This would be replaced with actual API calls to your backend for each section
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_BASE_URL}/media/search/quick`,
-          {
-            params: { query: "popular" },
-            headers: {
-              "Content-Type": "application/json",
-            },
-          }
-        );
+        // Use api instance, relative URL, remove manual headers
+        const response = await api.get(`/media/search/quick`, {
+          params: { query: "popular" },
+          // headers: {
+          //   "Content-Type": "application/json",
+          // },
+        });
 
         // Combine all media types for the "All" tab or filter by the active tab
         let items = [];
@@ -102,6 +100,7 @@ export function Search() {
         setCategoryItems(categoriesData);
       } catch (error) {
         console.error("Error fetching trending items:", error);
+        // Add user-facing error handling if desired (e.g., toast)
       } finally {
         setLoading(false);
       }

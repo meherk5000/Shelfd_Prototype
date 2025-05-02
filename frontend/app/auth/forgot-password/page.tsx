@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { useToast } from "@/components/ui/use-toast";
+import { api } from "@/lib/api";
 import axios from "axios";
 
 export default function ForgotPassword() {
@@ -21,10 +22,7 @@ export default function ForgotPassword() {
     setIsLoading(true);
 
     try {
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/forgot-password`,
-        { email }
-      );
+      await api.post(`/api/auth/forgot-password`, { email });
 
       // Always show success, even if email doesn't exist (security best practice)
       setSubmitted(true);
