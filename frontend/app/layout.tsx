@@ -5,7 +5,6 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/context/AuthContext";
 import { ThemeProvider } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
-import { UserProvider } from "@auth0/nextjs-auth0/client";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -35,14 +34,12 @@ export default function RootLayout({
         className={cn("min-h-screen font-sans antialiased", inter.variable)}
         suppressHydrationWarning
       >
-        <UserProvider>
-          <AuthProvider>
-            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-              {children}
-              <Toaster richColors />
-            </ThemeProvider>
-          </AuthProvider>
-        </UserProvider>
+        <AuthProvider>
+          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+            {children}
+            <Toaster richColors />
+          </ThemeProvider>
+        </AuthProvider>
       </body>
     </html>
   );
