@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from typing import List, Optional
-from ..database.models.shelf import ShelfModel, ShelfItemModel, MediaType, ShelfType
+from ..database.models.shelf import ShelfModel, ShelfItemModel, MediaType, ShelfType, ShelfStatus
 from ..services.shelf_service import ShelfService
 from ..services.auth import get_current_user, oauth2_scheme
 from pydantic import BaseModel, Field
@@ -267,10 +267,10 @@ async def remove_from_shelf(
         try:
             # Convert plural to singular and uppercase
             media_type_map = {
-                "books": "BOOK",
-                "movies": "MOVIE",
-                "tv-shows": "TV",
-                "articles": "ARTICLE"
+                "book": "BOOK",
+                "movie": "MOVIE",
+                "tv": "TV",
+                "article": "ARTICLE"
             }
             media_type_str = media_type_map.get(media_type.lower())
             if not media_type_str:
@@ -416,6 +416,26 @@ async def rate_item(
         await shelf_item.save()
         print(f"RATE ENDPOINT - ShelfItem {shelf_item.id} saved successfully.")
 
+        # --- Automatically move item to Finished shelf --- 
+        try:
+            print(f"RATE ENDPOINT - Attempting to move item {data.media_id} to Finished shelf...")
+            await ShelfService.move_item(
+                user_id=user_id,
+                media_type=media_type_enum,
+                media_id=data.media_id,
+                new_status=ShelfStatus.FINISHED.value # Use the value of the FINISHED enum member
+            )
+            print(f"RATE ENDPOINT - Successfully moved/confirmed item {data.media_id} in Finished shelf.")
+        except ValueError as move_error: # Catch specific error from move_item if item not found etc.
+            # This shouldn't happen if we just found the shelf_item, but good practice
+            print(f"RATE ENDPOINT - Warning: Could not move item after rating: {move_error}")
+            # Don't raise, as rating itself was successful
+        except Exception as move_exception:
+            # Catch other potential errors during the move
+            print(f"RATE ENDPOINT - Error occurred trying to move item after rating: {move_exception}")
+            # Don't raise, log it or handle as needed
+        # --- End shelf move logic --- 
+
         all_ratings = await ShelfItemModel.find({
             "media_id": data.media_id,
             "media_type": media_type_enum,
@@ -453,10 +473,10 @@ async def get_rating(
         try:
             # Handle plural form if provided
             media_type_map = {
-                "books": "BOOK",
-                "movies": "MOVIE",
-                "tv-shows": "TV",
-                "articles": "ARTICLE"
+                "book": "BOOK",
+                "movie": "MOVIE",
+                "tv": "TV",
+                "article": "ARTICLE"
             }
             media_type_str = media_type_map.get(media_type.lower(), media_type.upper())
             media_type_enum = MediaType[media_type_str]

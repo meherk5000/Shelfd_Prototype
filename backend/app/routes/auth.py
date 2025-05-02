@@ -93,7 +93,6 @@ async def signup(user_data: UserCreate, request: Request):
         }
         
     except HTTPException as he:
-        # Re-raise HTTP exceptions as they're already properly formatted
         raise he
     except Exception as e:
         print(f"Debug - Error in signup: {str(e)}")
@@ -260,7 +259,7 @@ async def forgot_password(request: PasswordResetRequest):
     # For now, we'll just return it for testing
     return {
         "message": "If your email is registered, you will receive a password reset link",
-        "reset_token": reset_token  # Remove this in production!
+        "reset_token": reset_token  # Remove this in production
     }
 
 @router.post("/reset-password")

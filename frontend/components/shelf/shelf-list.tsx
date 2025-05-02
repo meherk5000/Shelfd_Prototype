@@ -3,12 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Grid, List, Filter, Search, MoreVertical } from "lucide-react";
+import { Grid, List, MoreVertical } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useShelf } from "@/lib/hooks/use-shelf";
+import {
+  useShelf,
+  Shelf,
+  ShelfItem,
+  MediaTypeMapping,
+  mediaTypeMap,
+} from "@/lib/hooks/use-shelf";
 import { toast } from "sonner";
 import { TrashIcon } from "@heroicons/react/24/outline";
-import api from "@/lib/api";
 import { MediaType } from "@/lib/types";
 import useSWR from "swr";
 import { API_BASE_URL } from "@/lib/config";
@@ -18,7 +23,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MediaTypeMapping, mediaTypeMap } from "@/lib/hooks/use-shelf";
 import { useAuth } from "@/lib/context/AuthContext";
 
 // Define interface for shelf items used in this component
@@ -28,14 +32,14 @@ interface DisplayShelfItem {
   image: string;
   creator?: string;
   dateAdded?: string;
-  rating?: number | null; // Allow null for rating
+  rating?: number | null;
   progress?: number;
 }
 
 // Helper function to render stars
 const StarRating = ({ rating }: { rating: number }) => {
   const fullStars = Math.floor(rating);
-  const halfStar = rating % 1 >= 0.5;
+  const halfStar = rating % 1 >= 0.25 && rating % 1 < 0.75;
   const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
   return (
     <div className="flex items-center">
@@ -48,7 +52,20 @@ const StarRating = ({ rating }: { rating: number }) => {
           <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z" />
         </svg>
       ))}
-      {/* Add half star logic if needed, for simplicity only full stars for now */}
+      {halfStar && (
+        <svg
+          key="half"
+          className="w-4 h-4 text-yellow-400 fill-current"
+          viewBox="0 0 20 20"
+        >
+          <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0v15z" />
+          <path
+            fill="currentColor"
+            className="text-gray-300"
+            d="M10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545L10 15V0z"
+          />
+        </svg>
+      )}
       {[...Array(emptyStars)].map((_, i) => (
         <svg
           key={`empty-${i}`}
@@ -65,13 +82,16 @@ const StarRating = ({ rating }: { rating: number }) => {
 interface ShelfListProps {
   type: MediaType;
   initialList: string;
-  onRemove?: (bookId: string) => void;
 }
 
-export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
+export function ShelfList({ type, initialList }: ShelfListProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
-  const { getUserShelves } = useShelf();
+  const {
+    getUserShelves,
+    removeFromShelf,
+    loading: shelfActionLoading,
+  } = useShelf();
   const { isAuthenticated } = useAuth();
 
   // Log the current authentication status on each render
@@ -82,50 +102,44 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
       ? "TV Shows"
       : type.charAt(0).toUpperCase() + type.slice(1);
 
+  // <<< START LOGGING >>>
+  console.log(`[ShelfList] Received 'type' prop: ${type}`);
+  const backendMediaTypeKey = mediaTypeMap[mediaType as keyof MediaTypeMapping];
+  console.log(
+    `[ShelfList] Derived 'backendMediaTypeKey': ${backendMediaTypeKey}`
+  );
+  // <<< END LOGGING >>>
+
+  const swrKey = isAuthenticated
+    ? `${API_BASE_URL}/api/shelves/user/${backendMediaTypeKey}`
+    : null;
   const {
-    data: shelves,
-    error,
-    isLoading,
-    mutate,
-  } = useSWR(
-    isAuthenticated
-      ? `${API_BASE_URL}/api/shelves/user/${
-          mediaTypeMap[mediaType as keyof MediaTypeMapping]
-        }`
-      : null,
-    () => getUserShelves(mediaType as keyof MediaTypeMapping),
-    {
-      refreshInterval: 0,
-      revalidateOnFocus: true,
-      revalidateOnReconnect: true,
-      dedupingInterval: 0,
-      shouldRetryOnError: true,
-      errorRetryCount: 3,
-      onSuccess: (data) => {
-        console.log("ShelfList - Received updated shelf data:", data);
-      },
-    }
+    data: swrData,
+    error: swrError,
+    isLoading: swrIsLoading,
+    mutate: swrMutate,
+  } = useSWR<Shelf[] | null>(
+    swrKey,
+    () =>
+      isAuthenticated && backendMediaTypeKey
+        ? getUserShelves(mediaType as keyof MediaTypeMapping)
+        : Promise.resolve(null),
+    { revalidateOnFocus: true }
   );
 
-  useEffect(() => {
-    console.log("ShelfList - Revalidating shelves for type:", mediaType);
-    console.log("ShelfList - Current shelves:", shelves);
-    // mutate(); // Temporarily comment out automatic mutate
-  }, [mediaType]); // Remove mutate from dependencies for now
+  // swrData directly contains the array of shelves, or null/undefined if loading/error
+  const shelves: Shelf[] = swrData || [];
 
   const targetShelf = shelves?.find(
-    (shelf: any) => shelf.name.toLowerCase() === initialList.toLowerCase()
+    (shelf: Shelf) => shelf.name.toLowerCase() === initialList.toLowerCase()
   );
 
   useEffect(() => {
-    // Explicitly log if shelves data exists or not
-    if (shelves) {
-      console.log("[ShelfList Effect] Shelves data IS present:", shelves);
+    if (swrData) {
+      console.log("[ShelfList Effect] SWR data IS present:", swrData);
+      console.log("[ShelfList Effect] Extracted Shelves:", shelves);
       console.log("[ShelfList Effect] Target shelf:", targetShelf);
-      console.log(
-        "[ShelfList Effect] Looking for shelf with name:",
-        initialList
-      );
+      console.log("[ShelfList Effect] Looking for shelf name:", initialList);
       if (targetShelf) {
         console.log(
           "[ShelfList Effect] Target shelf items:",
@@ -133,43 +147,30 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
         );
       }
     } else {
-      console.log("[ShelfList Effect] Shelves data is now UNDEFINED or NULL.");
+      console.log("[ShelfList Effect] SWR data is null/undefined.");
     }
-  }, [shelves, targetShelf, initialList]);
+    if (swrError) {
+      console.error("[ShelfList Effect] SWR Error detected:", swrError);
+    }
+  }, [swrData, shelves, targetShelf, initialList, swrError]);
 
-  // Use the DisplayShelfItem interface for typing
   const items: DisplayShelfItem[] =
-    targetShelf?.items.map((item: any): DisplayShelfItem => {
-      // Add return type
-      const mediaId = item.media_id || item.id;
-      if (!mediaId) {
-        console.warn("Item without any ID:", item);
-      }
-      // Log the raw item received from the backend
-      // Add a specific check for 'iZombie' to make it easier to find in logs
-      if (item.title === "iZombie") {
-        console.log("ShelfList Raw Item for iZombie:", JSON.stringify(item));
-      }
-      // console.log("ShelfList Raw Item:", item); // Can keep this general one too if needed
-      const mappedItem: DisplayShelfItem = {
-        id: mediaId,
+    targetShelf?.items.map(
+      (item: ShelfItem): DisplayShelfItem => ({
+        id: item.media_id,
         title: item.title,
-        image: item.cover_image || item.image || "/placeholder.svg",
+        image: item.cover_image || "/placeholder.svg",
         creator: item.creator,
         dateAdded: item.added_at,
-        rating: item.rating, // Rating is now included
+        rating: item.rating,
         progress: item.progress,
-      };
-      console.log("ShelfList Mapped Item:", mappedItem);
-      return mappedItem;
-    }) || [];
+      })
+    ) || [];
 
-  // Type the item in the filter function
   const filteredItems = items.filter((item: DisplayShelfItem) =>
     item.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Helper function to get the correct detail page path based on media type
   const getDetailPath = (mediaType: MediaType, id: string): string => {
     switch (mediaType) {
       case "books":
@@ -177,56 +178,51 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
       case "movies":
         return `/movies/${id}`;
       case "tv-shows":
-        return `/tv/${id}`; // Use /tv/ for tv-shows
+        return `/tv/${id}`;
       case "articles":
-        return `/article/${id}`; // Fix: Use /article/ (singular)
+        return `/article/${id}`;
       default:
-        return "/"; // Fallback path
+        return "/";
     }
   };
-
-  // Explicitly check if loading OR if shelves data is undefined (which it should be when logged out)
-  if (isLoading || shelves === undefined) {
-    // You might want a different loading/empty state specifically for the logged-out case
-    return <div>Loading shelf items...</div>;
-  }
-
-  // Check for errors *after* loading/undefined check
-  if (error) {
-    console.error("[ShelfList] SWR Error:", error);
-    return <div>Error loading shelf items. Please try refreshing.</div>;
-  }
 
   const handleRemove = async (itemId: string) => {
-    // --- Find the item title before deleting ---
-    let itemTitle = "Item"; // Default title
-    if (shelves) {
-      for (const shelf of shelves) {
-        const foundItem = shelf.items.find(
-          (item: any) => item.media_id === itemId
-        );
-        if (foundItem) {
-          itemTitle = foundItem.title;
-          break;
-        }
-      }
+    const itemTitle =
+      items.find((i: DisplayShelfItem) => i.id === itemId)?.title || "Item";
+    if (!targetShelf?._id) {
+      toast.error("Could not determine the shelf ID to remove the item from.");
+      console.error(
+        "Cannot remove item: targetShelf or targetShelf._id is undefined."
+      );
+      return;
     }
-    // --- End find title ---
     try {
-      await api.delete(`/api/shelves/${type}/${itemId}`);
-      await mutate(); // Revalidate SWR cache
-      // --- Use sonner toast ---
+      await removeFromShelf(mediaType as keyof MediaTypeMapping, itemId);
       toast.success(`'${itemTitle}' removed from shelf`);
-      // --- End toast ---
+      swrMutate();
     } catch (error: any) {
       console.error("Error removing item:", error);
-      // --- Use sonner toast for error ---
-      toast.error(
-        error.response?.data?.detail || "Failed to remove item from shelf"
-      );
-      // --- End error toast ---
+      toast.error(error.message || "Failed to remove item from shelf");
     }
   };
+
+  if (!isAuthenticated && !swrIsLoading) {
+    return <div>Please log in to view your shelves.</div>;
+  }
+  if (swrIsLoading) {
+    return <div>Loading shelf items...</div>;
+  }
+  if (swrError) {
+    console.error("[ShelfList] SWR Error:", swrError);
+    return <div>Error loading shelf items. Please try refreshing.</div>;
+  }
+  if (!targetShelf && !swrIsLoading) {
+    console.warn(
+      `[ShelfList] Shelf named '${initialList}' not found for type '${type}'. Available shelves:`,
+      shelves?.map((s: Shelf) => s.name)
+    );
+    return <div>Shelf '{initialList}' not found.</div>;
+  }
 
   const ItemMenu = ({ itemId }: { itemId: string }) => (
     <DropdownMenu>
@@ -280,8 +276,7 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
 
       {viewMode === "grid" ? (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {/* Type item and index here */}
-          {filteredItems.map((item: DisplayShelfItem, index: number) => (
+          {filteredItems.map((item: DisplayShelfItem) => (
             <Link key={item.id} href={getDetailPath(type, item.id)} passHref>
               <div className="group relative bg-card rounded-lg border overflow-hidden hover:shadow-md transition-shadow cursor-pointer h-full flex flex-col">
                 <div className="aspect-[2/3] relative">
@@ -304,21 +299,24 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
                           </p>
                         )}
                       </div>
-                      <div onClick={(e) => e.stopPropagation()}>
+                      <div
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
                         <ItemMenu itemId={item.id} />
                       </div>
                     </div>
-                    {typeof item.rating === "number" && !isNaN(item.rating) ? (
-                      <div className="flex items-center text-sm mt-1">
-                        <span className="text-muted-foreground mr-1.5">
-                          Your Rating:
-                        </span>
+                    {typeof item.rating === "number" && !isNaN(item.rating) && (
+                      <div className="flex items-center text-sm text-muted-foreground mt-1">
+                        Your Rating:
                         <StarRating rating={item.rating} />
                         <span className="ml-1 font-medium">
-                          {item.rating.toFixed(1)}
+                          ({item.rating.toFixed(1)})
                         </span>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               </div>
@@ -327,7 +325,6 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Type item here */}
           {filteredItems.map((item: DisplayShelfItem) => (
             <Link key={item.id} href={getDetailPath(type, item.id)} passHref>
               <div className="group flex items-center gap-4 p-4 bg-card rounded-lg border hover:bg-accent transition-colors cursor-pointer">
@@ -345,17 +342,15 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
                       by {item.creator}
                     </p>
                   )}
-                  {typeof item.rating === "number" && !isNaN(item.rating) ? (
-                    <div className="flex items-center text-sm mt-1">
-                      <span className="text-muted-foreground mr-1.5">
-                        Your Rating:
-                      </span>
+                  {typeof item.rating === "number" && !isNaN(item.rating) && (
+                    <div className="flex items-center text-sm text-muted-foreground mt-1">
+                      Your Rating:
                       <StarRating rating={item.rating} />
                       <span className="ml-1 font-medium">
-                        {item.rating.toFixed(1)}
+                        ({item.rating.toFixed(1)})
                       </span>
                     </div>
-                  ) : null}
+                  )}
                 </div>
                 {item.progress !== undefined && (
                   <div className="w-32 flex-shrink-0">
@@ -367,7 +362,12 @@ export function ShelfList({ type, initialList, onRemove }: ShelfListProps) {
                     </div>
                   </div>
                 )}
-                <div onClick={(e) => e.stopPropagation()}>
+                <div
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                >
                   <ItemMenu itemId={item.id} />
                 </div>
               </div>

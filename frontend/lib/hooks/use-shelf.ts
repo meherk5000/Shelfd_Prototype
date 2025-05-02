@@ -49,18 +49,22 @@ export enum ShelfStatus {
 }
 
 // Add this interface near the top of the file with other type definitions
-interface ShelfItem {
+export interface ShelfItem {
   media_id: string;
   title: string;
   cover_image: string;
   creator: string;
   added_at: string;
+  rating?: number | null;
+  progress?: number;
 }
 
-interface Shelf {
+export interface Shelf {
   _id: string;
   name: string;
   items: ShelfItem[];
+  shelf_type: string;
+  media_type: string;
 }
 
 // Helper function to get the correct shelf type based on media type and status
@@ -279,13 +283,15 @@ export function useShelf() {
     }
   }, [mutate]);
 
-  const removeFromShelf = useCallback(async (shelfId: string, itemId: string) => {
+  const removeFromShelf = useCallback(async (mediaType: keyof MediaTypeMapping, itemId: string) => {
     setLoading(true);
     try {
-      await api.delete(`/api/shelves/custom/${shelfId}/items/${itemId}`);
-      Object.values(mediaTypeMap).forEach(type => {
-        mutate(`${API_BASE_URL}/api/shelves/user/${type}`);
-      });
+      const apiMediaType = mediaTypeMap[mediaType];
+      if (!apiMediaType) {
+        throw new Error(`Invalid media type provided to removeFromShelf: ${mediaType}`);
+      }
+      await api.delete(`/api/shelves/${apiMediaType}/${itemId}`);
+      mutate(`${API_BASE_URL}/api/shelves/user/${apiMediaType}`);
     } catch (error) {
       console.error("Error removing item:", error);
       throw error;

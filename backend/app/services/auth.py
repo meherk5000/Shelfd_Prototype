@@ -3,10 +3,13 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status, Header
-from typing import Optional, Dict
+from typing import Optional, Dict, TYPE_CHECKING
 import os
 from dotenv import load_dotenv
 import time
+
+if TYPE_CHECKING:
+        from ..database.models.user import User # Import only for type checkers
 
 # Load environment variables
 load_dotenv()

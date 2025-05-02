@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import Optional, List
 
 class User(Document):
-    email: EmailStr = Indexed(unique=True)  # Correct syntax
-    username: str = Indexed(unique=True)     # Correct syntax
+    email: EmailStr = Indexed(unique=True) 
+    username: str = Indexed(unique=True)     
     hashed_password: str
     full_name: Optional[str] = None
     created_at: datetime = datetime.utcnow()

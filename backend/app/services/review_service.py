@@ -491,6 +491,23 @@ class ReviewService:
                 shelf_item_to_update.review_date = datetime.utcnow()
                 await shelf_item_to_update.save()
                 print(f"DEBUG [create_review_...]: Ensured ShelfItem {shelf_item_to_update.id} has rating={rating}, review='{review_text}'.")
+
+                # --- Add logic to move the item to Finished shelf --- 
+                try:
+                    print(f"DEBUG [create_review_...]: Attempting to move item {media_id} to Finished shelf...")
+                    await ShelfService.move_item(\
+                        user_id=actual_user_id,\
+                        media_type=media_type,\
+                        media_id=media_id,\
+                        new_status=ShelfStatus.FINISHED.value\
+                    )
+                    print(f"DEBUG [create_review_...]: Successfully moved/confirmed item {media_id} in Finished shelf.")
+                except ValueError as move_error:
+                    print(f"DEBUG [create_review_...]: Warning: Could not move item after review update (it might already be Finished): {move_error}")
+                except Exception as move_exception:
+                    print(f"ERROR [create_review_...]: Unexpected error moving item after review update: {move_exception}")
+                # --- End shelf move logic --- 
+
             else:
                 print(f"WARNING [create_review_...]: Could not find or create ShelfItem to update for {media_id}.")
 

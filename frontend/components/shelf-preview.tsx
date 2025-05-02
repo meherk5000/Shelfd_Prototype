@@ -19,7 +19,7 @@ export function ShelfPreview({
 
   return (
     <Link
-      href={`/shelf/${getMediaType(title, activeTab)}/${urlTitle}`}
+      href={`/shelf/${getMediaType(activeTab)}/${urlTitle}`}
       className="block space-y-3 bg-card rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow duration-200"
     >
       <div className="flex items-baseline justify-between mb-2">

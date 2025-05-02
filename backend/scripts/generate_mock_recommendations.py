@@ -1,3 +1,9 @@
+# backend/scripts/generate_mock_recommendations.py
+# This script generates mock recommendations for the user.
+# It is used to test the recommendation system.
+# It is also used to generate mock data for the database.
+# NOTE: This mock data was generated using ChatGPT..
+
 import os
 import pickle
 import json

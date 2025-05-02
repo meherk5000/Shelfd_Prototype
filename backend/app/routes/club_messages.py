@@ -169,7 +169,7 @@ async def get_club_messages(
              logger.warning("Club members list is None, empty, or not fetched.")
         # --- END DEBUG LOGGING ---
 
-        # Check if user is a member or creator (assuming links are fetched)
+        # Check if user is a member or creator 
         is_member = False
         is_creator = False
         try:
@@ -191,7 +191,6 @@ async def get_club_messages(
             if not is_member and not is_creator:
                 logger.error(f"User {current_user.id} not authorized to view messages in club {club_id}")
                 # This specific error means the user isn't allowed to see messages.
-                # We will catch this specific exception below and return an empty list.
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Not authorized to view messages"
