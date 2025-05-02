@@ -142,6 +142,12 @@ export function Clubs() {
 
           // Fetch joined preview
           const joinedResult = await getUserClubs(0, yourClubsPreviewLimit);
+
+          console.log(
+            "[Your Clubs Tab - DEBUG] Raw joinedResult:",
+            JSON.stringify(joinedResult, null, 2) // Stringify for better object logging
+          );
+
           if (joinedResult.success && joinedResult.data?.clubs) {
             console.log(
               "[Your Clubs Tab - Overview] Fetched joined preview (raw):",
