@@ -127,10 +127,9 @@ async def get_book_features(books):
         except Exception as e:
             print(f"Error processing book {media_id}: {str(e)}")
     
-    # Save the RAW API response cache if it changed
-    if details_changed:
-        with open(BOOK_DETAILS_FILE, 'wb') as f:
-            pickle.dump(raw_details_cache, f)
+    # Save the STRUCTURED details cache 
+    with open(BOOK_DETAILS_FILE, 'wb') as f:
+        pickle.dump(book_details_structured, f)
     
     # Return the STRUCTURED details for recommendations
     return book_features, id_to_index, book_details_structured
@@ -196,10 +195,9 @@ async def get_movie_features(movies):
         except Exception as e:
             print(f"Error processing movie {media_id}: {str(e)}")
     
-    # Save RAW API response cache if changed
-    if details_changed:
-        with open(MOVIE_DETAILS_FILE, 'wb') as f:
-            pickle.dump(raw_details_cache, f)
+    # Save STRUCTURED details cache
+    with open(MOVIE_DETAILS_FILE, 'wb') as f:
+        pickle.dump(movie_details_structured, f)
     
     # Return STRUCTURED details
     return movie_features, id_to_index, movie_details_structured
@@ -262,10 +260,9 @@ async def get_tv_features(tv_shows):
         except Exception as e:
             print(f"Error processing TV show {media_id}: {str(e)}")
     
-    # Save RAW API response cache if changed
-    if details_changed:
-        with open(TV_DETAILS_FILE, 'wb') as f:
-            pickle.dump(raw_details_cache, f)
+    # Save STRUCTURED details cache
+    with open(TV_DETAILS_FILE, 'wb') as f:
+        pickle.dump(tv_details_structured, f)
     
     # Return STRUCTURED details
     return tv_features, id_to_index, tv_details_structured
@@ -474,13 +471,27 @@ def get_similar_items(user_items, vectors, id_to_index, item_details, exclude_id
                 break
         
         if media_id and media_id not in exclude_ids:
-            # --- Use Structured Details --- 
+            # --- Use Structured Details ---
             details = item_details.get(media_id, {}) # Get the structured details
-            title = details.get("title") or f"Item {media_id}" # Fallback if title is still missing
-            subtitle = details.get("subtitle", "")
-            image_url = details.get("image_url", "")
+
+            # --- Conditional Logic based on media_type ---
+            if media_type == "book":
+                title = details.get("title") or f"Item {media_id}"
+                subtitle = details.get("subtitle", "") # Expects authors string based on build script
+                image_url = details.get("image_url", "") # Expects direct image_url key
+            elif media_type == "movie" or media_type == "tv":
+                # Movie/TV details are expected to be flatter from get_movie/tv_features
+                title = details.get("title") or f"Item {media_id}"
+                subtitle = details.get("subtitle", "") # Expects year or creators based on build script logic
+                image_url = details.get("image_url", "") # Expects direct image_url key
+            else: # Fallback for unknown types
+                title = f"Item {media_id}"
+                subtitle = ""
+                image_url = ""
+            # --- End Conditional Logic ---
+
             # --- End Use Structured Details ---
-            
+
             # Append using the extracted details
             similar_items.append({
                 "id": media_id,

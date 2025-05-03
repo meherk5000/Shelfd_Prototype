@@ -20,6 +20,7 @@ import asyncio
 import certifi
 from app.services.article_service import ArticleService
 from datetime import datetime, timedelta
+import pickle  # Add pickle for loading data
 
 app = FastAPI(title="Shelfd API")
 
@@ -115,22 +116,67 @@ async def fetch_initial_articles():
 async def periodic_recommendation_updates():
     """Background task that runs recommendation updates weekly"""
     global last_recommendation_update
-    
+
+    # Define paths to the saved recommendation model data
+    DATA_DIR = os.path.join("scripts", "data")
+    BOOK_VECTORS_PATH = os.path.join(DATA_DIR, "book_vectors.pkl")
+    BOOK_MAPPING_PATH = os.path.join(DATA_DIR, "book_mapping.pkl")
+    BOOK_DETAILS_PATH = os.path.join(DATA_DIR, "book_details.pkl")
+    MOVIE_VECTORS_PATH = os.path.join(DATA_DIR, "movie_vectors.pkl")
+    MOVIE_MAPPING_PATH = os.path.join(DATA_DIR, "movie_mapping.pkl")
+    MOVIE_DETAILS_PATH = os.path.join(DATA_DIR, "movie_details.pkl")
+    TV_VECTORS_PATH = os.path.join(DATA_DIR, "tv_vectors.pkl")
+    TV_MAPPING_PATH = os.path.join(DATA_DIR, "tv_mapping.pkl")
+    TV_DETAILS_PATH = os.path.join(DATA_DIR, "tv_details.pkl")
+
     while True:
         now = datetime.utcnow()
-        
+
         # Only run if it's been at least 7 days since the last update
         if now - last_recommendation_update > timedelta(days=7):
             print("Running scheduled recommendation update")
             try:
-                # Import and run the update function
+                # --- Load the recommendation data from files ---
+                print("Loading recommendation data...")
+                if not all(os.path.exists(p) for p in [
+                    BOOK_VECTORS_PATH, BOOK_MAPPING_PATH, BOOK_DETAILS_PATH,
+                    MOVIE_VECTORS_PATH, MOVIE_MAPPING_PATH, MOVIE_DETAILS_PATH,
+                    TV_VECTORS_PATH, TV_MAPPING_PATH, TV_DETAILS_PATH
+                ]):
+                    print("Error: One or more recommendation data files not found. Run build script first.")
+                    # Skip update if files are missing
+                    await asyncio.sleep(6 * 60 * 60) # Sleep before next check
+                    continue 
+                    
+                with open(BOOK_VECTORS_PATH, 'rb') as f: book_vectors = pickle.load(f)
+                with open(BOOK_MAPPING_PATH, 'rb') as f: book_mapping = pickle.load(f)
+                with open(BOOK_DETAILS_PATH, 'rb') as f: book_details = pickle.load(f)
+                with open(MOVIE_VECTORS_PATH, 'rb') as f: movie_vectors = pickle.load(f)
+                with open(MOVIE_MAPPING_PATH, 'rb') as f: movie_mapping = pickle.load(f)
+                with open(MOVIE_DETAILS_PATH, 'rb') as f: movie_details = pickle.load(f)
+                with open(TV_VECTORS_PATH, 'rb') as f: tv_vectors = pickle.load(f)
+                with open(TV_MAPPING_PATH, 'rb') as f: tv_mapping = pickle.load(f)
+                with open(TV_DETAILS_PATH, 'rb') as f: tv_details = pickle.load(f)
+                print("Recommendation data loaded successfully.")
+                # ------------------------------------------------
+
+                # Import the update function
                 from scripts.build_recommendation_model import update_all_recommendations
-                await update_all_recommendations()
+                
+                # --- Pass the loaded data as arguments ---
+                await update_all_recommendations(
+                    book_vectors, book_mapping, book_details,
+                    movie_vectors, movie_mapping, movie_details,
+                    tv_vectors, tv_mapping, tv_details
+                )
+                # -------------------------------------------
+
                 last_recommendation_update = now
                 print("Recommendation update completed successfully")
             except Exception as e:
                 print(f"Error in recommendation update: {e}")
-        
+                # Optionally add more detailed error logging here
+
         # Check again in 6 hours
         await asyncio.sleep(6 * 60 * 60)
 

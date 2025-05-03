@@ -53,8 +53,13 @@ uvicorn==0.34.0
 uvloop==0.21.0
 watchfiles==1.0.4
 websockets==14.2
+feedparser
+beautifulsoup4
 
 # AI recommendation system dependencies
-scikit-learn
-numpy
-scipy
+# REMOVED: scikit-learn 
+# REMOVED: numpy
+# REMOVED: scipy
+numpy==2.2.0
+scipy==1.14.0
+scikit-learn==1.6.1

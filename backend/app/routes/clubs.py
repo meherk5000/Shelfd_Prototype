@@ -736,46 +736,49 @@ async def format_club_response(club: Club, current_user: Optional[User] = None, 
     # --- End Re-added Logic ---
 
     # --- Re-added Link Fetching Logic for Members ---
-    member_ids = []
-    valid_members_count = 0 
-    members_list = club.members or []
-    logger.debug(f"[Robust Format] Club {club.id}: Input members_list (type={type(members_list)}): {members_list}") # Log input
-    if members_list:
-        logger.debug(f"[Robust Format] Club {club.id}: Processing {len(members_list)} potential members.")
-        for i, member_link_or_obj in enumerate(members_list):
-            logger.debug(f"[Robust Format] Club {club.id}: Processing item {i} (type={type(member_link_or_obj)}): {member_link_or_obj}")
-            if member_link_or_obj: 
-                try:
-                    member_user = None
-                    if hasattr(member_link_or_obj, 'fetch') and not isinstance(member_link_or_obj, User):
-                        logger.debug(f"[Robust Format] Club {club.id}: Item {i} is a Link, fetching...")
-                        member_user = await member_link_or_obj.fetch()
-                        if member_user:
-                           logger.debug(f"[Robust Format] Club {club.id}: Fetched member {member_user.id}")
-                        else:
-                           logger.warning(f"[Robust Format] Club {club.id}: Fetch returned None for item {i}")
-                    elif isinstance(member_link_or_obj, User):
-                        logger.debug(f"[Robust Format] Club {club.id}: Item {i} is already a User object.")
-                        member_user = member_link_or_obj
+    valid_members = []
+    member_ids = set()
+    valid_members_count = 0
+    # logger.debug(f"[Robust Format] Club {club.id}: Input members_list (type={type(members_list)}): {members_list}") # Log input
+
+    if club.members and isinstance(club.members, list):
+        # logger.debug(f"[Robust Format] Club {club.id}: Processing {len(members_list)} potential members.")
+        for i, member_link_or_obj in enumerate(club.members):
+            # logger.debug(f"[Robust Format] Club {club.id}: Processing item {i} (type={type(member_link_or_obj)}): {member_link_or_obj}")
+            try:
+                member_user = None
+                if isinstance(member_link_or_obj, Link):
+                    # logger.debug(f"[Robust Format] Club {club.id}: Item {i} is a Link, fetching...")
+                    member_user = await member_link_or_obj.fetch()
+                    if member_user:
+                        # logger.debug(f"[Robust Format] Club {club.id}: Fetched member {member_user.id}")
+                        pass
                     else:
-                        logger.warning(f"[Robust Format] Club {club.id}: Item {i} is unexpected type: {type(member_link_or_obj)}")
-                    
-                    if member_user and hasattr(member_user, 'id'): # Ensure fetched/existing user has ID
-                        member_id_str = str(member_user.id)
-                        if member_id_str not in member_ids: # Avoid duplicates if logic error somewhere
-                            member_ids.append(member_id_str)
-                            valid_members_count += 1 
-                        else:
-                            logger.warning(f"[Robust Format] Club {club.id}: Duplicate member ID {member_id_str} detected.")
-                    # No need for an else here, warnings logged above if fetch fails or type is wrong
-                except Exception as e:
-                    logger.error(f"[Robust Format] Error processing member item {i} ({member_link_or_obj}) for club {club.id}: {e}", exc_info=True)
-            else:
-                 logger.warning(f"[Robust Format] Club {club.id}: Found a None value in members list at index {i}.")
+                        logger.warning(f"[Robust Format] Club {club.id}: Fetch returned None for item {i}")
+                elif isinstance(member_link_or_obj, User):
+                    # logger.debug(f"[Robust Format] Club {club.id}: Item {i} is already a User object.")
+                    member_user = member_link_or_obj
+                elif member_link_or_obj is None:
+                    logger.warning(f"[Robust Format] Club {club.id}: Found a None value in members list at index {i}.")
+                else:
+                    logger.warning(f"[Robust Format] Club {club.id}: Item {i} is unexpected type: {type(member_link_or_obj)}")
+
+                if member_user and isinstance(member_user, User):
+                    member_id_str = str(member_user.id)
+                    if member_id_str not in member_ids:
+                        valid_members.append(member_user) # Store the fetched user object
+                        member_ids.add(member_id_str)
+                        valid_members_count += 1
+                    else:
+                        logger.warning(f"[Robust Format] Club {club.id}: Duplicate member ID {member_id_str} detected.")
+
+            except Exception as e:
+                logger.error(f"[Robust Format] Error processing member item {i} ({member_link_or_obj}) for club {club.id}: {e}", exc_info=True)
     else:
-         logger.debug(f"[Robust Format] Club {club.id}: No members list found or it's empty.")
-    logger.debug(f"[Robust Format] Club {club.id}: Finished processing members. Count={valid_members_count}, IDs={member_ids}")
-    # --- End Re-added Logic ---
+        # Handle case where members_list is None or not a list
+        # logger.debug(f"[Robust Format] Club {club.id}: No members list found or it's empty.")
+        pass
+    # logger.debug(f"[Robust Format] Club {club.id}: Finished processing members. Count={valid_members_count}, IDs={list(member_ids)}") # Use list for serialization if needed
 
     # Determine if the current user is a member/creator
     current_user_id_str = str(current_user.id) if current_user else None
@@ -834,24 +837,20 @@ async def format_club_response(club: Club, current_user: Optional[User] = None, 
 
     # --- End cover image URL adjustment ---
 
-    logger.debug(f"[Robust Format] Club {club.id}: Calculated member_count: {valid_members_count}")
-    logger.debug(f"[Robust Format] Club {club.id}: Calculated is_member: {is_member_flag}")
-    logger.debug(f"[Robust Format] Club {club.id}: Calculated is_creator: {is_creator_flag}")
-    logger.debug(f"[Robust Format] Club {club.id}: Final cover_image URL: {absolute_cover_image_url}")
-
-    return ClubResponse(
+    # Assign calculated fields
+    formatted_club = ClubResponse(
         id=str(club.id),
         name=club.name,
         description=club.description,
         creator_id=creator_id_str,
         creator_username=creator_username,
-        member_count=valid_members_count, # Use count from explicit processing
+        member_count=valid_members_count,
         media_type=club.media_type,
         is_private=club.is_private,
         created_at=club.created_at.isoformat(),
         is_member=is_member_flag,
         is_creator=is_creator_flag,
-        cover_image=absolute_cover_image_url, # Use the absolute URL
+        cover_image=absolute_cover_image_url,
         book_title=club.book_title,
         book_author=club.book_author,
         book_cover=club.book_cover,
@@ -869,6 +868,14 @@ async def format_club_response(club: Club, current_user: Optional[User] = None, 
         tv_season=club.tv_season,
         tv_episode=club.tv_episode
     )
+
+    # Log final calculated values for debugging
+    # logger.debug(f"[Robust Format] Club {club.id}: Calculated member_count: {valid_members_count}")
+    # logger.debug(f"[Robust Format] Club {club.id}: Calculated is_member: {is_member_flag}")
+    # logger.debug(f"[Robust Format] Club {club.id}: Calculated is_creator: {is_creator_flag}")
+    # logger.debug(f"[Robust Format] Club {club.id}: Final cover_image URL: {absolute_cover_image_url}")
+
+    return formatted_club
 
 async def format_post_response(post: ClubPost) -> ClubPostResponse:
     """Format a post object for response."""
