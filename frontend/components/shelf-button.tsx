@@ -143,10 +143,6 @@ export function ShelfButton({
         setSelectedStatus(status as ShelfStatus);
       }
     } catch (error: any) {
-      console.error(
-        "[ShelfButton] Unexpected error in completeAddToShelf:",
-        error
-      );
       const errorMessage =
         error.response?.data?.detail ||
         error.message ||
@@ -158,6 +154,11 @@ export function ShelfButton({
         errorMessage.includes("is already in your");
 
       if (!isAlreadyExistsError) {
+        // Log the full error *only* if it's NOT the expected 409 error
+        console.error(
+          "[ShelfButton] Unexpected error in completeAddToShelf:",
+          error
+        );
         // Show error toast only if it's NOT the expected 409 error
         toast.error(errorMessage);
       } else {

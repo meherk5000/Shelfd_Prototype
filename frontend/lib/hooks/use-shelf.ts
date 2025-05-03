@@ -265,18 +265,33 @@ export function useShelf() {
 
       return response.data;
     } catch (error: any) {
-      console.error("=== ERROR addToShelf ===");
-      console.error("Payload causing error:", payload);
-      console.error("Error object:", error);
-      if (error.response) {
-        console.error("Error Response Data:", error.response.data);
-        console.error("Error Response Status:", error.response.status);
-        console.error("Error Response Headers:", error.response.headers);
-      } else if (error.request) {
-        console.error("Error Request Data:", error.request);
+      // --- Check if it's the specific 409 "already exists" error ---
+      const errorMessage = error.response?.data?.detail || error.message || "Unknown error";
+      const isAlreadyExistsError =
+        error.response?.status === 409 &&
+        typeof errorMessage === 'string' && // Ensure errorMessage is a string
+        errorMessage.includes("is already in your"); 
+
+      if (!isAlreadyExistsError) {
+          // Log details only if it's NOT the expected 409 error
+          console.error("=== ERROR addToShelf ===");
+          console.error("Payload causing error:", payload);
+          console.error("Error object:", error);
+          if (error.response) {
+            console.error("Error Response Data:", error.response.data);
+            console.error("Error Response Status:", error.response.status);
+            console.error("Error Response Headers:", error.response.headers);
+          } else if (error.request) {
+            console.error("Error Request Data:", error.request);
+          } else {
+            console.error('Error Message:', error.message);
+          }
       } else {
-        console.error('Error Message:', error.message);
+          // Optionally log that the handled error occurred in the hook
+          console.log(`[useShelf] Handled 409 error: ${errorMessage}`);
       }
+
+      // Always re-throw the error so the calling component can handle it (e.g., show toast)
       throw error;
     } finally {
       setLoading(false);
