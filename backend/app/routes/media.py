@@ -4,9 +4,11 @@ from fastapi import APIRouter, HTTPException, Depends
 import httpx
 from pydantic import BaseModel
 from config import Settings
-from app.services.shelf_service import ShelfService
-from app.services.auth import get_current_user
-from app.services.article_service import ArticleService
+from ..services.shelf_service import ShelfService
+from ..services.auth import get_current_user
+from ..services.article_service import ArticleService
+from ..database.models.user import User
+from ..database.models.shelf import MediaType
 
 router = APIRouter()
 settings = Settings()
@@ -243,23 +245,23 @@ async def get_movie_details(movie_id: int):
         )
 
 @router.get("/shelves/user/{media_type}")
-async def get_user_shelves(
-    media_type: str,
-    current_user: str = Depends(get_current_user)
+async def get_media_shelves(
+    media_type: str, 
+    current_user: User = Depends(get_current_user)
 ):
-    print(f"Debug - Received media_type: {media_type}")
-    print(f"Debug - Current user: {current_user}")
-    
+    # print(f"Debug - Received media_type: {media_type}")
+    # print(f"Debug - Current user: {current_user}")
     try:
-        shelves = await ShelfService.get_user_shelves(
-            user_id=current_user,
-            media_type=media_type
-        )
-        print(f"Debug - Found shelves: {shelves}")
+        # Convert media type string to enum if needed
+        mt_enum = MediaType[media_type.upper()] 
+        shelves = await ShelfService.get_user_shelves(str(current_user.id), mt_enum)
+        # print(f"Debug - Found shelves: {shelves}")
         return shelves
+    except KeyError:
+        raise HTTPException(status_code=400, detail="Invalid media type")
     except Exception as e:
-        print(f"Debug - Error getting shelves: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # print(f"Debug - Error getting shelves: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve shelves")
 
 @router.get("/article/{article_id}")
 async def get_article_details(article_id: str):

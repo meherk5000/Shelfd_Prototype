@@ -49,14 +49,14 @@ export function Header() {
   const pageInfo = getPageTitle(pathname);
 
   return (
-    <div className="flex h-16 items-center w-full px-4 md:px-6 border-b">
+    <div className="flex h-20 items-center w-full px-4 md:px-6 border-b">
       <div className="md:hidden mr-2">
         <MobileNav />
       </div>
       <div className="flex-shrink-0 mr-4">
         <Link
           href={pageInfo.href}
-          className="font-semibold text-xl md:text-2xl hover:text-primary transition-colors block truncate"
+          className="font-semibold text-xl md:text-2xl text-[#402924] hover:text-primary transition-colors block truncate pt-2.5"
         >
           {pageInfo.title}
         </Link>

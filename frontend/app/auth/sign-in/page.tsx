@@ -53,7 +53,7 @@ function SignInContent() {
     }
   }, [isAuthenticated, returnTo, user, hasRedirected]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading || hasRedirected) return;
 
@@ -62,24 +62,28 @@ function SignInContent() {
 
     console.log(`Attempting login for ${email} with redirect to ${returnTo}`);
 
-    login(email, password)
-      .then((success) => {
-        if (success) {
-          console.log("Login successful, redirecting...");
-          setHasRedirected(true);
-          window.location.href = returnTo;
-        } else {
-          console.log("Login failed (handled by context)");
-          setIsLoading(false);
-        }
-      })
-      .catch((err) => {
-        console.error("Unexpected error during login process:", err);
-        toast.error("Login Error", {
-          description: "An unexpected error occurred. Please try again.",
-        });
-        setIsLoading(false);
-      });
+    // Rely on AuthContext's login function to handle errors internally
+    // and return true/false for success status.
+    const success = await login(email, password);
+
+    if (success) {
+      console.log("Login successful, redirecting...");
+      setHasRedirected(true);
+      window.location.href = returnTo; // Start redirect
+    } else {
+      // Login failed, error already handled in AuthContext (toast shown etc.)
+      console.log("Login failed (handled by context)");
+      setIsLoading(false); // Ensure loading state is reset on failure
+    }
+
+    // The catch block is removed, as AuthContext.login should not throw
+    // for expected API errors (like 400, 429). It returns false instead.
+    // Unexpected errors might still occur, but we'll rely on Next.js overlay for those
+    // during development for simplicity, given time constraints.
+
+    // Reset loading state only if login fails (if successful, we navigate away)
+    // No longer needed here as it's handled in the 'else' block.
+    // setIsLoading(false);
   };
 
   // If already being redirected, show a simple loading screen

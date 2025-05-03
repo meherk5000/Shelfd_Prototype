@@ -259,9 +259,7 @@ async def remove_from_shelf(
     token: str = Depends(oauth2_scheme)
 ):
     try:
-        print(f"Debug - Attempting to remove item: media_type={media_type}, media_id={media_id}")
         user_id = await get_current_user(token)
-        print(f"Debug - User ID: {user_id}")
         
         # Convert media_type string to enum using the same logic as add_item
         try:
@@ -277,9 +275,7 @@ async def remove_from_shelf(
                 raise KeyError(f"Unknown media type: {media_type}")
                 
             media_type_enum = MediaType[media_type_str]
-            print(f"Debug - Converted media type to: {media_type_enum}")
         except KeyError:
-            print(f"Debug - Invalid media type: {media_type}")
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid media type: {media_type}"
@@ -290,13 +286,10 @@ async def remove_from_shelf(
             media_id=media_id,
             media_type=media_type_enum
         )
-        print("Debug - Successfully removed item")
         return {"message": "Item removed successfully"}
     except ValueError as e:
-        print(f"Debug - ValueError: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Debug - Unexpected error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/custom")
@@ -514,5 +507,4 @@ async def get_rating(
             
         return result
     except Exception as e:
-        print(f"Debug - Error getting rating: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))

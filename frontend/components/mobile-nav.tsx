@@ -8,6 +8,7 @@ import {
   SheetContent,
   SheetTrigger,
   SheetClose,
+  SheetTitle,
 } from "@/components/ui/sheet";
 import {
   Home,
@@ -66,6 +67,7 @@ export function MobileNav() {
         </Button>
       </SheetTrigger>
       <SheetContent side="left" className="w-60 p-4">
+        <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
         <Link
           href="/"
           className="flex items-center mb-6"

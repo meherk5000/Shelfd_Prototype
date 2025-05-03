@@ -106,10 +106,10 @@ export function Sidebar() {
                     <button
                       className={cn(
                         "w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left",
-                        "text-muted-foreground hover:text-foreground hover:bg-muted"
+                        "text-[#402924] hover:bg-muted hover:font-bold"
                       )}
                     >
-                      <item.icon className="w-5 h-5" />
+                      <item.icon className="w-5 h-5 text-[#402924]" />
                       <span>{item.label}</span>
                     </button>
                   </DialogTrigger>
@@ -149,12 +149,10 @@ export function Sidebar() {
                   "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
                   isActive
                     ? "text-[#402924] font-bold bg-accent"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    : "text-[#402924] hover:bg-muted hover:font-bold"
                 )}
               >
-                <item.icon
-                  className={cn("w-5 h-5", isActive && "text-[#402924]")}
-                />
+                <item.icon className={cn("w-5 h-5", "text-[#402924]")} />
                 <span>{item.label}</span>
               </Link>
             );

@@ -90,9 +90,17 @@ api.interceptors.response.use(
         }
         
         console.log("Attempting token refresh...");
-        const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
-           refresh_token: refreshToken
-        });
+        // Use a basic axios instance for the refresh call to avoid interceptor loops
+        const refreshAxios = axios.create({ baseURL: API_BASE_URL });
+        const response = await refreshAxios.post(
+           '/api/auth/refresh-token', // Correct backend path
+           null, // No request body needed
+           { // Add headers config
+               headers: {
+                   'Authorization': `Bearer ${refreshToken}`
+               }
+           }
+        );
 
         // If successful, update tokens
         if (response.data.access_token) {

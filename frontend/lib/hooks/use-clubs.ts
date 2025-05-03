@@ -7,34 +7,35 @@ import axios from 'axios';
 
 // Utility function to normalize club cover image URLs
 export const normalizeImageUrl = (url: string | undefined | null): string | undefined => {
-  if (!url) return undefined;
-  
-  // Check if it's already an absolute URL
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    return url;
-  }
-  
-  // If it's just the relative path (e.g., /club_covers/filename.jpg)
-  if (url.startsWith('/club_covers/')) {
-    return `${API_BASE_URL}${url}`; // Prepend the backend base URL
-  }
-  
-  // If it includes /static/ or just the filename part from older formats
-  if (url.includes('/static/club_covers/') || url.includes('/club_covers/')) {
-    const parts = url.split('/');
-    const filename = parts[parts.length - 1];
-    return `${API_BASE_URL}/club_covers/${filename}`; // Construct full backend URL
-  }
-  
-  // Try to extract filename if it somehow ended up different
-  const filenameMatch = url.match(/[^/]+$/);
-  if (filenameMatch) {
-     return `${API_BASE_URL}/club_covers/${filenameMatch[0]}`;
+  if (!url) {
+    return undefined;
   }
 
-  // Fallback if we can't parse it
-  console.warn(`[normalizeImageUrl] Could not normalize URL: ${url}`);
-  return url; // Return original or undefined if it's truly unparseable
+  // Check if the URL is already absolute (starts with http:// or https://)
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url; // It's already absolute, use it as is.
+  }
+
+  // Handle potentially incorrect relative paths starting with /static/
+  if (url.startsWith('/static/club_covers/')) {
+    const filename = url.substring('/static/club_covers/'.length);
+    console.warn(`[normalizeImageUrl] Correcting URL with /static/ prefix: ${url}`);
+    return `${API_BASE_URL}/club_covers/${filename}`;
+  }
+
+  // Assume it's a relative path, potentially starting with /uploads/ or just the filename
+  const parts = url.split('/');
+  const filename = parts.pop(); // Get the last part
+
+  if (filename && filename.includes('.')) { // Basic check if it looks like a filename
+    // Reconstruct the URL using the API_BASE_URL and the known static path
+    return `${API_BASE_URL}/club_covers/${filename}`;
+  } else {
+    // If we couldn't extract a reasonable filename, log a warning and return the original URL
+    // or undefined, depending on desired behavior for malformed relative paths.
+    console.warn(`[normalizeImageUrl] Could not extract filename from potentially relative URL: ${url}. Returning undefined.`);
+    return undefined;
+  }
 };
 
 export interface ClubData {
@@ -314,6 +315,7 @@ export function useClubs() {
 
     try {
       const formData = new FormData();
+      console.log(`[uploadCoverImage] Appending file: Name=${file.name}, Size=${file.size}, Type=${file.type}`);
       formData.append("file", file);
 
       const response = await api.post(

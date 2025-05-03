@@ -113,15 +113,10 @@ def create_refresh_token(data: dict):
     return encoded_jwt
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    print(f"Debug - Password verification:")
-    print(f"Plain password: {plain_password}")
-    print(f"Hashed password: {hashed_password}")
     try:
         result = pwd_context.verify(plain_password, hashed_password)
-        print(f"Debug - Password verification result: {result}")
         return result
     except Exception as e:
-        print(f"Debug - Password verification error: {str(e)}")
         return False
 
 def get_password_hash(password: str) -> str:

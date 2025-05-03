@@ -180,7 +180,6 @@ class ClubService:
     @staticmethod
     async def leave_club(club_id: PydanticObjectId, user: User) -> Club:
         """Leave a club."""
-        print(f"DEBUG - Leave club: Attempting to leave club {club_id} for user {user.id}")
         club = await ClubService.get_club(club_id)
         
         # Get creator object (already fetched by get_club)
@@ -190,17 +189,14 @@ class ClubService:
              logger.error(f"Club {club_id} is missing creator information.")
              raise HTTPException(status_code=500, detail="Club creator information missing.")
              
-        print(f"DEBUG - Leave club: Creator ID = {creator.id}, User ID = {user.id}")
-        
         # Check if user is the creator
         if str(user.id) == str(creator.id):
-            print(f"DEBUG - Leave club: User is creator, cannot leave")
+            logger.error(f"Club {club_id}: User is creator, cannot leave")
             raise HTTPException(status_code=400, detail="Creator cannot leave the club")
             
         # Check if user is a member and remove them
         user_id_str = str(user.id)
         original_member_count = len(club.members)
-        print(f"DEBUG - Leave club: Original member count = {original_member_count}")
         
         # Get member IDs for debugging
         member_ids = []
@@ -209,7 +205,6 @@ class ClubService:
                 member_ids.append(str(member.ref.id))
             else:
                 member_ids.append(str(member.id))
-        print(f"DEBUG - Leave club: Current members = {member_ids}")
         
         # Remove the member using ref.id for Link objects
         club.members = [
@@ -220,10 +215,9 @@ class ClubService:
         
         # If member count didn't change, user wasn't a member
         if len(club.members) == original_member_count:
-            print(f"DEBUG - Leave club: Member count didn't change, user not found in members list")
+            logger.error(f"Club {club_id}: Member count didn't change, user not found in members list")
             raise HTTPException(status_code=400, detail="Not a member of this club")
 
-        print(f"DEBUG - Leave club: New member count = {len(club.members)}")
         await club.save()
         return club
 
@@ -273,18 +267,14 @@ class ClubService:
              logger.error(f"Club {club_id} is missing creator information for deletion check.")
              raise HTTPException(status_code=500, detail="Club creator information missing.")
 
-        print(f"DEBUG - Delete club: user.id={user.id}, creator.id={creator.id}")
-        
         if str(user.id) != str(creator.id):
             raise HTTPException(status_code=403, detail="Only the creator can delete the club")
 
         # Delete all posts in the club
         deleted_posts = await ClubPost.find({"club.id": club_id}).delete()
-        print(f"DEBUG - Deleted {deleted_posts} posts")
         
         # Delete the club
         await club.delete()
-        print(f"DEBUG - Club {club_id} deleted successfully")
 
     @staticmethod
     async def update_club(

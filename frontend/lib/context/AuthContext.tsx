@@ -11,6 +11,7 @@ import React, {
 import { api } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import axios from "axios";
 
 interface User {
   id: string;
@@ -158,29 +159,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error("Login failed: No tokens received");
       }
     } catch (err: any) {
-      console.error("Login error:", err);
-      const errorMessage =
-        err.response?.data?.detail || err.message || "Login failed";
-      setError(errorMessage);
+      let errorMessage = "Login failed. Please try again later.";
 
-      // Check for specific error status codes or messages
-      if (err.response?.status === 429) {
-        toast.error("Too many login attempts. Please try again later.");
-      } else if (
-        err.response?.status === 400 &&
-        (errorMessage.includes("Incorrect email or password") ||
-          errorMessage.includes("Invalid credentials") ||
-          errorMessage.includes("Invalid email or password"))
-      ) {
-        toast.error("Invalid email or password. Please try again.");
+      // Check if it's an Axios error with a response
+      if (axios.isAxiosError(err) && err.response) {
+        errorMessage = err.response.data?.detail || err.message || errorMessage;
+        // Comment out console.error to potentially prevent Next.js dev overlay
+        // console.error(
+        //   `Login API Error (${err.response.status}): ${errorMessage}`,
+        //   err
+        // );
+
+        // Set specific user-friendly messages based on status code
+        if (err.response.status === 429) {
+          errorMessage = "Too many login attempts. Please try again later.";
+        } else if (err.response.status === 400) {
+          // You could check detail content here if needed, but a generic message is often safer
+          errorMessage =
+            "Invalid email or password. Please check your credentials.";
+        }
+        // Add more specific status code checks if needed (e.g., 500)
       } else {
-        // Generic error for other issues
-        toast.error(
-          "Login failed. Please check your connection or try again later."
-        );
+        // Handle non-Axios errors or errors without a response
+        errorMessage = err.message || errorMessage;
+        // Comment out console.error to potentially prevent Next.js dev overlay
+        // console.error("Login Error (Non-API or Network):", err);
       }
 
+      // Set the error state for potential display elsewhere
+      setError(errorMessage);
+
+      // Show a toast notification to the user
+      toast.error(errorMessage);
+
+      // Ensure local auth state is cleared on failure
       handleAuthFailure();
+
+      // Explicitly return false for failure
       return false;
     } finally {
       setLoading(false);

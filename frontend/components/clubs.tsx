@@ -14,7 +14,7 @@ import {
   Tv,
   Search,
 } from "lucide-react";
-import { useClubs, ClubData } from "@/lib/hooks/use-clubs";
+import { useClubs, ClubData, normalizeImageUrl } from "@/lib/hooks/use-clubs";
 import Link from "next/link";
 import { useDebounce } from "@/lib/hooks/use-debounce";
 import {
@@ -348,11 +348,7 @@ export function Clubs() {
           {club.cover_image ? (
             <div className="w-full h-full relative">
               <Image
-                src={
-                  club.cover_image && club.cover_image.startsWith("http")
-                    ? club.cover_image
-                    : `${API_BASE_URL}${club.cover_image || ""}`
-                }
+                src={normalizeImageUrl(club.cover_image) || "/placeholder.png"}
                 alt={club.name}
                 fill
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

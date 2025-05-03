@@ -128,13 +128,6 @@ class ShelfService:
     @staticmethod
     async def get_user_shelves(user_id: str, media_type: MediaType) -> List[ShelfModel]:
         try:
-            # Debug the query parameters
-            print(f"Debug - Querying shelves for user {user_id} and media type {media_type}")
-
-            # Convert user_id to string if it's a User object
-            if hasattr(user_id, 'id'):
-                user_id = str(user_id.id)
-
             # Get all shelves for this user and media type
             shelves = await ShelfModel.find({
                 "user_id": user_id,
@@ -143,7 +136,6 @@ class ShelfService:
 
             # If no shelves exist, create default ones
             if not shelves:
-                print("Debug - No shelves found, creating defaults")
                 shelves = await ShelfService.create_default_shelves(user_id, media_type)
 
             # Process shelves and fetch their specific items
@@ -182,11 +174,9 @@ class ShelfService:
                 shelf_data_to_return["items"] = items_dict
                 processed_shelves.append(shelf_data_to_return)
 
-            print(f"Debug - Returning {len(processed_shelves)} shelves with detailed items")
             return processed_shelves # Return list of dicts matching frontend expectation
 
         except Exception as e:
-            print(f"Debug - Error in get_user_shelves: {str(e)}")
             # It might be better to re-raise or handle specific exceptions
             import traceback
             traceback.print_exc()
@@ -200,7 +190,6 @@ class ShelfService:
         # --- End import ---
         try:
             actual_user_id = str(user_id.id) if hasattr(user_id, 'id') else str(user_id)
-            print(f"Debug - Removing item: user={actual_user_id}, media_id={media_id}, type={media_type}")
 
             shelf_items_to_delete = await ShelfItemModel.find({
                 "user_id": actual_user_id,
@@ -209,27 +198,22 @@ class ShelfService:
             }).to_list()
 
             if not shelf_items_to_delete:
-                print(f"Debug - No ShelfItemModel found for media_id={media_id}, type={media_type}. Nothing to remove.")
                 raise ValueError(f"Item with ID {media_id} (type: {media_type}) not found in any shelf item record.")
 
             deleted_count = 0
             review_deleted = False # Flag to track if review deletion was attempted
 
             for item in shelf_items_to_delete:
-                print(f"Debug - Processing ShelfItemModel: {item.id}, on Shelf ID: {item.shelf_id}")
                 parent_shelf = None
                 try:
                     parent_shelf = await ShelfModel.get(item.shelf_id) # Use get for potential None
                 except Exception as e:
-                     print(f"Warning - Could not fetch parent shelf {item.shelf_id} due to error: {e}")
+                     pass # Ensure this pass is correctly indented
 
                 if parent_shelf:
-                    print(f"Debug - Found parent shelf: {parent_shelf.id} ({parent_shelf.name}, Type: {parent_shelf.shelf_type}, Status: {parent_shelf.status})")
-                    
                     # --- Check if it's the Finished shelf and delete review --- 
                     if parent_shelf.shelf_type == ShelfType.DEFAULT and parent_shelf.status == ShelfStatus.FINISHED:
                         if not review_deleted: # Only attempt review deletion once per call
-                            print(f"INFO: Item {item.id} is on the Finished shelf. Attempting to delete associated review...")
                             try:
                                 # Find the review for this user/media
                                 # Note: Need to import Review model or use ReviewService.get_user_review
@@ -241,20 +225,15 @@ class ShelfService:
                                 })
                                 
                                 if review_to_delete:
-                                    print(f"INFO: Found review {review_to_delete.id}. Calling ReviewService.delete_review...")
-                                    # ReviewService.delete_review also handles removing from finished shelf,
-                                    # but calling it ensures likes etc are cleaned up properly.
-                                    # It should handle the case where the item is already gone from the shelf.
                                     await ReviewService.delete_review(str(review_to_delete.id), actual_user_id)
-                                    print(f"INFO: Successfully triggered deletion for review {review_to_delete.id}")
                                     review_deleted = True
                                 else:
-                                    print(f"INFO: No review found for user {actual_user_id} and media {media_id}. No review deletion needed.")
+                                    pass # Added pass to avoid empty block after removing print
                             except Exception as review_delete_error:
-                                print(f"ERROR: Failed to delete review for item {media_id} when removing from Finished shelf: {review_delete_error}")
                                 # Log error, but continue shelf removal
+                                pass # Added pass for error handling block
                         else:
-                            print(f"INFO: Review deletion already attempted for this media item in this call. Skipping duplicate attempt.")
+                            pass # Added pass to avoid empty block after removing print
                     # --- End review deletion check --- 
 
                     # Remove the media_id from the parent shelf's items list
@@ -262,25 +241,20 @@ class ShelfService:
                         original_items = parent_shelf.items.copy()
                         parent_shelf.items = [i for i in parent_shelf.items if i != media_id]
                         await parent_shelf.save()
-                        print(f"Debug - Removed {media_id} from shelf {parent_shelf.id}. Items before: {original_items}, after: {parent_shelf.items}")
                     else:
-                        print(f"Debug - {media_id} not found in parent shelf {parent_shelf.id}'s items list. Skipping shelf update.")
+                        pass # Added pass to avoid empty block after removing print
                 else:
-                    print(f"Warning - Parent shelf with ID {item.shelf_id} not found for item {item.id}. Cannot update shelf items list.")
+                    pass # Added pass to avoid empty block after removing print
 
                 # Delete the ShelfItemModel document itself
                 await item.delete()
-                print(f"Debug - Deleted ShelfItemModel: {item.id}")
                 deleted_count += 1
 
-            print(f"Debug - Successfully deleted {deleted_count} ShelfItemModel instance(s) for media_id {media_id}.")
             return deleted_count > 0
 
         except ValueError as ve:
-            print(f"Debug - ValueError in remove_from_shelf: {str(ve)}")
             raise ve
         except Exception as e:
-            print(f"Debug - Unexpected error in remove_from_shelf: {str(e)}")
             import traceback
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"An unexpected error occurred while removing the item: {str(e)}")
@@ -324,11 +298,9 @@ class ShelfService:
 
         if shelf:
             # Found existing shelf
-            print(f"Debug - Found existing default shelf '{shelf.name}' for status '{status}'")
             return shelf # Return the found shelf
 
         # 4. Create new shelf if not found
-        print(f"Debug - Creating new default shelf '{name}' for status '{status}'")
         new_shelf_doc = ShelfModel(
             user_id=user_id,
             name=name, # Use the derived name
@@ -369,8 +341,6 @@ class ShelfService:
         new_status: str, # e.g., "current", "finished"
     ):
         """Moves an item between default shelves based on the new status."""
-        print(f"Debug - Moving item {media_id} ({media_type}) for user {user_id} to status {new_status}")
-
         # 1. Find the existing shelf item in any default shelf
         shelf_item = await ShelfItemModel.find_one({
             "user_id": user_id,
@@ -397,12 +367,8 @@ class ShelfService:
         except DocumentNotFound:
              raise ValueError(f"Old shelf {shelf_item.shelf_id} not found for item {media_id}.")
 
-        print(f"Debug - Found old shelf: {old_shelf.name} ({old_shelf.id})")
-
         # 3. Check if already in the target status
         if old_shelf.status.value == new_status:
-            print(f"Debug - Item already in target status '{new_status}'. No move needed.")
-            # Technically the route handler already prevents this, but belt-and-suspenders
             return shelf_item # Return the item as no move occurred
 
         # 4. Find or create the new target default shelf based on status
@@ -412,26 +378,23 @@ class ShelfService:
         except ValueError as e: # Handle if get_or_create_shelf fails for status
             raise ValueError(f"Could not determine target shelf for status '{new_status}': {e}")
 
-        print(f"Debug - Found/Created new shelf: {new_shelf.name} ({new_shelf.id})")
-
         # 5. Update Old Shelf (remove item)
         if media_id in old_shelf.items:
             old_shelf.items.remove(media_id)
             await old_shelf.save()
-            print(f"Debug - Removed item from old shelf '{old_shelf.name}'")
         else:
-             print(f"Warning - Item {media_id} not found in old shelf '{old_shelf.name}' items list, though ShelfItemModel linked it.")
+            pass # Added pass for consistency
 
         # 6. Update New Shelf (add item)
         if media_id not in new_shelf.items:
             new_shelf.items.append(media_id)
             await new_shelf.save()
-            print(f"Debug - Added item to new shelf '{new_shelf.name}'")
+        else:
+            pass # Added pass for consistency
 
         # 7. Update Shelf Item (change shelf_id)
         shelf_item.shelf_id = str(new_shelf.id)
         await shelf_item.save()
-        print(f"Debug - Updated ShelfItemModel {shelf_item.id} to point to new shelf {new_shelf.id}")
 
         return shelf_item # Return the updated shelf item
 
@@ -447,14 +410,12 @@ class ShelfService:
         creator: Optional[str] = None
     ) -> ShelfItemModel:
         """Adds an item to the correct default shelf based on status."""
-        print(f"Debug - Adding item {media_id} ({title}) to default shelf with status '{status}'")
         # 1. Find or create the target default shelf
         target_shelf = await ShelfService.get_or_create_shelf(user_id, media_type, status, ShelfType.DEFAULT)
         
         # 2. Check if item ALREADY exists in this specific target shelf's items list
         # (Should ideally be redundant if route handler logic is correct, but good failsafe)
         if media_id in target_shelf.items:
-            print(f"Warning/Debug - Item {media_id} already in target shelf '{target_shelf.name}' items list. Fetching existing ShelfItemModel.")
             # If already in list, find the existing ShelfItemModel instead of creating a new one
             existing_item = await ShelfItemModel.find_one({
                 "user_id": user_id,
@@ -465,13 +426,13 @@ class ShelfService:
                 return existing_item
             else:
                  # Discrepancy: In items list but no ShelfItemModel? Log and proceed to create.
-                 print(f"Error - Item {media_id} in shelf {target_shelf.id} items list but no ShelfItemModel found! Recreating.")
+                 pass # Added pass to avoid empty block after removing print
 
         # 3. Add item to shelf's list if not already there
         if media_id not in target_shelf.items:
             target_shelf.items.append(media_id)
             await target_shelf.save()
-            print(f"Debug - Added {media_id} to shelf '{target_shelf.name}' items list.")
+            pass # Added pass to avoid empty block after removing print
 
         # 4. Create the ShelfItemModel linking item to this shelf
         # Check if a shelf item exists for this user/media_id *at all* first? 
@@ -486,5 +447,4 @@ class ShelfService:
             cover_image=image_url
         )
         await shelf_item.create()
-        print(f"Debug - Created new ShelfItemModel: {shelf_item.id}")
         return shelf_item

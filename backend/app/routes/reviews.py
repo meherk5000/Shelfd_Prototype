@@ -26,8 +26,6 @@ async def create_review(
     Create or update a review for a media item.
     If the user has already reviewed this item, the review will be updated.
     """
-    # Add debug log for received data
-    print(f"DEBUG - Received review data: {data.dict()}") 
     try:
         user_id = await get_current_user(token)
         
@@ -323,7 +321,6 @@ async def legacy_rate_media(
     and create a review.
     """
     try:
-        print(f"Debug - Rate endpoint called with data: {data}")
         user_id = await get_current_user(token)
         
         # Extract data
@@ -337,9 +334,7 @@ async def legacy_rate_media(
         
         # Convert media type string to enum
         try:
-            print(f"Debug - Attempting to convert media type: {media_type_str}")
             media_type_enum = MediaType[media_type_str]
-            print(f"Debug - Converted to enum: {media_type_enum}")
         except KeyError:
             raise HTTPException(status_code=400, detail=f"Invalid media type: {media_type_str}")
         
@@ -347,38 +342,27 @@ async def legacy_rate_media(
         from ..services.shelf_service import ShelfService
         from ..database.models.shelf import ShelfStatus
         
-        print(f"Debug - Looking for shelf item with media_id: {media_id} and media_type: {media_type_enum}")
-        # Check if item is already in any shelf
         shelf_items = await ShelfService.get_shelf_items_by_media(
             user_id=user_id,
             media_id=media_id,
             media_type=media_type_enum
         )
         
-        print(f"Debug - Found {len(shelf_items)} matching shelf items")
         if not shelf_items:
-            print(f"Debug - Item not found in your shelves")
-            # Add to "Finished" shelf automatically
-            try:
-                shelf_result = await ShelfService.add_to_shelf(
-                    user_id=user_id,
-                    media_id=media_id,
-                    media_type=media_type_enum,
-                    status=ShelfStatus.FINISHED,
-                    media_data={
-                        "title": data.get("title", "Unknown Title"),
-                        "image_url": data.get("image_url", ""),
-                        "creator": data.get("creator", "")
-                    }
-                )
-                
-                if not shelf_result.get("success"):
-                    raise ValueError("Failed to add to shelf")
-                
-                print(f"Debug - Added to Finished shelf: {shelf_result}")
-            except Exception as e:
-                print(f"Debug - Error adding to shelf: {str(e)}")
-                # Continue anyway - we'll try to save the review
+            shelf_result = await ShelfService.add_to_shelf(
+                user_id=user_id,
+                media_id=media_id,
+                media_type=media_type_enum,
+                status=ShelfStatus.FINISHED,
+                media_data={
+                    "title": data.get("title", "Unknown Title"),
+                    "image_url": data.get("image_url", ""),
+                    "creator": data.get("creator", "")
+                }
+            )
+            
+            if not shelf_result.get("success"):
+                raise ValueError("Failed to add to shelf")
         
         # Create the review
         try:
@@ -402,12 +386,13 @@ async def legacy_rate_media(
                 }
             }
         except Exception as e:
-            print(f"Debug - Error saving rating: {str(e)}")
-            raise HTTPException(status_code=500, detail=str(e))
+            error_msg = f"Failed to save rating: {str(e)}"
+            print(f"ERROR: {error_msg}")
+            raise HTTPException(status_code=500, detail=error_msg)
             
     except HTTPException:
         raise
     except Exception as e:
         error_msg = f"Failed to save rating: {str(e)}"
-        print(f"Debug - Error: {error_msg}")
+        print(f"ERROR: {error_msg}")
         raise HTTPException(status_code=500, detail=error_msg) 

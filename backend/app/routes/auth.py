@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from ..database.models.user import User
-from ..services.auth import create_access_token, create_refresh_token, verify_password, get_password_hash, validate_password_strength, is_rate_limited
+from ..services.auth import create_access_token, create_refresh_token, verify_password, get_password_hash, validate_password_strength, is_rate_limited, get_current_user
 from pydantic import BaseModel, EmailStr
 from jose import JWTError, jwt
 import os
@@ -32,38 +32,30 @@ class PasswordReset(BaseModel):
 @router.post("/signup", status_code=201)
 async def signup(user_data: UserCreate, request: Request):
     try:
-        print(f"Debug - Received signup request for email: {user_data.email}")
-        
         # Validate password strength
         is_valid, error_message = validate_password_strength(user_data.password)
         if not is_valid:
-            print(f"Debug - Password validation failed: {error_message}")
             raise HTTPException(status_code=400, detail=error_message)
         
         # Check if user exists
         existing_user = await User.find_one({"email": user_data.email})
         if existing_user:
-            print(f"Debug - Email already registered: {user_data.email}")
             raise HTTPException(status_code=409, detail="Email already registered")
         
         # Also check for username uniqueness
         existing_username = await User.find_one({"username": user_data.username})
         if existing_username:
-            print(f"Debug - Username already taken: {user_data.username}")
             raise HTTPException(status_code=409, detail="Username already taken")
         
         # Create user
-        print("Debug - Creating new user")
         user = User(
             email=user_data.email,
             username=user_data.username,
             hashed_password=get_password_hash(user_data.password)
         )
-        print("Debug - Saving user to database")
         await user.save()
         
         # Create default shelves for each media type
-        print(f"Debug - Creating default shelves for user ID: {str(user.id)}")
         for media_type in [
             MediaType.BOOK,
             MediaType.MOVIE,
@@ -76,11 +68,9 @@ async def signup(user_data: UserCreate, request: Request):
             )
         
         # Create tokens
-        print("Debug - Creating access and refresh tokens")
         access_token = create_access_token({"sub": str(user.id)})
         refresh_token = create_refresh_token({"sub": str(user.id)})
         
-        print("Debug - Signup successful")
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
@@ -95,8 +85,7 @@ async def signup(user_data: UserCreate, request: Request):
     except HTTPException as he:
         raise he
     except Exception as e:
-        print(f"Debug - Error in signup: {str(e)}")
-        print(f"Debug - Error type: {type(e)}")
+        print(f"ERROR during signup: {e}") 
         import traceback
         print(f"Debug - Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
@@ -114,41 +103,32 @@ async def login(user_data: UserLogin, request: Request):
             detail=f"Too many login attempts. Please try again in {wait_time} seconds."
         )
     
-    print(f"Debug - Login attempt for email: {user_data.email}")
-    
-    # Log the incoming password length
-    print(f"Debug - Received password length: {len(user_data.password)}")
-    
     user = await User.find_one({"email": user_data.email})
-    print(f"Debug - Found user: {user is not None}")
     
     if user:
-        print(f"Debug - User details: id={user.id}, email={user.email}")
-        print(f"Debug - Stored hashed password: {user.hashed_password}")
+        pass # Avoid empty block
     
     if not user:
-        print("Debug - User not found")
         # Use same error message for security (don't reveal if email exists)
         raise HTTPException(status_code=400, detail="Invalid email or password")
         
     is_valid = verify_password(user_data.password, user.hashed_password)
-    print(f"Debug - Password verification result: {is_valid}")
     
     if not is_valid:
-        print("Debug - Invalid password")
-        # Check rate limiting again after failed attempt
-        is_limited, wait_time = is_rate_limited(client_ip, user_data.email)
-        if is_limited:
-            raise HTTPException(
-                status_code=429, 
-                detail=f"Too many failed login attempts. Please try again in {wait_time} seconds."
-            )
+        # The attempt was already recorded by the initial call to is_rate_limited.
+        # Re-calling here is likely incorrect and removed.
+        # # Check rate limiting again after failed attempt
+        # is_limited, wait_time = is_rate_limited(client_ip, user_data.email)
+        # if is_limited:
+        #     raise HTTPException(
+        #         status_code=429, 
+        #         detail=f"Too many failed login attempts. Please try again in {wait_time} seconds."
+        #     )
         raise HTTPException(status_code=400, detail="Invalid email or password")
     
     # Create tokens
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
-    print("Debug - Created access and refresh tokens")
     
     response_data = {
         "access_token": access_token, 
@@ -160,32 +140,18 @@ async def login(user_data: UserLogin, request: Request):
             "username": user.username
         }
     }
-    print(f"Debug - Sending response: {response_data}")
     return response_data
 
 @router.get("/me")
-async def get_current_user_info(authorization: str = Header(None)):
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    
-    token = authorization.split(" ")[1]
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-        user_id = payload.get("sub")
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-            
-        user = await User.get(user_id)
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-            
-        return {
-            "id": str(user.id),
-            "email": user.email,
-            "username": user.username
-        }
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+async def get_current_user_info(user: User = Depends(get_current_user)):
+    """Get information about the currently authenticated user."""
+    # The get_current_user dependency already handles token validation and user fetching.
+    # It raises appropriate HTTPExceptions on failure.
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "username": user.username
+    }
 
 @router.get("/test-db")
 async def test_db():

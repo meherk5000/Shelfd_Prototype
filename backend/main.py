@@ -17,6 +17,7 @@ from app.database.models.recommendation import Recommendation
 from config import Settings
 import os
 import asyncio
+import certifi
 from app.services.article_service import ArticleService
 from datetime import datetime, timedelta
 
@@ -62,8 +63,8 @@ async def startup_db_client():
         client = AsyncIOMotorClient(
             settings.mongodb_url,
             serverSelectionTimeoutMS=5000,
-            tls=True,
-            tlsAllowInvalidCertificates=True
+            # Removed tls=True and tlsAllowInvalidCertificates=True for local dev
+            tlsCAFile=certifi.where()
         )
         
         # Test the connection

@@ -177,25 +177,26 @@ class UpdateClubTVShowRequest(BaseModel):
 # Routes
 @router.post("/create", response_model=ClubResponse)
 async def create_club(
-    request: CreateClubRequest,
+    request_data: CreateClubRequest,
+    request: Request,
     current_user: User = Depends(get_current_user)
 ) -> ClubResponse:
-    logger.debug("[Backend] Received club creation request with data: %s", request.model_dump())
+    logger.debug("[Backend] Received club creation request with data: %s", request_data.model_dump())
     logger.debug("[Backend] Current user: %s (ID: %s)", current_user.username, current_user.id)
 
     try:
         # Use the ClubService to handle creation (which now returns a fetched object)
         created_club = await ClubService.create_club(
-            name=request.name,
+            name=request_data.name,
             creator=current_user,
-            media_type=request.media_type,
-            description=request.description,
-            is_private=request.is_private,
-            cover_image=request.cover_image,
-            book_title=request.book_title,
-            book_author=request.book_author,
-            book_cover=request.book_cover,
-            book_id=request.book_id,
+            media_type=request_data.media_type,
+            description=request_data.description,
+            is_private=request_data.is_private,
+            cover_image=request_data.cover_image,
+            book_title=request_data.book_title,
+            book_author=request_data.book_author,
+            book_cover=request_data.book_cover,
+            book_id=request_data.book_id,
         )
         
         logger.debug("[Backend Route] Club successfully created and fetched via service with ID: %s", created_club.id)
@@ -209,7 +210,7 @@ async def create_club(
             # created_club = await Club.get(created_club.id, fetch_links=True)
 
         # Format the response using the updated club object
-        return await format_club_response(created_club, current_user)
+        return await format_club_response(created_club, current_user, request=request)
     except HTTPException as he:
         # Re-raise HTTPExceptions directly (e.g., validation errors from service)
         logger.error("[Backend] HTTPException during club creation: %s - %s", he.status_code, he.detail)
@@ -220,6 +221,7 @@ async def create_club(
 
 @router.get("", response_model=List[ClubResponse])
 async def get_clubs(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     media_type: Optional[str] = None,
@@ -239,10 +241,11 @@ async def get_clubs(
         media_type=media_type,
         search=search,
     )
-    return [await format_club_response(club, current_user) for club in clubs]
+    return [await format_club_response(club, current_user, request=request) for club in clubs]
 
 @router.get("/user", response_model=List[ClubResponse])
 async def get_user_clubs(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -251,10 +254,11 @@ async def get_user_clubs(
     clubs, total = await ClubService.get_user_clubs(current_user, skip, limit)
     
     # Return formatted responses directly as a list comprehension
-    return [await format_club_response(club, current_user) for club in clubs]
+    return [await format_club_response(club, current_user, request=request) for club in clubs]
 
 @router.get("/created", response_model=List[ClubResponse])
 async def get_created_clubs(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -263,10 +267,11 @@ async def get_created_clubs(
     clubs, total = await ClubService.get_created_clubs(current_user, skip, limit)
     
     # Return formatted responses directly as a list comprehension
-    return [await format_club_response(club, current_user) for club in clubs]
+    return [await format_club_response(club, current_user, request=request) for club in clubs]
 
 @router.get("/my", response_model=List[ClubResponse])
 async def get_my_clubs(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -291,7 +296,7 @@ async def get_my_clubs(
     formatted_clubs = []
     for club in paginated_clubs:
         try:
-            formatted_clubs.append(await format_club_response(club, current_user))
+            formatted_clubs.append(await format_club_response(club, current_user, request=request))
         except Exception as e:
             logger.error(f"Error formatting club {club.id} in get_my_clubs: {e}", exc_info=True)
             # Optionally, skip clubs that fail to format
@@ -302,11 +307,12 @@ async def get_my_clubs(
 @router.get("/{club_id}", response_model=ClubResponse)
 async def get_club(
     club_id: PydanticObjectId,
+    request: Request,
     current_user: Optional[User] = Depends(get_current_user),
 ):
     """Get a specific club."""
     club = await ClubService.get_club(club_id)
-    return await format_club_response(club, current_user)
+    return await format_club_response(club, current_user, request=request)
 
 @router.post("/{club_id}/join")
 async def join_club(
@@ -359,18 +365,19 @@ async def delete_club(
 @router.patch("/{club_id}", response_model=ClubResponse)
 async def update_club(
     club_id: PydanticObjectId,
-    request: UpdateClubRequest,
+    update_data: UpdateClubRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     """Update club details."""
     club = await ClubService.update_club(
         club_id,
         current_user,
-        name=request.name,
-        description=request.description,
-        is_private=request.is_private,
+        name=update_data.name,
+        description=update_data.description,
+        is_private=update_data.is_private,
     )
-    return await format_club_response(club, current_user)
+    return await format_club_response(club, current_user, request=request)
 
 @router.post("/upload-cover")
 async def upload_club_cover(
@@ -440,7 +447,8 @@ async def get_club_threads(
 @router.put("/{club_id}/book", response_model=ClubResponse)
 async def update_club_book(
     club_id: str,
-    request: UpdateClubBookRequest,
+    update_request: UpdateClubBookRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     """Update a club with book information"""
@@ -471,10 +479,10 @@ async def update_club_book(
         if club.media_type != "book":
             raise HTTPException(status_code=400, detail="This club is not a book club")
             
-        club.book_id = request.book_id
-        club.book_title = request.book_title
-        club.book_author = request.book_author
-        club.book_cover = request.book_cover
+        club.book_id = update_request.book_id
+        club.book_title = update_request.book_title
+        club.book_author = update_request.book_author
+        club.book_cover = update_request.book_cover
         
         # Clear other media types
         club.movie_id = None
@@ -502,7 +510,7 @@ async def update_club_book(
              raise HTTPException(status_code=404, detail="Club not found after update.")
         
         # Step 6: Format the fully updated and fetched club
-        return await format_club_response(updated_club, current_user)
+        return await format_club_response(updated_club, current_user, request=request)
         
     except Exception as e:
         # Log the actual error for debugging
@@ -512,7 +520,8 @@ async def update_club_book(
 @router.put("/{club_id}/movie", response_model=ClubResponse)
 async def update_club_movie(
     club_id: str,
-    request: UpdateClubMovieRequest,
+    update_request: UpdateClubMovieRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     """Update a club with movie information"""
@@ -543,11 +552,11 @@ async def update_club_movie(
         if club.media_type != "movie":
             raise HTTPException(status_code=400, detail="This club is not a movie club")
             
-        club.movie_id = request.movie_id
-        club.movie_title = request.movie_title
-        club.movie_director = request.movie_director
-        club.movie_year = request.movie_year
-        club.movie_poster = request.movie_poster
+        club.movie_id = update_request.movie_id
+        club.movie_title = update_request.movie_title
+        club.movie_director = update_request.movie_director
+        club.movie_year = update_request.movie_year
+        club.movie_poster = update_request.movie_poster
         
         # Clear other media types
         club.book_id = None
@@ -573,7 +582,7 @@ async def update_club_movie(
              raise HTTPException(status_code=404, detail="Club not found after update.")
 
         # Step 6: Format the response
-        return await format_club_response(updated_club, current_user)
+        return await format_club_response(updated_club, current_user, request=request)
         
     except Exception as e:
         # Log the actual error for debugging
@@ -583,7 +592,8 @@ async def update_club_movie(
 @router.put("/{club_id}/tv-show", response_model=ClubResponse)
 async def update_club_tv(
     club_id: str,
-    request: UpdateClubTVShowRequest,
+    update_request: UpdateClubTVShowRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     """Update a club with TV show information"""
@@ -614,13 +624,13 @@ async def update_club_tv(
         if club.media_type != "tv":
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This club is not a TV show club")
             
-        club.tv_id = request.tv_id
-        club.tv_title = request.tv_title
-        club.tv_creator = request.tv_creator
-        club.tv_year = request.tv_year
-        club.tv_poster = request.tv_poster
-        club.tv_season = request.tv_season
-        club.tv_episode = request.tv_episode
+        club.tv_id = update_request.tv_id
+        club.tv_title = update_request.tv_title
+        club.tv_creator = update_request.tv_creator
+        club.tv_year = update_request.tv_year
+        club.tv_poster = update_request.tv_poster
+        club.tv_season = update_request.tv_season
+        club.tv_episode = update_request.tv_episode
         
         # Clear other media types
         club.book_id = None
@@ -644,7 +654,7 @@ async def update_club_tv(
              raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Club not found after update.")
         
         # Step 6: Format the response
-        return await format_club_response(updated_club, current_user) 
+        return await format_club_response(updated_club, current_user, request=request) 
         
     except HTTPException as he:
         raise he
@@ -694,7 +704,7 @@ async def get_club_members(
         )
 
 # Helper functions
-async def format_club_response(club: Club, current_user: Optional[User] = None) -> ClubResponse:
+async def format_club_response(club: Club, current_user: Optional[User] = None, request: Optional[Request] = None) -> ClubResponse:
     """Format a club object for response, handling Links/DBRefs robustly."""
     creator: Optional[User] = None
     creator_id_str = "None"
@@ -773,9 +783,61 @@ async def format_club_response(club: Club, current_user: Optional[User] = None) 
     is_member_flag = bool(current_user and current_user_id_str in member_ids)
     is_creator_flag = bool(current_user and creator and current_user_id_str == str(creator.id))
 
+    # --- Prepend base URL to cover image if it's relative ---
+    absolute_cover_image_url = club.cover_image
+    if club.cover_image and not club.cover_image.startswith('http') and request:
+        base_url_str = str(request.base_url).rstrip('/')
+        image_path = club.cover_image
+        
+        # Robustly clean the path: remove known incorrect prefixes
+        if image_path.startswith('/api/club_covers/'):
+            image_path = image_path[len('/api/club_covers/'):]
+        elif image_path.startswith('/uploads/club_covers/'):
+            image_path = image_path[len('/uploads/club_covers/'):]
+        elif image_path.startswith('/static/club_covers/'): # Added handling for /static/
+             image_path = image_path[len('/static/club_covers/'):]
+        elif image_path.startswith('/club_covers/'):
+            image_path = image_path[len('/club_covers/'):]
+        elif image_path.startswith('/uploads/'): # Handle case where only /uploads/ is present
+            image_path = image_path[len('/uploads/'):]
+        elif image_path.startswith('/'): # Remove any other leading slash
+            image_path = image_path[1:]
+
+        # Ensure it starts with the correct prefix
+        if not image_path.startswith('club_covers/'): # Check if it already starts with this after cleaning
+             # Prepend the correct serving path
+            absolute_cover_image_url = f"{base_url_str}/club_covers/{image_path}"
+        else: 
+             # It was already correct or cleaned to be correct (e.g. started with /club_covers/)
+              absolute_cover_image_url = f"{base_url_str}/{image_path}"
+            
+    elif club.cover_image and not club.cover_image.startswith('http'):
+        # Handle case where request object might not be available but path is relative
+        # In a production setup, you might want a default base URL from config
+        logger.warning(f"Request object not available to build absolute URL for relative path: {club.cover_image}")
+        # Attempt basic fix assuming it should be /club_covers/
+        cleaned_path = club.cover_image
+        if cleaned_path.startswith('/api/club_covers/'):
+            cleaned_path = cleaned_path[len('/api/club_covers/'):]
+        elif cleaned_path.startswith('/uploads/club_covers/'):
+            cleaned_path = cleaned_path[len('/uploads/club_covers/'):]
+        elif cleaned_path.startswith('/static/club_covers/'): # Added handling for /static/
+             cleaned_path = cleaned_path[len('/static/club_covers/'):]
+        elif cleaned_path.startswith('/club_covers/'):
+            cleaned_path = cleaned_path[len('/club_covers/'):]
+        elif cleaned_path.startswith('/uploads/'): 
+            cleaned_path = cleaned_path[len('/uploads/'):]
+        elif cleaned_path.startswith('/'):
+             cleaned_path = cleaned_path[1:]
+             
+        absolute_cover_image_url = f"/club_covers/{cleaned_path}" # Best effort relative path
+
+    # --- End cover image URL adjustment ---
+
     logger.debug(f"[Robust Format] Club {club.id}: Calculated member_count: {valid_members_count}")
     logger.debug(f"[Robust Format] Club {club.id}: Calculated is_member: {is_member_flag}")
     logger.debug(f"[Robust Format] Club {club.id}: Calculated is_creator: {is_creator_flag}")
+    logger.debug(f"[Robust Format] Club {club.id}: Final cover_image URL: {absolute_cover_image_url}")
 
     return ClubResponse(
         id=str(club.id),
@@ -789,7 +851,7 @@ async def format_club_response(club: Club, current_user: Optional[User] = None) 
         created_at=club.created_at.isoformat(),
         is_member=is_member_flag,
         is_creator=is_creator_flag,
-        cover_image=club.cover_image,
+        cover_image=absolute_cover_image_url, # Use the absolute URL
         book_title=club.book_title,
         book_author=club.book_author,
         book_cover=club.book_cover,
