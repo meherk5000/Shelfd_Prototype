@@ -1,11 +1,16 @@
 import { Suspense } from "react";
-import { use } from "react";
 import { MovieDetails } from "@/components/movies/movie-details";
 import { Layout } from "@/components/layout";
 import { Loader2 } from "lucide-react";
 
-export default function MoviePage({ params }: { params: { id: string } }) {
-  const { id: rawId } = use(Promise.resolve(params));
+interface MoviePageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default function MoviePage({ params }: MoviePageProps) {
+  const { id: rawId } = params;
 
   let movieId: number | null = null;
   try {

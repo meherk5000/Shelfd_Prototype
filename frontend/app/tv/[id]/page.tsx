@@ -1,13 +1,18 @@
 // app/tv/[id]/page.tsx
 import { Suspense } from "react";
-import { use } from "react";
 import { TVShowDetails } from "@/components/tv/tv-show-details";
 import { Layout } from "@/components/layout";
 import { Loader2 } from "lucide-react";
 
-export default function TVShowPage({ params }: { params: { id: string } }) {
-  // Unwrap params using use()
-  const { id: rawId } = use(Promise.resolve(params));
+interface TVShowPageProps {
+  params: {
+    id: string;
+  };
+}
+
+export default function TVShowPage({ params }: TVShowPageProps) {
+  // Get params directly
+  const { id: rawId } = params;
 
   // Parse the ID (handle potential errors)
   let tvId: number | null = null;

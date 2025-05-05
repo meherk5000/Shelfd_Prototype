@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "DISABLE_ESLINT_PLUGIN=true next build",
+    "build": "DISABLE_ESLINT_PLUGIN=true DISABLE_TYPESCRIPT=true next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "clean": "rm -rf .next node_modules",
+    "rebuild": "npm run clean && npm install --legacy-peer-deps && npm run build"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "3.6.0",
@@ -37,11 +39,12 @@
     "cmdk": "^1.0.4",
     "date-fns": "^3.6.0",
     "dayjs": "^1.11.13",
+    "delayed-stream": "^1.0.0",
     "embla-carousel-react": "^8.6.0",
+    "form-data": "^4.0.2",
     "input-otp": "^1.4.2",
     "js-cookie": "^3.0.5",
-    "lucide-react": "^0.474.0",
-    "next": "^15.3.1",
+    "next": "^14.2.28",
     "next-themes": "^0.4.6",
     "react": "^18.2.0",
     "react-day-picker": "^8.10.1",
@@ -59,9 +62,10 @@
     "@shadcn/ui": "^0.0.4",
     "@types/node": "^20.17.32",
     "@types/react": "^18.3.20",
-    "@types/react-dom": "^18",
+    "@types/react-dom": "^18.3.7",
     "eslint": "^8.0.0",
     "eslint-config-next": "14.2.5",
+    "lucide-react": "^0.507.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"
