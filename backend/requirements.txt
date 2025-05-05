@@ -56,10 +56,7 @@ websockets==14.2
 feedparser
 beautifulsoup4
 
-# AI recommendation system dependencies
-# REMOVED: scikit-learn 
-# REMOVED: numpy
-# REMOVED: scipy
+
 numpy==2.2.0
 scipy==1.14.0
 scikit-learn==1.6.1

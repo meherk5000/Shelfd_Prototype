@@ -5,6 +5,7 @@
 
 import React from "react";
 import "../radix-ui-handler";
+import "../radix-dependencies-fix";
 
 interface RadixProviderProps {
   children: React.ReactNode;

@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const path = require('path');
+
 const nextConfig = {
   reactStrictMode: true,
   typescript: {
@@ -31,6 +33,16 @@ const nextConfig = {
         // Add any other modules that might be causing issues
       };
     }
+
+    // Add aliases for problematic dependencies
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'get-nonce': path.resolve(__dirname, 'node_modules/get-nonce'),
+      'detect-node-es': path.resolve(__dirname, 'node_modules/detect-node-es'),
+      'use-sidecar': path.resolve(__dirname, 'node_modules/use-sidecar'),
+      'react-style-singleton': path.resolve(__dirname, 'node_modules/react-style-singleton'),
+      'react-remove-scroll': path.resolve(__dirname, 'node_modules/react-remove-scroll')
+    };
 
     // Improve handling of Radix UI components
     config.module = {

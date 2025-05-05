@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/context/AuthContext";
 import { ThemeProvider } from "@/components/theme-provider";
+import { RadixProvider } from "@/lib/providers/radix-provider";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({
@@ -34,12 +35,14 @@ export default function RootLayout({
         className={cn("min-h-screen font-sans antialiased", inter.variable)}
         suppressHydrationWarning
       >
-        <AuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
-            {children}
-            <Toaster richColors />
-          </ThemeProvider>
-        </AuthProvider>
+        <RadixProvider>
+          <AuthProvider>
+            <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+              {children}
+              <Toaster richColors />
+            </ThemeProvider>
+          </AuthProvider>
+        </RadixProvider>
       </body>
     </html>
   );
