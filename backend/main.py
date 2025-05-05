@@ -1,3 +1,9 @@
+"""
+Main application entry point for the Shelfd API.
+This file initializes the FastAPI application, sets up middleware,
+configures database connections, and registers all API routes.
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -5,6 +11,7 @@ from app.database.client import connect_to_mongo, close_mongo_connection
 from app.routes import media, auth, shelf, reviews, clubs, club_messages, recommendations
 from beanie import init_beanie
 from motor.motor_asyncio import AsyncIOMotorClient
+# Database models that need to be registered with Beanie ODM
 from app.database.models.user import User
 from app.database.models.shelf import ShelfModel, ShelfItemModel
 from app.database.models.review import Review, ReviewLike
@@ -20,15 +27,17 @@ import asyncio
 import certifi
 from app.services.article_service import ArticleService
 from datetime import datetime, timedelta
-import pickle  # Add pickle for loading data
+import pickle  # Used for loading serialized recommendation data
 
+# Initialize the FastAPI application
 app = FastAPI(title="Shelfd API")
 
-# Get environment-specific settings
+# Load environment-specific settings
 settings = Settings()
 print(f"CORS Origins configured: {settings.CORS_ORIGINS}")
 
-# CORS middleware configuration with more detailed settings
+# CORS middleware to allow frontend applications to interact with this API
+# This is crucial for browser security policies when frontend and backend are on different domains
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],  # Restrict to Next.js development server
@@ -39,16 +48,17 @@ app.add_middleware(
     max_age=3600,  # Cache preflight requests for 1 hour
 )
 
-# Ensure uploads directory exists
+# Create the uploads directory for user-generated content if it doesn't exist
 os.makedirs("uploads/club_covers", exist_ok=True)
 
-# Mount the uploads directory to serve static files
+# Serve static files from the uploads directory
+# This lets us store and serve user uploaded content like club cover images
 app.mount("/club_covers", StaticFiles(directory="uploads/club_covers"), name="club_covers")
 
-# Initialize recommendation update tracking
+# Track when recommendations were last updated to avoid excessive processing
 last_recommendation_update = datetime.min
 
-# Include routers
+# Register all API route handlers by including their routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(media.router, prefix="/media", tags=["media"])
 app.include_router(shelf.router, prefix="/api/shelves", tags=["shelves"])
@@ -59,19 +69,27 @@ app.include_router(recommendations.router, prefix="/api", tags=["recommendations
 
 @app.on_event("startup")
 async def startup_db_client():
+    """
+    Initialize database connection and models when the API server starts.
+    This function runs once on application startup to:
+    1. Establish MongoDB connection
+    2. Initialize Beanie ODM with all data models
+    3. Start background tasks for article fetching and recommendation updates
+    """
     try:
-        # Updated connection settings
+        # Create MongoDB client with appropriate security settings
         client = AsyncIOMotorClient(
             settings.mongodb_url,
             serverSelectionTimeoutMS=5000,
-            # Removed tls=True and tlsAllowInvalidCertificates=True for local dev
+            # Using certifi to ensure secure connections with valid certificates
             tlsCAFile=certifi.where()
         )
         
-        # Test the connection
+        # Test the database connection
         await client.admin.command('ping')
         
-        # Initialize Beanie with all models
+        # Initialize Beanie ODM with all document models
+        # This sets up the ODM to work with the MongoDB collections
         await init_beanie(
             database=client[settings.MONGODB_NAME],
             document_models=[
@@ -85,7 +103,7 @@ async def startup_db_client():
                 ClubThread, 
                 ClubMilestone, 
                 ClubMessage,
-                Recommendation  # Add recommendation model
+                Recommendation
             ]
         )
         
@@ -93,17 +111,18 @@ async def startup_db_client():
         print(f"Database name: {settings.MONGODB_NAME}")
         print(f"Collections initialized: {[model.Settings.name for model in [User, ShelfModel, ShelfItemModel, Review, ReviewLike, Club, ClubPost, ClubThread, ClubMilestone, ClubMessage, Recommendation]]}")
         
-        # Fetch initial articles
+        # Start background tasks for data maintenance
         asyncio.create_task(fetch_initial_articles())
-        
-        # Start the background task for recommendation updates
         asyncio.create_task(periodic_recommendation_updates())
     except Exception as e:
         print(f"Failed to connect to MongoDB: {str(e)}")
         raise e
 
 async def fetch_initial_articles():
-    """Fetches articles in the background after startup"""
+    """
+    Fetches the latest articles from RSS feeds after server startup.
+    This ensures the application has fresh content without manual intervention.
+    """
     try:
         print("Fetching initial articles from RSS feeds...")
         # Add a delay to ensure DB connection is fully established
@@ -114,10 +133,16 @@ async def fetch_initial_articles():
         print(f"Error fetching initial articles: {e}")
 
 async def periodic_recommendation_updates():
-    """Background task that runs recommendation updates weekly"""
+    """
+    Background task that runs recommendation updates on a weekly schedule.
+    This ensures users get fresh recommendations without requiring manual updates.
+    
+    The function loads pre-computed recommendation data from files and uses it
+    to generate personalized recommendations for all users.
+    """
     global last_recommendation_update
 
-    # Define paths to the saved recommendation model data
+    # Define paths to the saved recommendation model data files
     DATA_DIR = os.path.join("scripts", "data")
     BOOK_VECTORS_PATH = os.path.join(DATA_DIR, "book_vectors.pkl")
     BOOK_MAPPING_PATH = os.path.join(DATA_DIR, "book_mapping.pkl")
@@ -129,14 +154,15 @@ async def periodic_recommendation_updates():
     TV_MAPPING_PATH = os.path.join(DATA_DIR, "tv_mapping.pkl")
     TV_DETAILS_PATH = os.path.join(DATA_DIR, "tv_details.pkl")
 
+    # Run forever in the background
     while True:
         now = datetime.utcnow()
 
-        # Only run if it's been at least 7 days since the last update
+        # Only run update if it's been at least 7 days since the last one
         if now - last_recommendation_update > timedelta(days=7):
             print("Running scheduled recommendation update")
             try:
-                # --- Load the recommendation data from files ---
+                # Load precomputed recommendation data from files
                 print("Loading recommendation data...")
                 if not all(os.path.exists(p) for p in [
                     BOOK_VECTORS_PATH, BOOK_MAPPING_PATH, BOOK_DETAILS_PATH,
@@ -144,10 +170,11 @@ async def periodic_recommendation_updates():
                     TV_VECTORS_PATH, TV_MAPPING_PATH, TV_DETAILS_PATH
                 ]):
                     print("Error: One or more recommendation data files not found. Run build script first.")
-                    # Skip update if files are missing
-                    await asyncio.sleep(6 * 60 * 60) # Sleep before next check
+                    # Skip this update cycle if files are missing
+                    await asyncio.sleep(6 * 60 * 60) # Sleep 6 hours before next check
                     continue 
-                    
+                
+                # Load each recommendation data file
                 with open(BOOK_VECTORS_PATH, 'rb') as f: book_vectors = pickle.load(f)
                 with open(BOOK_MAPPING_PATH, 'rb') as f: book_mapping = pickle.load(f)
                 with open(BOOK_DETAILS_PATH, 'rb') as f: book_details = pickle.load(f)
@@ -158,33 +185,33 @@ async def periodic_recommendation_updates():
                 with open(TV_MAPPING_PATH, 'rb') as f: tv_mapping = pickle.load(f)
                 with open(TV_DETAILS_PATH, 'rb') as f: tv_details = pickle.load(f)
                 print("Recommendation data loaded successfully.")
-                # ------------------------------------------------
 
-                # Import the update function
+                # Import the recommendation update function
                 from scripts.build_recommendation_model import update_all_recommendations
                 
-                # --- Pass the loaded data as arguments ---
+                # Generate new recommendations for all users
                 await update_all_recommendations(
                     book_vectors, book_mapping, book_details,
                     movie_vectors, movie_mapping, movie_details,
                     tv_vectors, tv_mapping, tv_details
                 )
-                # -------------------------------------------
 
+                # Update the timestamp to track when we last ran this process
                 last_recommendation_update = now
                 print("Recommendation update completed successfully")
             except Exception as e:
                 print(f"Error in recommendation update: {e}")
-                # Optionally add more detailed error logging here
 
-        # Check again in 6 hours
+        # Check again in 6 hours to avoid unnecessary CPU usage
         await asyncio.sleep(6 * 60 * 60)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    """Close database connections when the server shuts down."""
     await close_mongo_connection()
 
-# Health check endpoint
+# Simple health check endpoint for monitoring
 @app.get("/health")
 async def health_check():
+    """Check if the API server is running."""
     return {"status": "healthy"}

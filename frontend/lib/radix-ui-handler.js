@@ -1,6 +1,27 @@
-// This file pre-loads Radix UI components to avoid bundling issues
-// Import all Radix UI components used in the app here
+/**
+ * Radix UI Handler
+ * 
+ * This file pre-loads all Radix UI components to avoid bundling issues in Next.js.
+ * 
+ * The Problem:
+ * Next.js has issues with the way Radix UI dynamically imports its dependencies.
+ * When components are loaded on-demand, their dependencies sometimes fail to load
+ * properly, causing errors like "Cannot find module 'get-nonce'" or similar.
+ * 
+ * The Solution:
+ * By eagerly importing ALL Radix UI components that the application uses in a single
+ * file, and then importing that file early in the application lifecycle, we ensure
+ * that Next.js bundles all the dependencies correctly. This prevents the dynamic import
+ * failures that would otherwise occur when components are loaded individually.
+ * 
+ * How to use:
+ * 1. Add any new Radix UI component imports here
+ * 2. Make sure this file is imported by RadixProvider
+ * 3. Use RadixProvider near the root of your application
+ */
 
+// Import all Radix UI components used in the app
+// This forces Next.js to bundle them and their dependencies together
 import * as RadixAccordion from '@radix-ui/react-accordion';
 import * as RadixAlertDialog from '@radix-ui/react-alert-dialog';
 import * as RadixAspectRatio from '@radix-ui/react-aspect-ratio';
@@ -22,7 +43,8 @@ import * as RadixTabs from '@radix-ui/react-tabs';
 import * as RadixToast from '@radix-ui/react-toast';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 
-// Export all components
+// Export all components so they can be used elsewhere if needed
+// Though typically the components would be imported directly from their own packages
 export {
   RadixAccordion,
   RadixAlertDialog,

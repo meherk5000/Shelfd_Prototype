@@ -1,11 +1,21 @@
 // lib/api.ts
-// Revert to standard default import again
+/**
+ * This file sets up a centralized API client for communicating with the backend.
+ * It handles:
+ * 1. Setting up Axios with the correct base URL
+ * 2. Automatically attaching authentication tokens to requests
+ * 3. Handling token refresh when authentication expires
+ * 4. Providing API functions for various data needs throughout the app
+ */
 import axios from 'axios';
 
-// Get the API base URL from environment variable
+// Get the API base URL from environment variable with a fallback for local development
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 
-// Create an axios instance with default config
+/**
+ * Create a central Axios instance that will be used for all API requests.
+ * This gives us a consistent configuration and behavior across the app.
+ */
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -13,13 +23,17 @@ export const api = axios.create({
   }
 })
 
-// Add a request interceptor to add auth token to requests
+/**
+ * Request Interceptor: This runs before every request is sent.
+ * It automatically adds the authentication token to the request headers if available.
+ * This saves us from manually adding the token to every API call.
+ */
 api.interceptors.request.use(
   (config) => {
-    // Get the token from localStorage
+    // Get the token from localStorage (where we store it after login)
     const token = localStorage.getItem('token')
     
-    // If token exists, add it to the headers
+    // If token exists, add it to the Authorization header
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -29,16 +43,31 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Add a response interceptor to handle token refresh
+/**
+ * Response Interceptor: This handles token refresh when authentication expires.
+ * If a request fails with a 401 Unauthorized error, it will:
+ * 1. Try to refresh the token using the refresh token
+ * 2. Queue any requests that failed during the refresh process
+ * 3. Retry the failed requests with the new token when refresh succeeds
+ * 4. Log the user out if refresh fails
+ */
+
+// Flag to track if a token refresh is already in progress
 let isRefreshing = false;
 
+// Interface for queued requests waiting for token refresh
 interface QueueItem {
   resolve: (value?: unknown) => void;
   reject: (reason?: any) => void;
 }
 
+// Queue to hold requests that arrived during token refresh
 let failedQueue: QueueItem[] = [];
 
+/**
+ * Process the queue of requests that were waiting for a token refresh
+ * Either resolves them with the new token or rejects them all with an error
+ */
 const processQueue = (error: Error | null, token: string | null = null) => {
   failedQueue.forEach(prom => {
     if (error) {
@@ -48,22 +77,25 @@ const processQueue = (error: Error | null, token: string | null = null) => {
     }
   })
   
+  // Clear the queue after processing
   failedQueue = []
 }
 
 // Handle authentication errors and token refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => response, // Just return successful responses unchanged
   async (error) => {
     const originalRequest = error.config
     
-    // If error is 401 and we haven't already tried to refresh
+    // If error is 401 (Unauthorized) and we haven't already tried to refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // If we're already refreshing, queue this request
+      // If we're already in the process of refreshing, queue this request
       if (isRefreshing) {
+        // Create a new promise that will be resolved when the token is refreshed
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
         }).then(token => {
+          // When resolved, update the auth header and retry the request
           originalRequest.headers.Authorization = `Bearer ${token}`
           return api(originalRequest)
         }).catch(err => {
@@ -71,7 +103,7 @@ api.interceptors.response.use(
         })
       }
       
-      // Mark as retrying
+      // Mark that we're now trying to refresh the token
       originalRequest._retry = true
       isRefreshing = true
       
@@ -80,7 +112,7 @@ api.interceptors.response.use(
         const refreshToken = localStorage.getItem('refresh_token')
         
         if (!refreshToken) {
-          // No refresh token, logout
+          // No refresh token available, so we can't refresh - force logout
           console.error("Refresh Token not found. Logging out.");
           processQueue(new Error("Refresh token not found."), null);
           localStorage.removeItem('token')
@@ -93,25 +125,25 @@ api.interceptors.response.use(
         // Use a basic axios instance for the refresh call to avoid interceptor loops
         const refreshAxios = axios.create({ baseURL: API_BASE_URL });
         const response = await refreshAxios.post(
-           '/api/auth/refresh-token', // Correct backend path
+           '/api/auth/refresh-token', 
            null, // No request body needed
-           { // Add headers config
+           { // Add headers with the refresh token
                headers: {
                    'Authorization': `Bearer ${refreshToken}`
                }
            }
         );
 
-        // If successful, update tokens
+        // If successful, update tokens in localStorage
         if (response.data.access_token) {
           console.log("Token refresh successful.");
           const newAccessToken = response.data.access_token;
           localStorage.setItem('token', newAccessToken);
 
-          // Update default header for subsequent requests
+          // Update default header for future requests
           api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
 
-          // Process the queue with the new token
+          // Process all queued requests with the new token
           processQueue(null, newAccessToken)
 
           // Update the original request's header with the new token
@@ -120,7 +152,7 @@ api.interceptors.response.use(
           // Reset refreshing flag AFTER processing queue and setting header
           isRefreshing = false
 
-          // Retry the original request using the main api instance
+          // Retry the original request with the new token
           return api(originalRequest)
         } else {
           // Unexpected response from refresh endpoint
@@ -132,7 +164,7 @@ api.interceptors.response.use(
           return Promise.reject(new Error("Token refresh failed: Invalid response format."))
         }
       } catch (refreshError: any) {
-        // Refresh failed (e.g., refresh token invalid/expired -> 401 from /refresh)
+        // Refresh attempt failed (e.g., refresh token invalid/expired)
         console.error("Token refresh failed:", refreshError?.response?.data?.detail || refreshError);
         processQueue(refreshError, null)
         localStorage.removeItem('token')
@@ -142,17 +174,29 @@ api.interceptors.response.use(
       }
     }
     
-    // For other error status codes or if it was already a retry, just reject
+    // For other errors or if it was already a retry, just reject with the original error
     return Promise.reject(error)
   }
 )
 
+// Default export for convenience
 export default api
 
+/**
+ * Media Search API Functions
+ * These functions wrap API calls related to searching and retrieving media items.
+ * Each handles errors consistently and provides typed return values.
+ */
+
+/**
+ * Search for media (books, movies, TV shows) by query string
+ * @param query The search term
+ * @param mediaType Optional filter by media type (book, movie, tv)
+ * @param page Page number for pagination (defaults to 1)
+ * @returns Search results from the API
+ */
 export const searchMedia = async (query: string, mediaType?: string, page: number = 1) => {
   try {
-      // Development/Debug Logging: console.log('Making API request with:', { query, mediaType, page });
-
       // Create a params object for axios
       const paramsObject: { query: string; media_type?: string; page: string } = {
           query: query,
@@ -164,103 +208,74 @@ export const searchMedia = async (query: string, mediaType?: string, page: numbe
 
       // Use relative path and params object with the configured api instance
       const path = '/media/search';
-      // Development/Debug Logging: console.log('Request Path:', path, 'Params:', paramsObject);
-
-      // Use the configured axios instance 'api'
       const response = await api.get(path, { params: paramsObject });
-
-      // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
-
-      // Development/Debug Logging: console.log('API response data:', response.data);
       return response.data;
 
-  } catch (error: any) { // Catch potential Axios errors or interceptor errors
-      console.error('Search API error:', error); // Log the error
+  } catch (error: any) { 
+      console.error('Search API error:', error);
       // Extract detail from FastAPI/Axios error structure, fallback to message
       const detail = error.response?.data?.detail || error.message || "Failed to perform search.";
-      // Re-throw a standard error for the calling component to handle
       throw new Error(detail);
   }
 };
 
-
+/**
+ * Get detailed information about a specific movie
+ * @param movieId The TMDB ID of the movie
+ * @returns Detailed movie information including credits and similar movies
+ */
 export const getMovieDetails = async (movieId: number) => {
   try {
-    // Development/Debug Logging: console.log('Fetching movie details for:', movieId);
-    // Use relative path for the configured api instance
     const path = `/media/movies/${movieId}`;
-    // Development/Debug Logging: console.log('Request Path:', path);
-
-    // Use the configured axios instance 'api'
     const response = await api.get(path);
-
-    // Axios automatically handles non-2xx errors & JSON parsing.
-    // Interceptors on 'api' handle auth header and token refresh.
-
-    // Development/Debug Logging: console.log('Movie details received:', response.data);
-    // Return the data property from the axios response
     return response.data;
-
-  } catch (error: any) { // Catch potential Axios errors or interceptor errors
-    console.error('Movie details error:', error); // Log the error
-    // Extract detail from FastAPI/Axios error structure, fallback to message
+  } catch (error: any) {
+    console.error('Movie details error:', error);
     const detail = error.response?.data?.detail || error.message || "Failed to fetch movie details.";
-    // Re-throw a standard error for the calling component to handle
     throw new Error(detail);
   }
 };
 
-
+/**
+ * Get detailed information about a specific TV show
+ * @param tvId The TMDB ID of the TV show
+ * @returns Detailed TV show information including credits and similar shows
+ */
 export const getTVDetails = async (tvId: number) => {
   try {
-    // Use relative path for the configured api instance
     const path = `/media/tv/${tvId}`;
-    // Development/Debug Logging: console.log('Request Path:', path);
-
-    // Use the configured axios instance 'api'
     const response = await api.get(path);
-
-    // Axios automatically handles non-2xx errors & JSON parsing.
-    // Interceptors on 'api' handle auth header and token refresh.
-
-    // Development/Debug Logging: console.log('TV details received:', response.data);
-    // Return the data property from the axios response
     return response.data;
-
-  } catch (error: any) { // Catch potential Axios errors or interceptor errors
-    console.error('[TV Details Frontend] Error:', error); // Log the error
-    // Extract detail from FastAPI/Axios error structure, fallback to message
+  } catch (error: any) {
+    console.error('[TV Details Frontend] Error:', error);
     const detail = error.response?.data?.detail || error.message || "Failed to fetch TV show details.";
-    // Re-throw a standard error for the calling component to handle
     throw new Error(detail);
   }
 };
 
+/**
+ * Get detailed information about a specific book
+ * @param id The Google Books ID of the book
+ * @returns Detailed book information
+ */
 export const getBookDetails = async (id: string) => {
   try {
-    // Use relative path for the configured api instance
     const path = `/media/books/${id}`;
-    // Development/Debug Logging: console.log('Request Path:', path);
-
-    // Use the configured axios instance 'api'
     const response = await api.get(path);
-
-    // Axios automatically handles non-2xx errors & JSON parsing.
-    // Interceptors on 'api' handle auth header and token refresh.
-
-    // Development/Debug Logging: console.log('Book details received:', response.data);
-    // Return the data property from the axios response
     return response.data;
-
-  } catch (error: any) { // Catch potential Axios errors or interceptor errors
-    console.error('Book details error:', error); // Log the error
-    // Extract detail from FastAPI/Axios error structure, fallback to message
+  } catch (error: any) {
+    console.error('Book details error:', error);
     const detail = error.response?.data?.detail || error.message || "Failed to fetch book details.";
-    // Re-throw a standard error for the calling component to handle
     throw new Error(detail);
   }
 };
 
+/**
+ * Perform a quick search across all media types
+ * Returns limited results from each media type for UI display
+ * @param query The search term
+ * @returns Object containing arrays of movies, TV shows, books, and articles
+ */
 export const searchQuick = async (query: string) => {
   const emptyResults = {
     movies: [],
@@ -270,62 +285,44 @@ export const searchQuick = async (query: string) => {
   };
 
   try {
-    // Use relative path and params option for the configured api instance
     const path = `/media/search/quick`;
-    // Development/Debug Logging: console.log('[Quick Search] Request Path:', path, 'Query:', query);
-
-    // Use the configured axios instance 'api' with query params
     const response = await api.get(path, { params: { query } });
-
-    // Axios automatically handles non-2xx errors & JSON parsing.
-    // Interceptors on 'api' handle auth header and token refresh.
-
-    // Development/Debug Logging: console.log('[Quick Search] Success response:', response.data);
-    // Return the data property from the axios response
     return response.data;
-
-  } catch (error: any) { // Catch potential Axios errors or interceptor errors
-    console.error('[Quick Search] Error:', error); // Log the error
-    // Maintain original behavior: return empty results on error
+  } catch (error: any) {
+    console.error('[Quick Search] Error:', error);
+    // Return empty results on error to prevent UI breakage
     return emptyResults;
   }
 };
 
+/**
+ * Get detailed information about a specific article
+ * @param articleId The ID of the article
+ * @returns Detailed article information
+ */
 export const getArticleDetails = async (articleId: string) => {
   try {
-    // Development/Debug Logging: console.log("[Frontend] Fetching article with ID:", articleId);
-
-    // Use relative path for the configured api instance
     const path = `/media/article/${articleId}`;
-    // Development/Debug Logging: console.log(`[Frontend] Making request to path: ${path}`);
-
-    // Use the configured axios instance 'api'
     const response = await api.get(path);
-
-    // Axios automatically handles non-2xx errors & JSON parsing.
-    // Interceptors on 'api' handle auth header and token refresh.
-
-    // Development/Debug Logging: console.log("[Frontend] Article data received:", response.data);
-    // Return the data property from the axios response
     return response.data;
-
-  } catch (error: any) { // Catch potential Axios errors or interceptor errors
-    console.error("[Frontend] Error fetching article details:", error); // Log the error
-    // Extract detail from FastAPI/Axios error structure, fallback to message
+  } catch (error: any) {
+    console.error("[Frontend] Error fetching article details:", error);
     const detail = error.response?.data?.detail || error.message || "Failed to fetch article details.";
-    // Re-throw a standard error for the calling component to handle
     throw new Error(detail);
   }
 };
 
-// Helper function to check if user is authenticated
+/**
+ * Check if the user is currently authenticated
+ * Used for conditional rendering and protected routes
+ * @returns Boolean indicating authentication status
+ */
 export const checkAuth = async () => {
   try {
     const token = localStorage.getItem('token')
     if (!token) return false
     
-    // Correct path for checking auth (/api/auth/me)
-    // Also ensure it uses the 'api' instance to include the token
+    // Try to get the user profile - this will fail if the token is invalid
     const response = await api.get('/api/auth/me') 
     return response.status === 200
   } catch (error) {
@@ -333,7 +330,17 @@ export const checkAuth = async () => {
   }
 }
 
-// Explore API Endpoints
+/**
+ * Explore/Discovery API Functions
+ * These functions retrieve curated content for the explore pages
+ */
+
+/**
+ * Get trending media across all types or filtered by type
+ * @param tab Filter by media type (All, Movies, TV, Books, Articles)
+ * @param options Optional filtering parameters
+ * @returns List of trending media items
+ */
 export async function getTrendingMedia(
   tab: string = "All",
   options?: {
@@ -343,7 +350,6 @@ export async function getTrendingMedia(
     limit?: number
   }
 ) {
-  // Development/Debug Logging: console.log(`Fetching trending media for tab: ${tab}`);
   const defaultResponse = { results: [] };
   try {
     // Build query parameters
@@ -357,26 +363,23 @@ export async function getTrendingMedia(
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
 
-    // Use relative path for the configured api instance
     const path = `/media/explore/trending`;
-    // Development/Debug Logging: console.log('Request Path:', path, 'Params:', params.toString());
-
-    // Use the configured axios instance 'api' with query params object
-    // Note: Pass URLSearchParams directly to axios params
     const response = await api.get(path, { params });
-
-    // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
-
-    // Development/Debug Logging: console.log(`Received ${response.data.results.length} trending items`);
     return response.data;
 
   } catch (error: any) {
-    console.error("Failed to fetch trending media:", error); // Log error
-    // Maintain original behavior: return empty results array on error
+    console.error("Failed to fetch trending media:", error);
+    // Return empty results on error to prevent UI breakage
     return defaultResponse;
   }
 }
 
+/**
+ * Get new releases across all media types or filtered by type
+ * @param tab Filter by media type (All, Movies, TV, Books, Articles)
+ * @param options Optional filtering parameters including date range
+ * @returns List of new release media items
+ */
 export async function getNewReleases(
   tab: string = "All",
   options?: {
@@ -388,7 +391,6 @@ export async function getNewReleases(
     limit?: number
   }
 ) {
-  // Development/Debug Logging: console.log(`Fetching new releases for tab: ${tab}`);
   const defaultResponse = { results: [] };
   try {
     // Build query parameters
@@ -404,25 +406,24 @@ export async function getNewReleases(
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
 
-    // Use relative path for the configured api instance
     const path = `/media/explore/new-releases`;
-    // Development/Debug Logging: console.log('Request Path:', path, 'Params:', params.toString());
-
-    // Use the configured axios instance 'api' with query params object
     const response = await api.get(path, { params });
-
-    // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
-
-    // Development/Debug Logging: console.log(`Received ${response.data.results.length} new releases`);
     return response.data;
 
   } catch (error: any) {
-    console.error("Failed to fetch new releases:", error); // Log error
-    // Maintain original behavior: return empty results array on error
+    console.error("Failed to fetch new releases:", error);
+    // Return empty results on error to prevent UI breakage
     return defaultResponse;
   }
 }
 
+/**
+ * Get media by category (genre, subject, etc.)
+ * @param category The category ID or name to filter by
+ * @param tab Filter by media type (All, Movies, TV, Books, Articles)
+ * @param options Optional filtering parameters
+ * @returns List of media items in the specified category
+ */
 export async function getCategoryMedia(
   category: string,
   tab: string = "All",
@@ -433,7 +434,6 @@ export async function getCategoryMedia(
     limit?: number
   }
 ) {
-  // Development/Debug Logging: console.log(`Fetching ${category} media for tab: ${tab}`);
   const defaultResponse = { results: [] };
   try {
     // Build query parameters
@@ -447,21 +447,13 @@ export async function getCategoryMedia(
     if (options?.page) params.append('page', options.page.toString());
     if (options?.limit) params.append('limit', options.limit.toString());
 
-    // Use relative path including the category for the configured api instance
     const path = `/media/explore/category/${category}`;
-    // Development/Debug Logging: console.log('Request Path:', path, 'Params:', params.toString());
-
-    // Use the configured axios instance 'api' with query params object
     const response = await api.get(path, { params });
-
-    // Axios handles non-2xx and JSON parsing. Interceptors handle auth.
-
-    // Development/Debug Logging: console.log(`Received ${response.data.results.length} items for ${category}`);
     return response.data;
 
   } catch (error: any) {
-    console.error(`Failed to fetch ${category} media:`, error); // Log error
-    // Maintain original behavior: return empty results array on error
+    console.error(`Failed to fetch ${category} media:`, error);
+    // Return empty results on error to prevent UI breakage
     return defaultResponse;
   }
 }

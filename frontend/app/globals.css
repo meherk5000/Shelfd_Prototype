@@ -1,88 +1,153 @@
+/* Import Tailwind's base styles - this brings in Tailwind's reset and basic styles */
 @tailwind base;
+/* Import Tailwind's component styles - this includes pre-styled components */
 @tailwind components;
+/* Import Tailwind's utility styles - these are the atomic utility classes like flex, p-4, etc. */
 @tailwind utilities;
 
+/* 
+ * COLOR SYSTEM EXPLANATION
+ * This application uses HSL color format (hue, saturation, lightness) for all colors.
+ * Colors are defined as CSS variables, which enables:
+ * 1. Easy theme switching between light and dark mode
+ * 2. Consistent color usage throughout the application
+ * 3. The ability to derive related colors by adjusting lightness/saturation
+ *
+ * The format is 'hsl(var(--color-name))' which references the CSS variable's value.
+ * These variables are then used in tailwind.config.ts to create theme colors.
+ */
+
+/* Define root variables within Tailwind's base layer */
 @layer base {
+  /* Light mode theme variables (default) */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --radius: 0.5rem;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    /* Core background and text colors */
+    --background: 0 0% 100%; /* Pure white - used for page backgrounds */
+    --foreground: 0 0% 3.9%; /* Near black for text - highly readable on white */
+    
+    /* Card component colors - cards are distinct content blocks */
+    --card: 0 0% 100%; /* White background for cards - same as main background */
+    --card-foreground: 0 0% 3.9%; /* Same as main text color for consistency */
+    
+    /* Popover/dropdown colors - used for menus, tooltips, etc. */
+    --popover: 0 0% 100%; /* White background for popovers */
+    --popover-foreground: 0 0% 3.9%; /* Near black text for popovers */
+    
+    /* Primary action colors - used for buttons, links, active states */
+    --primary: 0 0% 9%; /* Very dark gray, almost black - for main actions */
+    --primary-foreground: 0 0% 98%; /* Off-white for text on primary colored backgrounds */
+    
+    /* Secondary color - used for less prominent elements and secondary actions */
+    --secondary: 0 0% 96.1%; /* Very light gray - subtle background for secondary elements */
+    --secondary-foreground: 0 0% 9%; /* Very dark gray for text on secondary backgrounds */
+    
+    /* Muted color - used for disabled items, placeholders, less important text */
+    --muted: 0 0% 96.1%; /* Very light gray - same as secondary for simplicity */
+    --muted-foreground: 0 0% 45.1%; /* Medium gray for less important text - reduces visual prominence */
+    
+    /* Accent color - used for highlighting or decorative elements */
+    --accent: 0 0% 96.1%; /* Very light gray - same as secondary and muted */
+    --accent-foreground: 0 0% 9%; /* Very dark gray text on accent - ensures readability */
+    
+    /* Destructive color - used for delete buttons, errors, warnings */
+    --destructive: 0 84.2% 60.2%; /* Red color - immediately recognizable as warning/delete */
+    --destructive-foreground: 0 0% 98%; /* Off-white text on destructive - for readability */
+    
+    /* UI element borders, inputs, and focus rings */
+    --border: 0 0% 89.8%; /* Light gray for borders - subtle separation */
+    --input: 0 0% 89.8%; /* Same as border - for input field borders */
+    --ring: 0 0% 3.9%; /* Dark ring for focus states - ensures accessibility */
+    
+    /* Border radius for rounded corners - controls the roundness of UI elements */
+    --radius: 0.5rem; /* 8px rounded corners - modern, slightly rounded look */
+    
+    /* Chart colors for data visualization - distinct colors for clarity in charts */
+    --chart-1: 12 76% 61%; /* Reddish */
+    --chart-2: 173 58% 39%; /* Teal */
+    --chart-3: 197 37% 24%; /* Dark blue */
+    --chart-4: 43 74% 66%; /* Yellow */
+    --chart-5: 27 87% 67%; /* Orange */
   }
 
+  /* 
+   * Dark mode theme variables
+   * These override the light mode variables when the 'dark' class is applied to the html element.
+   * This is handled by the ThemeProvider component from next-themes.
+   */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* Invert most colors for dark mode - dark backgrounds with light text */
+    --background: 0 0% 3.9%; /* Near black background - easy on the eyes at night */
+    --foreground: 0 0% 98%; /* Off-white text - good contrast but not harsh white */
+    
+    /* Card and popover colors match the main background in dark mode */
+    --card: 0 0% 3.9%; /* Near black cards */
+    --card-foreground: 0 0% 98%; /* Off-white text on cards */
+    
+    --popover: 0 0% 3.9%; /* Near black popovers */
+    --popover-foreground: 0 0% 98%; /* Off-white text on popovers */
+    
+    /* Primary colors are inverted in dark mode - light buttons with dark text */
+    --primary: 0 0% 98%; /* Off-white primary - stands out on dark background */
+    --primary-foreground: 0 0% 9%; /* Near black text on primary - maintains readability */
+    
+    /* Secondary and accent colors are darker in dark mode */
+    --secondary: 0 0% 14.9%; /* Very dark gray - barely lighter than background */
+    --secondary-foreground: 0 0% 98%; /* Off-white text on secondary */
+    
+    --muted: 0 0% 14.9%; /* Very dark gray - same as secondary */
+    --muted-foreground: 0 0% 63.9%; /* Medium light gray for less important text */
+    
+    --accent: 0 0% 14.9%; /* Very dark gray - same as secondary */
+    --accent-foreground: 0 0% 98%; /* Off-white text on accent */
+    
+    /* Destructive is more muted in dark mode to avoid being too harsh */
+    --destructive: 0 62.8% 30.6%; /* Darker red - less intense on dark backgrounds */
+    --destructive-foreground: 0 0% 98%; /* Off-white text on destructive */
+    
+    /* Border and input colors are darker to maintain subtle separation */
+    --border: 0 0% 14.9%; /* Dark gray borders - subtle contrast with background */
+    --input: 0 0% 14.9%; /* Same as border */
+    --ring: 0 0% 83.1%; /* Light gray ring for focus - stands out on dark backgrounds */
+    
+    /* Chart colors adjusted for dark mode - more saturated and brighter */
+    --chart-1: 220 70% 50%; /* Blue */
+    --chart-2: 160 60% 45%; /* Green */
+    --chart-3: 30 80% 55%; /* Orange */
+    --chart-4: 280 65% 60%; /* Purple */
+    --chart-5: 340 75% 55%; /* Pink */
   }
 }
 
-/* Additional utility classes for layout and overflow control */
+/* Custom utility classes beyond what Tailwind provides */
+
+/* Class for truncating text in card content */
 .card-content {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Ensure all content respects container boundaries */
+/* Utility class to enforce strict overflow containment */
 .overflow-hidden-strict {
   overflow: hidden !important;
   max-width: 100% !important;
 }
 
-/* Ensure all cards prevent text overflow */
+/* Ensure all cards and rounded elements prevent text overflow */
 .card, 
 .rounded-lg, 
 .bg-card {
   overflow: hidden;
 }
 
+/* Apply default styles to all elements using Tailwind classes */
 @layer base {
+  /* Apply the border color variable to all element borders */
   * {
     @apply border-border;
   }
+  
+  /* Apply background and text colors to the body element */
   body {
     @apply bg-background text-foreground;
   }

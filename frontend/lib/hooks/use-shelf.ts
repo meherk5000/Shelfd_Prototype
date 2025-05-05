@@ -1,3 +1,13 @@
+/**
+ * useShelf Hook
+ * 
+ * This custom hook provides functionality for managing user shelves (collections of media items).
+ * It handles adding/removing items to shelves, fetching user shelves, and managing shelf display names.
+ * 
+ * The hook supports different media types (Books, Movies, TV Shows, Articles) and different
+ * shelf statuses (want to read/watch, currently reading/watching, finished, etc.).
+ */
+
 import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { API_BASE_URL } from '../config';
@@ -5,6 +15,10 @@ import useSWR, { useSWRConfig } from "swr";
 import { useAuth } from "../context/AuthContext";
 import React from 'react';
 
+/**
+ * Type mapping for media types to their API representation
+ * This is used for consistent type checking throughout the application
+ */
 export type MediaTypeMapping = {
   Books: "book";
   Movies: "movie";
@@ -12,6 +26,9 @@ export type MediaTypeMapping = {
   Articles: "article";
 };
 
+/**
+ * Map of frontend media type names to backend API media type values
+ */
 export const mediaTypeMap = {
   "Books": "book",
   "Movies": "movie",
@@ -19,6 +36,9 @@ export const mediaTypeMap = {
   "Articles": "article",
 };
 
+/**
+ * Map of media types to display values (currently same as API values)
+ */
 export const mediaTypeDisplayMap = {
   "Books": "book",
   "Movies": "movie",
@@ -26,6 +46,10 @@ export const mediaTypeDisplayMap = {
   "Articles": "article",
 };
 
+/**
+ * Enum of shelf types used by the backend API
+ * These are the specific shelf type identifiers used in the database
+ */
 export enum ShelfType {
   WANT_TO_READ = "want_to_read",
   CURRENTLY_READING = "currently_reading",
@@ -40,34 +64,50 @@ export enum ShelfType {
   CUSTOM = "custom"
 }
 
+/**
+ * Enum of shelf statuses used for frontend UI
+ * These are simplified status values that map to shelf types based on media type
+ */
 export enum ShelfStatus {
-  WANT_TO = "want_to",
-  CURRENT = "current",
-  FINISHED = "finished",
-  DNF = "did_not_finish",
-  SAVED = "saved"
+  WANT_TO = "want_to",         // Want to read/watch
+  CURRENT = "current",         // Currently reading/watching 
+  FINISHED = "finished",       // Finished reading/watching
+  DNF = "did_not_finish",      // Did not finish reading/watching
+  SAVED = "saved"              // Saved (for articles)
 }
 
-// Add this interface near the top of the file with other type definitions
+/**
+ * Interface for a shelf item (a media item that has been added to a shelf)
+ */
 export interface ShelfItem {
-  media_id: string;
-  title: string;
-  cover_image: string;
-  creator: string;
-  added_at: string;
-  rating?: number | null;
-  progress?: number;
+  media_id: string;            // ID of the media item
+  title: string;               // Title of the media item
+  cover_image: string;         // URL of the cover image
+  creator: string;             // Author/director/creator of the media
+  added_at: string;            // When the item was added to the shelf
+  rating?: number | null;      // User's rating (1-5 stars)
+  progress?: number;           // Reading/watching progress (percentage)
 }
 
+/**
+ * Interface for a shelf
+ */
 export interface Shelf {
-  _id: string;
-  name: string;
-  items: ShelfItem[];
-  shelf_type: string;
-  media_type: string;
+  _id: string;                 // ID of the shelf
+  name: string;                // Name of the shelf
+  items: ShelfItem[];          // Items in the shelf
+  shelf_type: string;          // Type of shelf (from ShelfType enum)
+  media_type: string;          // Type of media in the shelf
 }
 
-// Helper function to get the correct shelf type based on media type and status
+/**
+ * Helper function to get the correct shelf type based on media type and status
+ * Maps the simplified frontend status to specific backend shelf types
+ * 
+ * @param mediaType - Type of media (Books, Movies, TV Shows, Articles)
+ * @param status - Shelf status (want_to, current, finished, etc.)
+ * @returns The correct shelf type string for the backend API
+ */
 const getShelfType = (mediaType: keyof MediaTypeMapping, status: ShelfStatus): string => {
   switch(mediaType) {
     case "Books":
@@ -98,6 +138,11 @@ const getShelfType = (mediaType: keyof MediaTypeMapping, status: ShelfStatus): s
   }
 };
 
+/**
+ * Mapping of media types and statuses to shelf types
+ * This is an alternative to the getShelfType function, using a static object
+ * Used for looking up shelf types in different contexts
+ */
 const shelfTypeMap = {
   Books: {
     want_to: "want_to_read",
@@ -123,6 +168,13 @@ const shelfTypeMap = {
   }
 } as const;
 
+/**
+ * SWR fetcher function to handle API requests
+ * Used for data fetching with proper error handling
+ * 
+ * @param url - API URL to fetch
+ * @returns The API response data
+ */
 const fetcher = async (url: string) => {
   try {
     const response = await api.get(url);
@@ -133,11 +185,23 @@ const fetcher = async (url: string) => {
   }
 };
 
+/**
+ * Custom hook for managing user shelves
+ * Provides functions for adding/removing items to shelves and fetching shelf data
+ * 
+ * @returns An object with shelf management functions and state
+ */
 export function useShelf() {
   const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
   const { mutate } = useSWRConfig();
 
+  /**
+   * Fetch all shelves for a given media type belonging to the current user
+   * 
+   * @param mediaType - Type of media (Books, Movies, TV Shows, Articles)
+   * @returns Array of shelf objects
+   */
   const getUserShelves = useCallback(async (mediaType: keyof MediaTypeMapping) => {
     if (!isAuthenticated) return [];
     try {
@@ -162,6 +226,13 @@ export function useShelf() {
     }
   }, [isAuthenticated]);
 
+  /**
+   * Fetch only custom shelves for a given media type
+   * Custom shelves are user-created shelves beyond the default status shelves
+   * 
+   * @param mediaType - Type of media (Books, Movies, TV Shows, Articles)
+   * @returns Array of custom shelf objects
+   */
   const getCustomShelves = useCallback(async (mediaType: keyof MediaTypeMapping) => {
     if (!isAuthenticated) return [];
     try {
@@ -174,6 +245,13 @@ export function useShelf() {
     }
   }, [isAuthenticated, getUserShelves]);
 
+  /**
+   * Get a user-friendly display name for a shelf status based on media type
+   * 
+   * @param mediaType - Type of media (Books, Movies, TV Shows, Articles)
+   * @param status - Shelf status (want_to, current, finished, etc.)
+   * @returns User-friendly display name for the shelf
+   */
   const getShelfDisplayName = (mediaType: keyof MediaTypeMapping, status: ShelfStatus) => {
     switch(mediaType) {
       case "Books":
@@ -204,6 +282,16 @@ export function useShelf() {
     }
   };
 
+  /**
+   * Add a media item to a shelf
+   * Can add to default status shelves or custom shelves
+   * 
+   * @param mediaType - Type of media (Books, Movies, TV Shows, Articles)
+   * @param status - Shelf status or empty string for custom shelves
+   * @param item - Media item to add (id, title, image, creator)
+   * @param shelfId - Optional ID for custom shelves
+   * @returns API response data
+   */
   const addToShelf = useCallback(async (
     mediaType: keyof MediaTypeMapping,
     status: ShelfStatus | string,
@@ -230,7 +318,9 @@ export function useShelf() {
       const mappedMediaType = mediaTypeMap[mediaType].toLowerCase();
       const url = '/api/shelves/add_item';
 
+      // Build payload differently for custom shelves vs. status shelves
       if (shelfId) {
+        // Adding to a custom shelf (requires shelf_id)
         payload = {
           shelf_id: shelfId,
           media_id: item.id,
@@ -240,6 +330,7 @@ export function useShelf() {
           creator: item.creator,
         };
       } else {
+        // Adding to a default status shelf
         const shelfType = getShelfType(mediaType, status as ShelfStatus);
         payload = {
           media_id: item.id,
@@ -261,11 +352,12 @@ export function useShelf() {
       console.log("6. Response Data:", response.data);
       console.log("=== END addToShelf ===");
 
+      // Invalidate the cache for this media type to refresh shelf data
       mutate(`${API_BASE_URL}/api/shelves/user/${mappedMediaType}`);
 
       return response.data;
     } catch (error: any) {
-      // --- Check if it's the specific 409 "already exists" error ---
+      // Check if it's the specific 409 "already exists" error
       const errorMessage = error.response?.data?.detail || error.message || "Unknown error";
       const isAlreadyExistsError =
         error.response?.status === 409 &&
@@ -298,6 +390,12 @@ export function useShelf() {
     }
   }, [mutate]);
 
+  /**
+   * Remove a media item from a shelf
+   * 
+   * @param mediaType - Type of media (Books, Movies, TV Shows, Articles)
+   * @param itemId - ID of the media item to remove
+   */
   const removeFromShelf = useCallback(async (mediaType: keyof MediaTypeMapping, itemId: string) => {
     setLoading(true);
     try {
@@ -306,6 +404,8 @@ export function useShelf() {
         throw new Error(`Invalid media type provided to removeFromShelf: ${mediaType}`);
       }
       await api.delete(`/api/shelves/${apiMediaType}/${itemId}`);
+      
+      // Invalidate the cache for this media type to refresh shelf data
       mutate(`${API_BASE_URL}/api/shelves/user/${apiMediaType}`);
     } catch (error) {
       console.error("Error removing item:", error);
@@ -315,12 +415,13 @@ export function useShelf() {
     }
   }, [mutate]);
 
+  // Return the public API of the hook
   return {
-    addToShelf,
-    removeFromShelf,
-    getUserShelves,
-    getCustomShelves,
-    getShelfDisplayName,
-    loading,
+    addToShelf,            // Add an item to a shelf
+    removeFromShelf,       // Remove an item from a shelf
+    getUserShelves,        // Get all shelves for a media type
+    getCustomShelves,      // Get only custom shelves for a media type
+    getShelfDisplayName,   // Get display name for a shelf status
+    loading,               // Loading state for async operations
   };
 }

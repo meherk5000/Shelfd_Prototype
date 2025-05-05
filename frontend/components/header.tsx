@@ -1,4 +1,4 @@
-"use client";
+"use client"; // This directive tells Next.js this component should be client-side rendered
 
 import { GlobalSearch } from "./global-search";
 import Link from "next/link";
@@ -16,9 +16,15 @@ import { User, Settings, LogOut } from "lucide-react";
 import { MobileNav } from "./mobile-nav";
 
 export function Header() {
+  // Get authentication state and user info from our auth context
   const { isAuthenticated, user, logout } = useAuth();
+  // Get the current path to determine which page we're on
   const pathname = usePathname();
 
+  /**
+   * Helper function to determine the current page title based on URL path
+   * This gives us the proper display title and link for the header
+   */
   const getPageTitle = (path: string) => {
     const segments = path.split("/").filter(Boolean);
 
@@ -28,6 +34,8 @@ export function Header() {
     if (segments.length === 0) return defaultPage;
 
     const mainSegment = segments[0];
+    // Map URL segments to their display titles and corresponding links
+    // This helps us maintain consistency across the application
     const titles: { [key: string]: { title: string; href: string } } = {
       shelf: { title: "Shelf", href: "/shelf" },
       clubs: { title: "Clubs", href: "/clubs" },
@@ -46,13 +54,17 @@ export function Header() {
     return titles[mainSegment] || defaultPage;
   };
 
+  // Get the current page info based on the URL path
   const pageInfo = getPageTitle(pathname);
 
   return (
     <div className="flex h-20 items-center w-full px-4 md:px-6 border-b">
+      {/* Mobile navigation - only shows on small screens */}
       <div className="md:hidden mr-2">
         <MobileNav />
       </div>
+
+      {/* Page title that links back to the section homepage */}
       <div className="flex-shrink-0 mr-4">
         <Link
           href={pageInfo.href}
@@ -61,11 +73,16 @@ export function Header() {
           {pageInfo.title}
         </Link>
       </div>
+
+      {/* Global search bar - centered in the header */}
       <div className="flex-1 flex justify-center px-4">
         <GlobalSearch />
       </div>
+
+      {/* User profile section or auth buttons */}
       <div className="flex items-center justify-end flex-shrink-0 ml-4">
         {isAuthenticated && user ? (
+          // If user is logged in, show profile dropdown
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -106,6 +123,7 @@ export function Header() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
+          // If user is not logged in, show sign in/up buttons
           <div className="flex gap-2">
             <Link href="/auth/sign-in">
               <Button size="lg" variant="ghost">
