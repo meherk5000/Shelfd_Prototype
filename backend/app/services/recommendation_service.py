@@ -8,9 +8,6 @@ The recommendation system works in two ways:
 1. Fetches pre-computed recommendations from the database (processed in background tasks)
 2. Falls back to mock data if no recommendations exist yet for a user
 
-In a production environment, this service would connect to a more sophisticated
-recommendation engine that analyzes user behavior, content similarity, and collaborative
-filtering to provide personalized suggestions.
 """
 from typing import List, Dict, Any
 import json

@@ -40,7 +40,13 @@ print(f"CORS Origins configured: {settings.CORS_ORIGINS}")
 # This is crucial for browser security policies when frontend and backend are on different domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Restrict to Next.js development server
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001", # Add potential ports
+        "http://localhost:3002",
+        "http://localhost:3003",
+        "http://localhost:3004"  # Add the current port
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
