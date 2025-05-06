@@ -243,35 +243,48 @@ The API is organized around the following resource groups:
 
 - `GET /api/shelves`: Get user shelves
 - `POST /api/shelves`: Create new shelf
-- `PUT /api/shelves/{id}`: Update shelf
-- `DELETE /api/shelves/{id}`: Delete shelf
-- `POST /api/shelves/{id}/items`: Add item to shelf
-- `DELETE /api/shelves/{id}/items/{item_id}`: Remove item from shelf
+- `PUT /api/shelves/{shelf_id}`: Update shelf (Note: `id` refers to `shelf_id`)
+- `DELETE /api/shelves/{shelf_id}`: Delete shelf (Note: `id` refers to `shelf_id`)
+- `POST /api/shelves/{shelf_id}/items`: Add item to shelf (Note: `id` refers to `shelf_id`)
+- `DELETE /api/shelves/{shelf_id}/items/{item_id}`: Remove item from shelf (Note: `id` refers to `shelf_id`)
+- `POST /api/shelves/rate`: Legacy endpoint to rate media (creates a review and adds to 'Finished' shelf)
 
-### Media
+### Media Search (External APIs)
 
 - `GET /media/books/search`: Search for books
 - `GET /media/movies/search`: Search for movies
 - `GET /media/tv/search`: Search for TV shows
+- `GET /media/articles`: Fetch latest articles (implicitly via background task, but an endpoint might exist)
 
 ### Reviews
 
-- `GET /api/reviews/{media_type}/{media_id}`: Get reviews for media
-- `POST /api/reviews`: Create a review
-- `PUT /api/reviews/{id}`: Update a review
-- `DELETE /api/reviews/{id}`: Delete a review
+- `POST /api/reviews`: Create or update a review
+- `GET /api/reviews/{media_type}/{media_id}`: Get reviews for a media item
+- `GET /api/reviews/user/{media_type}/{media_id}`: Get the current user's review for a media item
+- `PUT /api/reviews/{review_id}`: Update an existing review
+- `DELETE /api/reviews/{review_id}`: Delete a review
+- `POST /api/reviews/{review_id}/like`: Like/unlike a review (toggle)
+- `GET /api/reviews/user`: Get all reviews submitted by the current user
 
 ### Clubs
 
-- `GET /api/clubs`: Get all clubs
+- `GET /api/clubs`: Get all clubs (or search/filter)
 - `POST /api/clubs`: Create a club
-- `GET /api/clubs/{id}`: Get club details
-- `PUT /api/clubs/{id}`: Update club
-- `DELETE /api/clubs/{id}`: Delete club
+- `GET /api/clubs/{club_id}`: Get club details (Note: `id` refers to `club_id`)
+- `PUT /api/clubs/{club_id}`: Update club (Note: `id` refers to `club_id`)
+- `DELETE /api/clubs/{club_id}`: Delete club (Note: `id` refers to `club_id`)
+- `POST /api/clubs/{club_id}/join`: Join a club (Endpoint likely exists, verify)
+- `POST /api/clubs/{club_id}/leave`: Leave a club (Endpoint likely exists, verify)
+- `POST /api/clubs/{club_id}/members/{user_id}`: Manage club members (Add/Remove - Endpoint likely exists, verify)
+
+### Club Messages
+
+- `POST /api/clubs/{club_id}/messages`: Post a message in a club
+- `GET /api/clubs/{club_id}/messages`: Get messages for a club
 
 ### Recommendations
 
-- `GET /api/recommendations`: Get personalized recommendations
+- `GET /api/recommendations`: Get personalized recommendations for the current user
 
 ## License
 
