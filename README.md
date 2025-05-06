@@ -14,6 +14,7 @@ Shelfd is a comprehensive media tracking and discovery platform that allows user
 - [Development](#development)
 - [API Endpoints](#api-endpoints)
 - [License](#license)
+- [References](#references)
 
 ## Project Overview
 
@@ -289,3 +290,22 @@ The API is organized around the following resource groups:
 ## License
 
 This project is licensed under the MIT License.
+
+## References
+
+### Content-Based Recommendation System
+
+- Gaurav, P. (2023). "Step By Step Content-Based Recommendation System." Medium. [https://medium.com/@prateekgaurav/step-by-step-content-based-recommendation-system-823bbfd0541c](https://medium.com/@prateekgaurav/step-by-step-content-based-recommendation-system-823bbfd0541c)
+- Lee, E. (2024). "Building a Content-Based Recommender System with Python and Google Colab." Medium. [https://drlee.io/building-a-content-based-recommender-system-with-python-and-google-colab-c753c9bdd449](https://drlee.io/building-a-content-based-recommender-system-with-python-and-google-colab-c753c9bdd449)
+- Code Heroku. (2019). "Building a Movie Recommendation Engine in Python using Scikit-Learn." Medium. [https://medium.com/code-heroku/building-a-movie-recommendation-engine-in-python-using-scikit-learn-c7489d7cb145](https://medium.com/code-heroku/building-a-movie-recommendation-engine-in-python-using-scikit-learn-c7489d7cb145)
+
+### Video Tutorials
+
+- "How to Build a Content-Based Recommendation System" (2022) [https://www.youtube.com/watch?v=PlQZepYEppQ](https://www.youtube.com/watch?v=PlQZepYEppQ)
+- "Content Base Recommendation | TF-IDF Vectorizer | Cosine Similarity" (2022) [https://www.youtube.com/watch?v=h13Kv1Fla2g](https://www.youtube.com/watch?v=h13Kv1Fla2g)
+- "Building A Movie Recommendation Engine | Machine Learning Projects" (2021) [https://www.youtube.com/watch?v=XoTwndOgXBM](https://www.youtube.com/watch?v=XoTwndOgXBM)
+- "Build A Movie Recommendation Engine Using Python" (2022) [https://www.youtube.com/watch?v=ueKXSupHz6Q](https://www.youtube.com/watch?v=ueKXSupHz6Q)
+
+### RSS Feed Implementation
+
+- Patel, D. (2020). "Web Scrapping RSS Feed Using Python." Medium. [https://medium.com/@darshipatel/web-scrapping-rss-feed-using-python-fb82370562b3](https://medium.com/@darshipatel/web-scrapping-rss-feed-using-python-fb82370562b3)
